@@ -1,1 +1,15 @@
+# Ignore the virtual environment
 diunaenv/
+
+# Ignore Python cache files
+__pycache__/
+
+# Ignore compiled Python files
+*.pyc
+*.pyo
+
+# Ignore logs
+*.log
+
+# Ignore VS Code workspace settings
+.vscode/
