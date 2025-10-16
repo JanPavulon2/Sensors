@@ -1,0 +1,30 @@
+{
+    "hardware": {
+        "gpio": {
+            "preview_panel": 19,
+            "led_strip": 18,
+            "encoders": {
+                "zone_selector": { "clk": 5, "dt": 6, "sw": 13 },
+                "modulator": { "clk": 16, "dt": 20, "sw": 21 }
+            },
+            "buttons": [24, 23, 26, 22]
+        }
+    },
+    
+    "zones": [
+        { "name": "lamp", "length": 19, "order": 1, "tag": "lamp" },
+        { "name": "top", "length": 4, "order": 2 },
+        { "name": "right", "length": 3, "order": 3 },
+        { "name": "bottom", "length": 4, "order": 4 },
+        { "name": "left", "length": 3, "order": 5 },
+        { "name": "strip", "length": 14, "order": 6 }
+    ],
+    
+    "defaults": {
+        "mode": "COLOR_SELECT",
+        "color_mode": "HUE",
+        "brightness": 64,
+        "animation_speed": 50,
+        "animation_intensity": 50
+    }
+}
