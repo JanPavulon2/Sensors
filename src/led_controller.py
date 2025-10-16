@@ -16,7 +16,7 @@ from enum import Enum, auto
 from rpi_ws281x import ws, Color
 from components import PreviewPanel, ZoneStrip
 from utils import hue_to_rgb, get_preset_by_index, PRESET_ORDER
-# import threading
+from animations import AnimationEngine
 import time
 import math
 import asyncio
@@ -109,15 +109,11 @@ class LEDController:
         )
 
         # Global state
-        # self.edit_mode = True           # Start with edit mode ON
-        # self.lamp_solo = False          # When True, lamp is independent from global animations
         self.edit_mode = state.get("edit_mode", True)
         self.lamp_solo = state.get("lamp_solo", False)
-        self.animation_running = False  # When True, global animation is active
+        self.lamp_solo_state = state.get("lamp_solo_state", None)
 
         # Main mode state
-        # self.mode = Mode.COLOR_SELECT
-        # self.color_mode = ColorMode.HUE
         self.mode = Mode[state.get("mode", "COLOR_SELECT")]
         self.color_mode = ColorMode[state.get("color_mode", "HUE")]
         self.anim_param_mode = AnimationParamMode.SPEED
@@ -139,19 +135,28 @@ class LEDController:
         self.zone_names = list(zones.keys())
         self.current_zone_index = 0
 
-        # Parameters per zone (used when not in animation mode)        
+        # Parameters per zone (used when not in animation mode)
         self.zone_hues = {z: state["zones"][z]["hue"] for z in self.zone_names}
         self.zone_brightness = {z: state["zones"][z]["brightness"] for z in self.zone_names}
         self.zone_preset_indices = {z: state["zones"][z]["preset"] for z in self.zone_names}
 
-        # Global animation parameters (when animation_running=True)
-        self.current_animation = "static"  # Name of animation
-        # self.animation_speed = 50          # 0-100
-        self.animation_speed = state.get("animation_speed", 50)
-        self.animation_color1 = (255, 0, 0)  # Primary color
-        self.animation_color2 = (0, 0, 255)  # Secondary color (for fade, gradient)
-        self.animation_intensity = 50      # 0-100
-        self.selected_animation_index = 0  # Index in animations list
+        # Animation system
+        self.animation_engine = AnimationEngine(self.strip, zones)
+
+        # Animation state from config
+        anim_state = state.get("animation", {})
+        self.animation_enabled = anim_state.get("enabled", False)
+        self.animation_name = anim_state.get("name", "breathe")
+        self.animation_speed = anim_state.get("speed", 50)
+        self.animation_color = anim_state.get("color", None)  # None = use zone colors
+        self.animation_color2 = anim_state.get("color2", None)
+        self.animation_intensity = anim_state.get("intensity", 100)
+
+        # Animation list for selection (ordered)
+        self.available_animations = ["breathe", "color_fade", "snake"]
+        self.selected_animation_index = 0
+        if self.animation_name in self.available_animations:
+            self.selected_animation_index = self.available_animations.index(self.animation_name)
 
         # Pulsing thread for edit mode indicator
         self.pulse_thread = None
@@ -222,11 +227,11 @@ class LEDController:
             if self.anim_param_mode == AnimationParamMode.SPEED:
                 value = self.animation_speed
                 max_value = 100
-                color = (255, 255, 255)  # White bar for speed
+                color = (64, 64, 64)  # Dimmed white bar for speed (25% brightness)
             elif self.anim_param_mode == AnimationParamMode.INTENSITY:
                 value = self.animation_intensity
                 max_value = 100
-                color = (255, 255, 255)  # White bar for intensity
+                color = (64, 64, 64)  # Dimmed white bar for intensity
             else:
                 # For COLOR1/COLOR2, show color instead
                 self._preview_show_color()
@@ -254,8 +259,13 @@ class LEDController:
     def _preview_show_animation(self):
         """Preview: Show mini animation (placeholder for now)"""
         # TODO: Implement mini animations for preview
-        # For now, just show the animation's primary color
-        r, g, b = self.animation_color1
+        # For now, just show the selected animation name color
+        if self.animation_color:
+            r, g, b = self.animation_color
+        else:
+            # Show current zone color as preview
+            zone_name = self._get_current_zone()
+            r, g, b = self._get_zone_color(zone_name)
         self.preview.set_color(r, g, b)
 
     def _get_zone_color(self, zone_name):
@@ -371,21 +381,6 @@ class LEDController:
             self.strip.set_zone_color(zone_name, r, g, b)
 
     # ===== Public API =====
-
-    def update_animations(self):
-        """
-        Update LED animations (placeholder).
-        This will be called periodically from asyncio loop.
-        """
-        if not self.animation_running:
-            return
-
-        # Example: simple color fade animation
-        for zone_name in self.zone_names:
-            hue = (self.zone_hues[zone_name] + 1) % 360
-            self.zone_hues[zone_name] = hue
-            r, g, b = hue_to_rgb(hue)
-            self.strip.set_zone_color(zone_name, r, g, b)
             
     def change_zone(self, delta):
         """
@@ -400,9 +395,16 @@ class LEDController:
         r, g, b = self._get_zone_color(old_zone_name)
         self.strip.set_zone_color(old_zone_name, r, g, b)
 
-        # Now switch to new zone
-        self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_names)
-        zone_name = self._get_current_zone()
+        # Now switch to new zone, SKIPPING lamp if lamp_solo is active
+        for _ in range(len(self.zone_names)):  # Max iterations to avoid infinite loop
+            self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_names)
+            zone_name = self._get_current_zone()
+
+            # Skip lamp if lamp_solo is ON
+            if zone_name == "lamp" and self.lamp_solo:
+                continue  # Try next zone
+            else:
+                break  # Found valid zone
 
         # Pulsing thread will automatically pick up the new zone (no restart needed)
 
@@ -486,14 +488,21 @@ class LEDController:
 
     def adjust_animation_speed(self, delta):
         """
-        Adjust global animation speed (0–100).
+        Adjust global animation speed (1–100).
         Called when in ANIMATION_PARAM mode with SPEED submode.
+        Updates live if animation is running.
         """
         if self.mode != Mode.ANIMATION_PARAM or self.anim_param_mode != AnimationParamMode.SPEED:
             return
 
         self.animation_speed = max(1, min(100, self.animation_speed + delta))
+
+        # Update live if animation is running
+        if self.animation_enabled:
+            self.animation_engine.update_param("speed", self.animation_speed)
+
         print(f">>> Animation speed = {self.animation_speed}/100")
+        self._sync_preview()
 
     def switch_mode(self):
         """
@@ -561,14 +570,47 @@ class LEDController:
         self._sync_preview()
 
     def toggle_lamp_solo(self):
-        """Toggle lamp solo mode (lamp independent from animations)"""
-        self.lamp_solo = not self.lamp_solo
-        status = "ON" if self.lamp_solo else "OFF"
-        print(f"\n>>> LAMP SOLO: {status}")
-        if self.lamp_solo:
-            print("    Lamp will remain static during animations")
+        """Toggle lamp solo mode - IMMEDIATELY saves and activates warm white"""
+        if not self.lamp_solo:
+            # Activating solo mode: save current lamp state
+            self.lamp_solo_state = {
+                "hue": self.zone_hues["lamp"],
+                "brightness": self.zone_brightness["lamp"],
+                "preset": self.zone_preset_indices["lamp"]
+            }
+            self.lamp_solo = True
+
+            # Set lamp to warm white immediately
+            preset_idx = PRESET_ORDER.index("warm_white")
+            self.zone_preset_indices["lamp"] = preset_idx
+            self.zone_brightness["lamp"] = 255
+
+            # Apply to strip immediately
+            _, (r, g, b) = get_preset_by_index(preset_idx)
+            self.strip.set_zone_color("lamp", r, g, b)
+
+            print(f"\n>>> LAMP SOLO: ON")
+            print("    Lamp -> Warm White @ Full Brightness (state saved)")
         else:
-            print("    Lamp will participate in animations")
+            # Deactivating solo mode: restore previous state
+            self.lamp_solo = False
+
+            if self.lamp_solo_state:
+                self.zone_hues["lamp"] = self.lamp_solo_state["hue"]
+                self.zone_brightness["lamp"] = self.lamp_solo_state["brightness"]
+                self.zone_preset_indices["lamp"] = self.lamp_solo_state["preset"]
+
+                # Apply to strip immediately
+                r, g, b = self._get_zone_color("lamp")
+                self.strip.set_zone_color("lamp", r, g, b)
+
+                print(f"\n>>> LAMP SOLO: OFF")
+                print(f"    Lamp restored: brightness={self.lamp_solo_state['brightness']}/255")
+
+                self.lamp_solo_state = None
+            else:
+                print(f"\n>>> LAMP SOLO: OFF")
+                print("    (No saved state to restore)")
 
     def quick_lamp_white(self):
         """
@@ -589,7 +631,10 @@ class LEDController:
             preset_idx = PRESET_ORDER.index("warm_white")
             self.zone_preset_indices["lamp"] = preset_idx
             self.zone_brightness["lamp"] = 255
-            # Don't change color_mode - pulsing will pick up new values
+
+            # Apply to strip immediately
+            _, (r, g, b) = get_preset_by_index(preset_idx)
+            self.strip.set_zone_color("lamp", r, g, b)
 
             print("\n>>> QUICK ACTION: Lamp -> Warm White @ Full Brightness")
             print("    (Previous state saved - press again to restore)")
@@ -601,37 +646,146 @@ class LEDController:
             self.zone_brightness["lamp"] = brightness
             self.color_mode = color_mode
 
+            # Apply to strip immediately
+            r, g, b = self._get_zone_color("lamp")
+            self.strip.set_zone_color("lamp", r, g, b)
+
             self.lamp_saved_state = None  # Clear saved state
 
             print("\n>>> QUICK ACTION: Lamp -> Previous state restored")
             print(f"    Brightness: {brightness}/255")
 
     def power_toggle(self):
-        """Toggle power for all zones (ON/OFF)"""
+        """Toggle power for all zones (ON/OFF) - saves and restores brightness"""
         # Check if any zone has brightness > 0
         any_on = any(self.zone_brightness[zone] > 0 for zone in self.zone_names)
 
         if any_on:
-            # Turn off all
+            # Turning OFF: Save current brightness and turn off
+            if not hasattr(self, 'power_saved_brightness'):
+                self.power_saved_brightness = {}
+
             for zone in self.zone_names:
+                # Save current brightness
+                self.power_saved_brightness[zone] = self.zone_brightness[zone]
+                # Turn off
                 self.zone_brightness[zone] = 0
                 self.strip.set_zone_color(zone, 0, 0, 0)
+
             self.preview.clear()
-            print("\n>>> POWER: OFF")
+            print("\n>>> POWER: OFF (brightness saved)")
         else:
-            # Turn on all to 255
-            for zone in self.zone_names:
-                self.zone_brightness[zone] = 255
-                r, g, b = self._get_zone_color(zone)
-                self.strip.set_zone_color(zone, r, g, b)
+            # Turning ON: Restore saved brightness
+            if hasattr(self, 'power_saved_brightness') and self.power_saved_brightness:
+                # Restore saved brightness
+                for zone in self.zone_names:
+                    saved = self.power_saved_brightness.get(zone, 64)  # Default 64 if not saved
+                    self.zone_brightness[zone] = saved
+                    r, g, b = self._get_zone_color(zone)
+                    self.strip.set_zone_color(zone, r, g, b)
+                print("\n>>> POWER: ON (brightness restored)")
+            else:
+                # No saved state, use default brightness (64)
+                for zone in self.zone_names:
+                    self.zone_brightness[zone] = 64
+                    r, g, b = self._get_zone_color(zone)
+                    self.strip.set_zone_color(zone, r, g, b)
+                print("\n>>> POWER: ON (default brightness)")
+
             self._sync_preview()
-            print("\n>>> POWER: ON")
 
     def clear_all(self):
         """Turn off all LEDs"""
         self.strip.clear()
         self.preview.clear()
         print(">>> All LEDs cleared")
+
+    async def start_animation(self):
+        """Start the currently selected animation"""
+        if self.animation_enabled:
+            print("[INFO] Animation already running")
+            return
+
+        # Stop pulsing if active
+        if self.edit_mode and self.pulse_active:
+            self._stop_pulse()
+
+        # Prepare animation parameters
+        params = {
+            "speed": self.animation_speed,
+        }
+
+        # Add animation-specific parameters
+        if self.animation_name == "breathe":
+            params["color"] = self.animation_color
+            params["intensity"] = self.animation_intensity
+        elif self.animation_name == "color_fade":
+            # Use current zone hue as starting point if no color specified
+            if self.animation_color:
+                # Convert RGB to hue (approximate)
+                params["start_hue"] = 0
+            else:
+                zone_name = self._get_current_zone()
+                params["start_hue"] = self.zone_hues[zone_name]
+        elif self.animation_name == "snake":
+            if self.animation_color:
+                params["color"] = tuple(self.animation_color)
+            else:
+                params["color"] = (255, 255, 255)
+
+        # Exclude lamp from animation if lamp_solo is ON
+        excluded_zones = ["lamp"] if self.lamp_solo else []
+
+        # Start animation
+        await self.animation_engine.start(self.animation_name, excluded_zones=excluded_zones, **params)
+
+        # Cache brightness values for animations
+        for zone_name in self.zone_names:
+            brightness = self.zone_brightness[zone_name]
+            self.animation_engine.current_animation.set_zone_brightness_cache(zone_name, brightness)
+
+        self.animation_enabled = True
+
+        print(f"\n>>> ANIMATION STARTED: {self.animation_name}")
+        print(f"    Speed: {self.animation_speed}/100")
+
+    async def stop_animation(self):
+        """Stop current animation and restore static colors"""
+        if not self.animation_enabled:
+            return
+
+        await self.animation_engine.stop()
+        self.animation_enabled = False
+
+        # Restore all zones to their static colors
+        for zone_name in self.zone_names:
+            r, g, b = self._get_zone_color(zone_name)
+            self.strip.set_zone_color(zone_name, r, g, b)
+
+        # Restart pulsing if edit mode is on
+        if self.edit_mode:
+            self._start_pulse()
+
+        print(f"\n>>> ANIMATION STOPPED")
+
+    def select_animation(self, delta):
+        """
+        Select animation in ANIMATION_SELECT mode
+
+        Args:
+            delta: -1 for previous, +1 for next
+        """
+        if self.mode != Mode.ANIMATION_SELECT:
+            return
+
+        self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
+        self.animation_name = self.available_animations[self.selected_animation_index]
+
+        print(f"\n>>> Animation: {self.animation_name}")
+        print(f"    [{self.selected_animation_index + 1}/{len(self.available_animations)}]")
+
+        # Update preview
+        self._sync_preview()
 
     def get_status(self):
         """
@@ -643,9 +797,17 @@ class LEDController:
         return {
             "mode": self.mode.name,
             "color_mode": self.color_mode.name,
-            "animation_speed": self.animation_speed,
             "edit_mode": self.edit_mode,
             "lamp_solo": self.lamp_solo,
+            "lamp_solo_state": self.lamp_solo_state,
+            "animation": {
+                "enabled": self.animation_enabled,
+                "name": self.animation_name,
+                "speed": self.animation_speed,
+                "color": self.animation_color,
+                "color2": self.animation_color2,
+                "intensity": self.animation_intensity
+            },
             "zones": {
                 zone: {
                     "hue": self.zone_hues[zone],

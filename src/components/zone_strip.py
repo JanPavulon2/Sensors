@@ -76,6 +76,33 @@ class ZoneStrip:
         """
         return self.zone_colors.get(zone_name)
 
+    def set_pixel_color(self, zone_name, pixel_index, r, g, b):
+        """
+        Set color for a specific pixel within a zone
+
+        Args:
+            zone_name: Name of zone (must exist in self.zones)
+            pixel_index: Index of pixel within the zone (0-based)
+            r, g, b: RGB values (0-255)
+        """
+        if zone_name not in self.zones:
+            return
+
+        start, end = self.zones[zone_name]
+        zone_length = end - start + 1
+
+        # Validate pixel index
+        if pixel_index < 0 or pixel_index >= zone_length:
+            return
+
+        # Calculate absolute pixel position on strip
+        absolute_position = start + pixel_index
+
+        if absolute_position < self.pixel_count:
+            color = Color(r, g, b)
+            self.strip.setPixelColor(absolute_position, color)
+            self.strip.show()
+
     def apply_all_zones(self):
         """Apply all zone colors to strip"""
         for zone_name, (r, g, b) in self.zone_colors.items():

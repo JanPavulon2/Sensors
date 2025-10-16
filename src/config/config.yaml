@@ -3,14 +3,14 @@ hardware:
     zone_selector: { clk: 5, dt: 6, sw: 13 }
     modulator: { clk: 16, dt: 20, sw: 21 }
 
-  buttons: [24, 23, 26, 22]
+  buttons: [22, 26, 23, 24]
 
   leds:
     preview:
       gpio: 19
       count: 8
       color_order: GRB
-      brightness: 255
+      brightness: 100
     strip:
       gpio: 18
       count: 48
@@ -53,3 +53,20 @@ zones:
     pixel_count: 15      # 45 physical LEDs (15 * 3)
     enabled: true
     order: 6
+
+animations:
+  breathe:
+    default_speed: 50
+    default_intensity: 100
+    min_speed: 1
+    max_speed: 100
+  color_fade:
+    default_speed: 30
+    default_start_hue: 0
+    min_speed: 1
+    max_speed: 100
+  snake:
+    default_speed: 60
+    default_color: [255, 255, 255]
+    min_speed: 1
+    max_speed: 100

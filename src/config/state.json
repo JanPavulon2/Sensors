@@ -1,39 +1,47 @@
 {
-  "mode": "ANIMATION_PARAM",
-  "color_mode": "PRESET",
-  "animation_speed": 94,
+  "mode": "ANIMATION_SELECT",
+  "color_mode": "HUE",
   "edit_mode": true,
   "lamp_solo": false,
+  "lamp_solo_state": null,
+  "animation": {
+    "enabled": true,
+    "name": "color_fade",
+    "speed": 57,
+    "color": null,
+    "color2": null,
+    "intensity": 100
+  },
   "zones": {
     "lamp": {
       "hue": 90,
-      "brightness": 32,
+      "brightness": 64,
       "preset": 10
     },
     "top": {
       "hue": 280,
-      "brightness": 255,
-      "preset": 14
+      "brightness": 64,
+      "preset": 10
     },
     "right": {
       "hue": 120,
       "brightness": 64,
-      "preset": 0
+      "preset": 5
     },
     "bottom": {
       "hue": 60,
-      "brightness": 255,
-      "preset": 2
+      "brightness": 64,
+      "preset": 0
     },
     "left": {
       "hue": 10,
-      "brightness": 255,
-      "preset": 7
+      "brightness": 64,
+      "preset": 11
     },
     "strip": {
       "hue": 90,
       "brightness": 64,
-      "preset": 0
+      "preset": 2
     }
   }
 }

@@ -109,8 +109,8 @@ async def main():
             led.adjust_brightness(delta)  # 1 level per click (8 levels total)
             save_state()
         elif led.mode.name == "ANIMATION_SELECT":
-            # TODO: Implement animation selection
-            print(f"[TODO] Animation select: delta={delta}")
+            led.select_animation(delta)  # Select animation
+            save_state()
         elif led.mode.name == "ANIMATION_PARAM":
             if led.anim_param_mode.name == "SPEED":
                 led.adjust_animation_speed(delta * 2)  # faster change
@@ -119,13 +119,19 @@ async def main():
                 print(f"[TODO] Animation param adjust: {led.anim_param_mode}")
     
     def handle_modulator_click():
-        """Modulator button clicked - switch sub-mode"""
+        """Modulator button clicked - switch sub-mode or start/stop animation"""
         if led.mode.name == "COLOR_SELECT":
             led.switch_color_submode()  # HUE <-> PRESET
-            save_state()
+        elif led.mode.name == "ANIMATION_SELECT":
+            # Toggle animation on/off
+            if led.animation_enabled:
+                asyncio.create_task(led.stop_animation())
+            else:
+                asyncio.create_task(led.start_animation())
         elif led.mode.name == "ANIMATION_PARAM":
             led.switch_anim_param_submode()  # SPEED <-> COLOR1 <-> COLOR2 <-> INTENSITY
-            save_state()
+
+        save_state()
 
     def handle_button1():
         """Button 1: Toggle EDIT MODE"""
@@ -150,15 +156,7 @@ async def main():
         while True:
             module.poll()
             await asyncio.sleep(0.01)  # non-blocking sleep
-    
-        
-    async def animation_loop():
-        """Runs background animations or pulsing"""
-        while True:
-            led.update_animations()  # optional method for animations
-            await asyncio.sleep(0.05)
-           
-    
+
     # Autosave loop - disabled since we save after each change
     # async def autosave_loop():
     #     while True:
@@ -196,17 +194,15 @@ async def main():
     print("Async LED Control Station running...")
     
     try:
-        await asyncio.gather(
-            hardware_loop(),
-            animation_loop(),
-            # autosave_loop()  # Disabled - we save after each change
-        )
+        await hardware_loop()
     except (asyncio.CancelledError, KeyboardInterrupt):
         print("\nShutting down...")
     finally:
         # Always cleanup on exit
+        print("Stopping animations...")
+        await led.stop_animation()  # Stop any running animation
         print("Stopping pulsing...")
-        led._stop_pulse()  # Stop pulsing task first
+        led._stop_pulse()  # Stop pulsing task
         await asyncio.sleep(0.1)  # Give time for colors to be restored
         print("Clearing all LEDs...")
         led.clear_all()
