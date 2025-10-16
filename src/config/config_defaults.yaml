@@ -1,3 +1,6 @@
+# Default configuration for LED Control Station
+# This file is used as fallback if config.yaml fails to load
+
 hardware:
   encoders:
     zone_selector: { clk: 5, dt: 6, sw: 13 }

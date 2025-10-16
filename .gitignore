@@ -38,6 +38,8 @@ wheels/
 
 # Project specific - backups and temporary files
 backups/
+old_working/
+src_failed/
 *.lgd-nfy0
 .lgd-nfy0
 

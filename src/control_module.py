@@ -6,8 +6,7 @@ Provides event-driven interface for hardware:
 - 4x Buttons
 
 Usage:
-    config = ConfigManager()
-    module = ControlModule(config)
+    module = ControlModule()
 
     # Assign callbacks
     module.on_zone_selector_rotate = lambda delta: print(f"Zone: {delta}")
@@ -21,6 +20,7 @@ Usage:
 """
 
 import RPi.GPIO as GPIO
+import asyncio
 from components import RotaryEncoder, Button
 
 
@@ -31,60 +31,50 @@ class ControlModule:
     Components:
         - Zone Selector (Encoder 1): Selects which zone to edit
         - Modulator (Encoder 2): Modulates parameters (color, brightness, speed)
-        - 4x Buttons: Various functions
+        - 4x Buttons: Currently unassigned (will be moved when available)
 
     Callbacks (assign functions to these):
         - on_zone_selector_rotate(delta): Called when zone selector rotates
         - on_zone_selector_click(): Called when zone selector button pressed
         - on_modulator_rotate(delta): Called when modulator rotates
         - on_modulator_click(): Called when modulator button pressed
-        - on_button: List of 4 button callbacks
-
-    Args:
-        config: ConfigManager instance for GPIO configuration
+        - on_button: List of 4 button callbacks (currently disabled - buttons unplugged)
     """
 
     def __init__(self, config):
-        """
-        Initialize control module with GPIO configuration
-
-        Args:
-            config: ConfigManager instance
-        """
-        # Store config reference
         self.config = config
-        gpio = config.hardware_gpio
+        print(config)
 
         # Initialize GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
         # Zone Selector (Encoder 1) - from config
-        enc1 = gpio["encoders"]["zone_selector"]
+        zone_cfg = config["hardware"]["encoders"]["zone_selector"]
         self.zone_selector = RotaryEncoder(
-            clk=enc1["clk"],
-            dt=enc1["dt"],
-            sw=enc1["sw"]
+            clk=zone_cfg["clk"],
+            dt=zone_cfg["dt"],
+            sw=zone_cfg["sw"]
         )
 
         # Modulator (Encoder 2) - from config
-        enc2 = gpio["encoders"]["modulator"]
+        mod_cfg = config["hardware"]["encoders"]["modulator"]
         self.modulator = RotaryEncoder(
-            clk=enc2["clk"],
-            dt=enc2["dt"],
-            sw=enc2["sw"]
+            clk=mod_cfg["clk"],
+            dt=mod_cfg["dt"],
+            sw=mod_cfg["sw"]
         )
 
         # Buttons - from config
-        button_gpios = gpio["buttons"]
-        self.buttons = [Button(pin) for pin in button_gpios]
+        button_pins = config["hardware"]["buttons"]
+        self.buttons = [Button(pin) for pin in button_pins]
 
         # Event callbacks (user assigns these)
         self.on_zone_selector_rotate = None
         self.on_zone_selector_click = None
         self.on_modulator_rotate = None
         self.on_modulator_click = None
-        self.on_button = [None] * len(self.buttons)
+        self.on_button = [None, None, None, None]
 
     def poll(self):
         """
@@ -118,3 +108,7 @@ class ControlModule:
     def cleanup(self):
         """Clean up GPIO resources"""
         GPIO.cleanup()
+
+
+
+

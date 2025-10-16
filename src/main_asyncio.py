@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 LED Control Station - Main Entry Point
 
@@ -21,9 +20,10 @@ Modes:
 """
 
 import asyncio
-from config_manager import ConfigManager
 from control_module import ControlModule
 from led_controller import LEDController
+from managers.config_manager import ConfigManager
+from managers.state_manager import StateManager
 
 async def main():
     print("=" * 60)
@@ -61,22 +61,38 @@ async def main():
     print("Starting...")
     print("=" * 60)
 
-    # Load config (with auto-save every 10 seconds)
-    config = ConfigManager(auto_save_interval=10)
+    # load configuration and state
+    config_manager = ConfigManager()
+    config = config_manager.load()
 
-    # Initialize hardware and controller with config
+    # Override zones in config dict with processed zones from zone_manager
+    # This ensures LEDController gets {"lamp": [0,18], ...} format
+    config["zones"] = config_manager.zones
+
+    state_manager = StateManager()
+    state = await state_manager.load()
+
+    # Initialize hardware and controller
     module = ControlModule(config)
-    led = LEDController(config)
+    led = LEDController(config, state)
+
+    # Helper function to save state
+    def save_state():
+        """Update and save state after LED changes"""
+        state_manager.update_from_led(led)
+        asyncio.create_task(state_manager.save())
 
     # Connect hardware events to LED controller
 
     def handle_zone_change(delta):
         """Zone selector rotated - change zone"""
         led.change_zone(delta)
+        save_state()
 
     def handle_zone_selector_click():
         """Zone selector button clicked - switch main mode (when edit_mode=ON)"""
         led.switch_mode()
+        save_state()
 
     def handle_modulator(delta):
         """Modulator rotated - adjust parameter based on mode"""
@@ -88,25 +104,33 @@ async def main():
                 led.adjust_color(delta * 10)  # 10 degrees per click for HUE
             else:  # PRESET
                 led.adjust_color(delta)  # 1 step per click for PRESET
+            save_state()
         elif led.mode.name == "BRIGHTNESS_ADJUST":
             led.adjust_brightness(delta)  # 1 level per click (8 levels total)
+            save_state()
         elif led.mode.name == "ANIMATION_SELECT":
             # TODO: Implement animation selection
             print(f"[TODO] Animation select: delta={delta}")
         elif led.mode.name == "ANIMATION_PARAM":
-            # TODO: Implement animation parameter adjustment
-            print(f"[TODO] Animation param adjust: delta={delta}")
-
+            if led.anim_param_mode.name == "SPEED":
+                led.adjust_animation_speed(delta * 2)  # faster change
+                save_state()
+            else:
+                print(f"[TODO] Animation param adjust: {led.anim_param_mode}")
+    
     def handle_modulator_click():
         """Modulator button clicked - switch sub-mode"""
         if led.mode.name == "COLOR_SELECT":
             led.switch_color_submode()  # HUE <-> PRESET
+            save_state()
         elif led.mode.name == "ANIMATION_PARAM":
             led.switch_anim_param_submode()  # SPEED <-> COLOR1 <-> COLOR2 <-> INTENSITY
+            save_state()
 
     def handle_button1():
         """Button 1: Toggle EDIT MODE"""
         led.toggle_edit_mode()
+        save_state()
 
     def handle_button2():
         """Button 2: Quick action - Lamp warm white"""
@@ -119,7 +143,29 @@ async def main():
     def handle_button4():
         """Button 4: Toggle lamp solo mode"""
         led.toggle_lamp_solo()
+        save_state()
 
+    async def hardware_loop():
+        """Poll hardware asynchronously"""
+        while True:
+            module.poll()
+            await asyncio.sleep(0.01)  # non-blocking sleep
+    
+        
+    async def animation_loop():
+        """Runs background animations or pulsing"""
+        while True:
+            led.update_animations()  # optional method for animations
+            await asyncio.sleep(0.05)
+           
+    
+    # Autosave loop - disabled since we save after each change
+    # async def autosave_loop():
+    #     while True:
+    #         state_manager.update_from_led(led)
+    #         await state_manager.save()
+    #         await asyncio.sleep(10)
+             
     # Assign callbacks
     module.on_zone_selector_rotate = handle_zone_change
     module.on_zone_selector_click = handle_zone_selector_click
@@ -136,8 +182,8 @@ async def main():
     print(f"  Edit Mode: {status['edit_mode']}")
     print(f"  Mode: {status['mode']}")
     print(f"  Color Mode: {status['color_mode']}")
-    print(f"  Zone: {status['zone']}")
-    print(f"  Brightness: {status['brightness']}/255")
+    print(f"  Zone: {status['zones']}")
+    # print(f"  Brightness: {status['brightness']}/255")
     print(f"  Lamp Solo: {status['lamp_solo']}")
     print()
     print("TIP: Press BTN1 to enter EDIT MODE and start editing!")
@@ -145,35 +191,36 @@ async def main():
     print("=" * 60)
     print()
 
-    # Start async tasks
-    config.start_auto_save_task()  # Start config auto-save
-
-    # Start pulsing if edit mode is ON
-    if led.edit_mode:
-        led.start_pulse_task()
-
-    # Main polling loop
+    
+            
+    print("Async LED Control Station running...")
+    
     try:
-        while True:
-            module.poll()  # Check hardware and call callbacks
-
-            # Handle pulse task start/stop based on edit_mode changes
-            if led.edit_mode and led.pulse_task is None:
-                led.start_pulse_task()
-            elif not led.edit_mode and led.pulse_task is not None:
-                await led.stop_pulse_task()
-
-            await asyncio.sleep(0.01)  # 10ms polling interval
-
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        pass  # Normal shutdown
+        await asyncio.gather(
+            hardware_loop(),
+            animation_loop(),
+            # autosave_loop()  # Disabled - we save after each change
+        )
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        print("\nShutting down...")
     finally:
-        print("\n\nShutting down...")
-        await led.clear_all()
+        # Always cleanup on exit
+        print("Stopping pulsing...")
+        led._stop_pulse()  # Stop pulsing task first
+        await asyncio.sleep(0.1)  # Give time for colors to be restored
+        print("Clearing all LEDs...")
+        led.clear_all()
+        print("Cleaning up GPIO...")
         module.cleanup()
-        await config.cleanup()  # Save state and stop auto-save
-        print("Goodbye!")
+        print("Saving final state...")
+        state_manager.update_from_led(led)
+        await state_manager.save()
+        print("Final state saved. Goodbye!")
+
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nShutting down gracefully...")

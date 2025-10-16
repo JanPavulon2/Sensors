@@ -1,79 +1,39 @@
 {
-  "version": "1.0.0",
-  "last_updated": "2025-10-16T10:19:48.748091",
-  "system": {
-    "power": true,
-    "edit_mode": true,
-    "lamp_solo": false,
-    "animation_running": false,
-    "current_mode": "COLOR_SELECT",
-    "color_mode": "PRESET",
-    "anim_param_mode": "SPEED",
-    "preview_mode": "COLOR_DISPLAY",
-    "selected_zone_index": 4,
-    "selected_preset_index": 16,
-    "selected_animation_index": 0
-  },
+  "mode": "ANIMATION_PARAM",
+  "color_mode": "PRESET",
+  "animation_speed": 94,
+  "edit_mode": true,
+  "lamp_solo": false,
   "zones": {
     "lamp": {
-      "hue": 340,
-      "preset_index": 16,
-      "brightness": 255,
-      "enabled": true,
-      "animation": null
+      "hue": 90,
+      "brightness": 32,
+      "preset": 10
     },
     "top": {
-      "hue": 170,
-      "preset_index": 5,
-      "brightness": 64,
-      "enabled": true,
-      "animation": null
+      "hue": 280,
+      "brightness": 255,
+      "preset": 14
     },
     "right": {
       "hue": 120,
-      "preset_index": 9,
-      "brightness": 128,
-      "enabled": true,
-      "animation": null
+      "brightness": 64,
+      "preset": 0
     },
     "bottom": {
-      "hue": 240,
-      "preset_index": 0,
-      "brightness": 192,
-      "enabled": true,
-      "animation": null
+      "hue": 60,
+      "brightness": 255,
+      "preset": 2
     },
     "left": {
-      "hue": 190,
-      "preset_index": 16,
-      "brightness": 96,
-      "enabled": true,
-      "animation": null
+      "hue": 10,
+      "brightness": 255,
+      "preset": 7
     },
     "strip": {
-      "hue": 170,
-      "preset_index": 0,
-      "brightness": 255,
-      "enabled": true,
-      "animation": null
+      "hue": 90,
+      "brightness": 64,
+      "preset": 0
     }
-  },
-  "animation": {
-    "current": "static",
-    "speed": 50,
-    "color1": [
-      255,
-      0,
-      0
-    ],
-    "color2": [
-      0,
-      0,
-      255
-    ],
-    "intensity": 50
-  },
-  "quick_action": {
-    "lamp_saved_state": null
   }
 }

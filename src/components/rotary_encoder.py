@@ -1,3 +1,4 @@
+
 """
 Rotary Encoder Component
 
@@ -88,3 +89,4 @@ class RotaryEncoder:
 
         self._last_button_state = current_state
         return False
+
