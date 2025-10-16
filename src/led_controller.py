@@ -55,119 +55,200 @@ class LEDController:
     LED Controller with state machine
 
     Manages:
-        - Preview panel (8 LEDs, GPIO 19, GRB)
-        - Main strip (33 pixels, GPIO 18, BRG)
-        - 5 zones: lamp, top, right, bottom, left
+        - Preview panel (configured from config)
+        - Main strip (configured from config with zones)
 
     Modes:
-        - COLOR_EDIT: Modulator changes hue
-        - BRIGHTNESS_EDIT: Modulator changes brightness
+        - COLOR_SELECT: Adjust color (HUE or PRESET)
+        - BRIGHTNESS_ADJUST: Adjust brightness
+        - ANIMATION_SELECT: Select animation
+        - ANIMATION_PARAM: Adjust animation parameters
 
     Example:
-        led = LEDController()
+        config = ConfigManager()
+        led = LEDController(config)
 
         # Change zone
         led.change_zone(1)  # Next zone
 
         # Adjust color
-        led.adjust_hue(10)  # +10 degrees
+        led.adjust_color(10)  # +10 degrees in HUE mode
 
         # Change mode
-        led.switch_mode()  # COLOR_EDIT -> BRIGHTNESS_EDIT
+        led.switch_mode()  # COLOR_SELECT -> BRIGHTNESS_ADJUST
     """
 
-    def __init__(self):
-        # Hardware setup
-        # Preview and Strip are on SEPARATE GPIOs
-        # Preview: GPIO 19, RGB hardware
-        # Strip: GPIO 18, BRG hardware
+    def __init__(self, config):
+        """
+        Initialize LED controller with configuration
 
-        self.preview = PreviewPanel(
-            gpio=19,  # Separate GPIO for preview
-            count=8,
-            color_order=ws.WS2811_STRIP_GRB,  # Preview panel is GRB (CJMCU-2812-8)
-            brightness=100  # Full hardware brightness
-        )
+        Args:
+            config: ConfigManager instance
+        """
+        # Store config reference
+        self.config = config
+        gpio = config.hardware_gpio
+        led_settings = config.led_settings
 
-        # Zone definitions: lamp(19px), top(4px), right(3px), bottom(4px), left(3px)
-        # All zones are on the main strip which is connected serially
-        zones = {
-            "lamp": [0, 18],    # 19 pixels = 57 physical LEDs (desk lamp)
-            "top": [19, 22],    # 4 pixels = 12 physical LEDs
-            "right": [23, 25],  # 3 pixels = 9 physical LEDs
-            "bottom": [26, 29], # 4 pixels = 12 physical LEDs
-            "left": [30, 32],    # 3 pixels = 9 physical LEDs
-            "strip": [33, 47]   # 14 pixels
+        # Get preview settings
+        preview_settings = led_settings.get("preview", {})
+        preview_gpio = gpio["preview_panel"]
+        preview_count = preview_settings.get("pixel_count", 8)
+        preview_brightness = preview_settings.get("brightness", 100)
+        preview_order_str = preview_settings.get("color_order", "GRB")
+
+        # Map color order string to rpi_ws281x constant
+        color_order_map = {
+            "RGB": ws.WS2811_STRIP_RGB,
+            "RBG": ws.WS2811_STRIP_RBG,
+            "GRB": ws.WS2811_STRIP_GRB,
+            "GBR": ws.WS2811_STRIP_GBR,
+            "BRG": ws.WS2811_STRIP_BRG,
+            "BGR": ws.WS2811_STRIP_BGR
         }
+        preview_color_order = color_order_map.get(preview_order_str, ws.WS2811_STRIP_GRB)
 
-        self.strip = ZoneStrip(
-            gpio=18,  # Separate GPIO for strip
-            pixel_count=48,  # Total: 99 physical LEDs / 3 = 33 pixels
-            zones=zones,
-            color_order=ws.WS2811_STRIP_BRG,  # Strip uses BRG
-            brightness=255  # Full hardware brightness
+        # Create preview panel
+        self.preview = PreviewPanel(
+            gpio=preview_gpio,
+            count=preview_count,
+            color_order=preview_color_order,
+            brightness=preview_brightness
         )
+
+        # Get strip settings
+        strip_settings = led_settings.get("strip", {})
+        strip_gpio = gpio["led_strip"]
+        strip_pixel_count = strip_settings.get("pixel_count", 48)
+        strip_brightness = strip_settings.get("brightness", 180)
+        strip_order_str = strip_settings.get("color_order", "BRG")
+        strip_color_order = color_order_map.get(strip_order_str, ws.WS2811_STRIP_BRG)
+
+        # Build zones dict from config (calculate indices automatically)
+        zones_config = config.zones  # Already sorted by order
+        zones = {}
+        current_start = 0
+        self.zone_names = []
+
+        for zone_cfg in zones_config:
+            tag = zone_cfg["tag"]
+            length = zone_cfg["length"]
+            end = current_start + length - 1
+            zones[tag] = [current_start, end]
+            self.zone_names.append(tag)
+            current_start = end + 1
+
+        # Create zone strip
+        self.strip = ZoneStrip(
+            gpio=strip_gpio,
+            pixel_count=strip_pixel_count,
+            zones=zones,
+            color_order=strip_color_order,
+            brightness=strip_brightness
+        )
+
+        # Load state from config
+        system_state = config.get_system_state()
+        defaults = config.defaults
 
         # Global state
-        self.edit_mode = True           # Start with edit mode ON
-        self.lamp_solo = False          # When True, lamp is independent from global animations
-        self.animation_running = False  # When True, global animation is active
+        self.edit_mode = system_state.get("edit_mode", defaults.get("edit_mode", True))
+        self.lamp_solo = system_state.get("lamp_solo", defaults.get("lamp_solo", False))
+        self.animation_running = system_state.get("animation_running", False)
 
-        # Main mode state
-        self.mode = Mode.COLOR_SELECT
-        self.color_mode = ColorMode.HUE
-        self.anim_param_mode = AnimationParamMode.SPEED
-        self.preview_mode = PreviewMode.COLOR_DISPLAY
+        # Main mode state - convert string to enum
+        mode_str = system_state.get("current_mode", defaults.get("mode", "COLOR_SELECT"))
+        self.mode = Mode[mode_str]
+
+        color_mode_str = system_state.get("color_mode", defaults.get("color_mode", "HUE"))
+        self.color_mode = ColorMode[color_mode_str]
+
+        anim_param_str = system_state.get("anim_param_mode", "SPEED")
+        self.anim_param_mode = AnimationParamMode[anim_param_str]
+
+        preview_mode_str = system_state.get("preview_mode", "COLOR_DISPLAY")
+        self.preview_mode = PreviewMode[preview_mode_str]
 
         # Zone selection
-        self.zone_names = list(zones.keys())
-        self.current_zone_index = 0
+        self.current_zone_index = system_state.get("selected_zone_index", 0)
 
-        # Parameters per zone (used when not in animation mode)
-        self.zone_hues = {name: 0 for name in self.zone_names}  # Hue 0-360
-        self.zone_preset_indices = {name: 0 for name in self.zone_names}  # Index in PRESET_ORDER
-        self.zone_brightness = {name: 64 for name in self.zone_names}  # 0-255 (default 25%)
+        # Load zone states from config
+        self.zone_hues = {}
+        self.zone_preset_indices = {}
+        self.zone_brightness = {}
 
-        # Global animation parameters (when animation_running=True)
-        self.current_animation = "static"  # Name of animation
-        self.animation_speed = 50          # 0-100
-        self.animation_color1 = (255, 0, 0)  # Primary color
-        self.animation_color2 = (0, 0, 255)  # Secondary color (for fade, gradient)
-        self.animation_intensity = 50      # 0-100
-        self.selected_animation_index = 0  # Index in animations list
+        for tag in self.zone_names:
+            zone_state = config.get_zone_state(tag)
+            self.zone_hues[tag] = zone_state.get("hue", 0)
+            self.zone_preset_indices[tag] = zone_state.get("preset_index", 0)
+            self.zone_brightness[tag] = zone_state.get("brightness", 64)
+
+        # Global animation parameters
+        anim_state = config.get_animation_state()
+        self.current_animation = anim_state.get("current", "static")
+        self.animation_speed = anim_state.get("speed", defaults.get("animation_speed", 50))
+        self.animation_color1 = tuple(anim_state.get("color1", [255, 0, 0]))
+        self.animation_color2 = tuple(anim_state.get("color2", [0, 0, 255]))
+        self.animation_intensity = anim_state.get("intensity", defaults.get("animation_intensity", 50))
+        self.selected_animation_index = system_state.get("selected_animation_index", 0)
 
         # Pulsing thread for edit mode indicator
         self.pulse_thread = None
         self.pulse_active = False
         self.pulse_lock = threading.Lock()
 
-        # Quick lamp state memory (for restoring after quick action)
-        self.lamp_saved_state = None  # (hue, preset_idx, brightness, color_mode)
+        # Quick lamp state memory
+        qa_state = config.get_quick_action_state()
+        self.lamp_saved_state = qa_state.get("lamp_saved_state")
 
-        # Initialize with default colors
+        # Initialize zones with colors from state
         self._initialize_zones()
 
-        # Start pulsing since edit_mode is ON by default
-        self._start_pulse()
+        # Start pulsing if edit mode is ON
+        if self.edit_mode:
+            self._start_pulse()
 
     def _initialize_zones(self):
-        """Initialize zones with different colors"""
-        initial_hues = {
-            "lamp": 30,    # Warm orange
-            "top": 0,      # Red
-            "right": 120,  # Green
-            "bottom": 240, # Blue
-            "left": 60,     # Yellow
-            "strip": 90
-        }
+        """Initialize zones with colors from loaded state"""
+        for zone_name in self.zone_names:
+            # Get color based on current hue
+            hue = self.zone_hues[zone_name]
+            brightness = self.zone_brightness[zone_name]
 
-        for zone_name, hue in initial_hues.items():
-            self.zone_hues[zone_name] = hue
             r, g, b = hue_to_rgb(hue)
+
+            # Apply brightness
+            scale = brightness / 255.0
+            r, g, b = int(r * scale), int(g * scale), int(b * scale)
+
             self.strip.set_zone_color(zone_name, r, g, b)
 
-        # Sync preview with first zone
+        # Sync preview with current zone
         self._sync_preview()
+
+    def _save_zone_state(self, zone_name):
+        """Save zone state to config manager"""
+        self.config.update_zone_state(
+            zone_name,
+            hue=self.zone_hues[zone_name],
+            preset_index=self.zone_preset_indices[zone_name],
+            brightness=self.zone_brightness[zone_name]
+        )
+
+    def _save_system_state(self):
+        """Save system state to config manager"""
+        self.config.update_system_state(
+            edit_mode=self.edit_mode,
+            lamp_solo=self.lamp_solo,
+            animation_running=self.animation_running,
+            current_mode=self.mode.name,
+            color_mode=self.color_mode.name,
+            anim_param_mode=self.anim_param_mode.name,
+            preview_mode=self.preview_mode.name,
+            selected_zone_index=self.current_zone_index,
+            selected_preset_index=self.zone_preset_indices.get(self._get_current_zone(), 0),
+            selected_animation_index=self.selected_animation_index
+        )
 
     def _sync_preview(self):
         """
@@ -341,6 +422,9 @@ class LEDController:
         # Sync preview
         self._sync_preview()
 
+        # Save system state (zone selection changed)
+        self._save_system_state()
+
         # Print feedback
         hue = self.zone_hues[zone_name]
         brightness = self.zone_brightness[zone_name]
@@ -380,6 +464,9 @@ class LEDController:
         # Only update preview
         self._sync_preview()
 
+        # Save zone state
+        self._save_zone_state(zone_name)
+
     def adjust_brightness(self, delta):
         """
         Adjust brightness for current zone (only in BRIGHTNESS_ADJUST mode)
@@ -414,6 +501,9 @@ class LEDController:
         # Update preview (bar indicator)
         self._sync_preview()
 
+        # Save zone state
+        self._save_zone_state(zone_name)
+
         print(f">>> {zone_name}: Brightness = {new_brightness}/255 (level {new_level}/8)")
 
     def switch_mode(self):
@@ -440,6 +530,10 @@ class LEDController:
             self.preview_mode = PreviewMode.BAR_INDICATOR
 
         self._sync_preview()
+
+        # Save system state
+        self._save_system_state()
+
         print(f"\n>>> Mode: {self.mode.name}")
 
     def toggle_edit_mode(self):
@@ -456,6 +550,9 @@ class LEDController:
             print(f"\n>>> EDIT MODE: OFF")
             self._stop_pulse()  # Stop pulsing and restore color
 
+        # Save system state
+        self._save_system_state()
+
     def switch_color_submode(self):
         """Switch between HUE and PRESET color modes (only in COLOR_SELECT)"""
         if self.mode != Mode.COLOR_SELECT:
@@ -468,6 +565,9 @@ class LEDController:
 
         print(f"\n>>> Color Mode: {self.color_mode.name}")
         self._sync_preview()
+
+        # Save system state
+        self._save_system_state()
 
     def switch_anim_param_submode(self):
         """Switch between animation parameter submodes (only in ANIMATION_PARAM)"""

@@ -1,0 +1,176 @@
+# ============================================================================
+# LED Control Station - Hardware & Zone Configuration
+# ============================================================================
+# DO NOT edit while application is running!
+# This file contains hardware GPIO mappings and default zone settings.
+# For runtime state (colors, brightness), see state.json
+
+# ============================================================================
+# Hardware GPIO Pin Mapping
+# ============================================================================
+hardware:
+  gpio:
+    # LED Strips
+    preview_panel: 19     # Preview panel (CJMCU-2812-8, 8 LEDs, GRB)
+    led_strip: 18         # Main LED strip (WS2811, BRG)
+
+    # Rotary Encoders
+    encoders:
+      zone_selector:
+        clk: 5            # Zone selector - CLK pin
+        dt: 6             # Zone selector - DT pin
+        sw: 13            # Zone selector - Switch pin
+
+      modulator:
+        clk: 16           # Value modulator - CLK pin
+        dt: 20            # Value modulator - DT pin
+        sw: 21            # Value modulator - Switch pin
+
+    # Buttons (GPIO pins in order: BTN1, BTN2, BTN3, BTN4)
+    buttons:
+      - 24                # BTN1: Toggle EDIT MODE
+      - 23                # BTN2: Quick action - Lamp warm white
+      - 26                # BTN3: Power toggle (all zones ON/OFF)
+      - 22                # BTN4: Toggle LAMP SOLO mode
+
+  # LED Strip Hardware Settings
+  led_settings:
+    frequency: 800000     # 800kHz for WS2812B/WS2811
+    dma: 10               # DMA channel
+    invert: false         # Signal inversion
+    channel: 0            # PWM channel
+
+    # Strip-specific settings
+    strip:
+      brightness: 180     # Hardware brightness for main strip (0-255)
+      color_order: "BRG"  # WS2811 color order
+      pixel_count: 48     # Total pixels on main strip
+
+    # Preview panel settings
+    preview:
+      brightness: 100     # Hardware brightness for preview (0-255)
+      color_order: "GRB"  # CJMCU-2812-8 color order
+      pixel_count: 8      # Number of LEDs on preview panel
+
+# ============================================================================
+# Zone Configuration
+# ============================================================================
+# Zones are sections of the main LED strip connected serially.
+# Each zone has:
+#   - name: Human-readable name
+#   - tag: Short identifier (used in code)
+#   - length: Number of pixels (1 pixel = 3 physical LEDs for WS2811)
+#   - order: Physical connection order (1=first, 2=second, etc.)
+#   - enabled: Whether zone is active
+#   - default_color: Default RGB color [R, G, B] (0-255 each)
+#   - default_brightness: Default brightness (0-255)
+
+zones:
+  - name: "Lamp"
+    tag: "lamp"
+    length: 19            # 19 pixels = 57 physical LEDs
+    order: 1
+    enabled: true
+    default_color: [255, 150, 50]  # Warm orange (hue ~30°)
+    default_brightness: 64
+
+  - name: "Top"
+    tag: "top"
+    length: 4             # 4 pixels = 12 physical LEDs
+    order: 2
+    enabled: true
+    default_color: [255, 0, 0]     # Red (hue 0°)
+    default_brightness: 64
+
+  - name: "Right"
+    tag: "right"
+    length: 3             # 3 pixels = 9 physical LEDs
+    order: 3
+    enabled: true
+    default_color: [0, 255, 0]     # Green (hue 120°)
+    default_brightness: 64
+
+  - name: "Bottom"
+    tag: "bottom"
+    length: 4             # 4 pixels = 12 physical LEDs
+    order: 4
+    enabled: true
+    default_color: [0, 0, 255]     # Blue (hue 240°)
+    default_brightness: 64
+
+  - name: "Left"
+    tag: "left"
+    length: 3             # 3 pixels = 9 physical LEDs
+    order: 5
+    enabled: true
+    default_color: [255, 255, 0]   # Yellow (hue 60°)
+    default_brightness: 64
+
+  - name: "Strip"
+    tag: "strip"
+    length: 14            # 14 pixels = 42 physical LEDs
+    order: 6
+    enabled: true
+    default_color: [127, 255, 127] # Light green (hue ~90°)
+    default_brightness: 64
+
+# ============================================================================
+# System Defaults
+# ============================================================================
+defaults:
+  # Initial operating mode
+  mode: "COLOR_SELECT"              # COLOR_SELECT | BRIGHTNESS_ADJUST | ANIMATION_SELECT | ANIMATION_PARAM
+
+  # Color selection mode
+  color_mode: "HUE"                 # HUE (smooth 0-360°) | PRESET (jump between presets)
+
+  # Edit mode (whether user can modify zones)
+  edit_mode: true                   # Start with edit mode ON
+
+  # Lamp solo mode (lamp independent from animations)
+  lamp_solo: false
+
+  # Preview panel display brightness reduction
+  preview_brightness_scale: 0.3    # 30% of full brightness for preview
+
+  # Animation parameters
+  animation_speed: 50               # 0-100
+  animation_intensity: 50           # 0-100
+
+# ============================================================================
+# Color Presets
+# ============================================================================
+# Predefined colors that can be cycled through in PRESET mode
+color_presets:
+  - name: "Red"
+    rgb: [255, 0, 0]
+
+  - name: "Orange"
+    rgb: [255, 128, 0]
+
+  - name: "Yellow"
+    rgb: [255, 255, 0]
+
+  - name: "Green"
+    rgb: [0, 255, 0]
+
+  - name: "Cyan"
+    rgb: [0, 255, 255]
+
+  - name: "Blue"
+    rgb: [0, 0, 255]
+
+  - name: "Purple"
+    rgb: [128, 0, 255]
+
+  - name: "Magenta"
+    rgb: [255, 0, 255]
+
+  - name: "White"
+    rgb: [255, 255, 255]
+
+  - name: "Warm White"
+    rgb: [255, 200, 150]
+
+  - name: "Cool White"
+    rgb: [200, 220, 255]

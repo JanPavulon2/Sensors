@@ -1,0 +1,75 @@
+{
+  "version": "1.0.0",
+  "last_updated": null,
+
+  "system": {
+    "power": true,
+    "edit_mode": true,
+    "lamp_solo": false,
+    "animation_running": false,
+    "current_mode": "COLOR_SELECT",
+    "color_mode": "HUE",
+    "anim_param_mode": "SPEED",
+    "preview_mode": "COLOR_DISPLAY",
+    "selected_zone_index": 0,
+    "selected_preset_index": 0,
+    "selected_animation_index": 0
+  },
+
+  "zones": {
+    "lamp": {
+      "hue": 30,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    },
+    "top": {
+      "hue": 0,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    },
+    "right": {
+      "hue": 120,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    },
+    "bottom": {
+      "hue": 240,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    },
+    "left": {
+      "hue": 60,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    },
+    "strip": {
+      "hue": 90,
+      "preset_index": 0,
+      "brightness": 64,
+      "enabled": true,
+      "animation": null
+    }
+  },
+
+  "animation": {
+    "current": "static",
+    "speed": 50,
+    "color1": [255, 0, 0],
+    "color2": [0, 0, 255],
+    "intensity": 50
+  },
+
+  "quick_action": {
+    "lamp_saved_state": null
+  }
+}

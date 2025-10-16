@@ -61,12 +61,12 @@ def main():
     print("Starting...")
     print("=" * 60)
 
-    # Load config
-    config = ConfigManager()
-    
-    # Initialize hardware and controller
-    module = ControlModule()
-    led = LEDController()
+    # Load config (with auto-save every 10 seconds)
+    config = ConfigManager(auto_save_interval=10)
+
+    # Initialize hardware and controller with config
+    module = ControlModule(config)
+    led = LEDController(config)
 
     # Connect hardware events to LED controller
 
@@ -155,6 +155,7 @@ def main():
         print("\n\nShutting down...")
         led.clear_all()
         module.cleanup()
+        config.cleanup()  # Save state and stop auto-save
         print("Goodbye!")
 
 

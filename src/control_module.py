@@ -6,7 +6,8 @@ Provides event-driven interface for hardware:
 - 4x Buttons
 
 Usage:
-    module = ControlModule()
+    config = ConfigManager()
+    module = ControlModule(config)
 
     # Assign callbacks
     module.on_zone_selector_rotate = lambda delta: print(f"Zone: {delta}")
@@ -30,43 +31,60 @@ class ControlModule:
     Components:
         - Zone Selector (Encoder 1): Selects which zone to edit
         - Modulator (Encoder 2): Modulates parameters (color, brightness, speed)
-        - 4x Buttons: Currently unassigned (will be moved when available)
+        - 4x Buttons: Various functions
 
     Callbacks (assign functions to these):
         - on_zone_selector_rotate(delta): Called when zone selector rotates
         - on_zone_selector_click(): Called when zone selector button pressed
         - on_modulator_rotate(delta): Called when modulator rotates
         - on_modulator_click(): Called when modulator button pressed
-        - on_button: List of 4 button callbacks (currently disabled - buttons unplugged)
+        - on_button: List of 4 button callbacks
+
+    Args:
+        config: ConfigManager instance for GPIO configuration
     """
 
-    def __init__(self):
+    def __init__(self, config):
+        """
+        Initialize control module with GPIO configuration
+
+        Args:
+            config: ConfigManager instance
+        """
+        # Store config reference
+        self.config = config
+        gpio = config.hardware_gpio
+
         # Initialize GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
-        # Zone Selector (Encoder 1)
-        self.zone_selector = RotaryEncoder(clk=5, dt=6, sw=13)
+        # Zone Selector (Encoder 1) - from config
+        enc1 = gpio["encoders"]["zone_selector"]
+        self.zone_selector = RotaryEncoder(
+            clk=enc1["clk"],
+            dt=enc1["dt"],
+            sw=enc1["sw"]
+        )
 
-        # Modulator (Encoder 2)
-        self.modulator = RotaryEncoder(clk=16, dt=20, sw=21)
+        # Modulator (Encoder 2) - from config
+        enc2 = gpio["encoders"]["modulator"]
+        self.modulator = RotaryEncoder(
+            clk=enc2["clk"],
+            dt=enc2["dt"],
+            sw=enc2["sw"]
+        )
 
-        # Buttons (currently unplugged - will be reassigned later)
-        # TODO: Move buttons when GPIO 19 freed up (currently used by preview)
-        self.buttons = [
-            Button(24),  # BTN1
-            Button(23),  # BTN2
-            Button(26),  # BTN3
-            Button(22),  # BTN4 (moved from GPIO 19)
-        ]
-        # self.buttons = []  # Disabled for now
+        # Buttons - from config
+        button_gpios = gpio["buttons"]
+        self.buttons = [Button(pin) for pin in button_gpios]
 
         # Event callbacks (user assigns these)
         self.on_zone_selector_rotate = None
         self.on_zone_selector_click = None
         self.on_modulator_rotate = None
         self.on_modulator_click = None
-        self.on_button = [None, None, None, None]
+        self.on_button = [None] * len(self.buttons)
 
     def poll(self):
         """

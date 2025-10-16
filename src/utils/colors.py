@@ -134,3 +134,43 @@ def hue_to_rgb(hue):
         return (int((hue - 240) * 4.25), 0, 255)
     else:
         return (255, 0, int((360 - hue) * 4.25))
+
+
+def rgb_to_hue(r, g, b):
+    """
+    Convert RGB (0-255) to hue (0-360)
+
+    Converts RGB color to hue angle. Returns 0 for grayscale colors.
+
+    Args:
+        r: Red value (0-255)
+        g: Green value (0-255)
+        b: Blue value (0-255)
+
+    Returns:
+        Hue value in degrees (0-360)
+
+    Example:
+        hue = rgb_to_hue(255, 0, 0)    # 0 (Red)
+        hue = rgb_to_hue(0, 255, 0)    # 120 (Green)
+        hue = rgb_to_hue(0, 0, 255)    # 240 (Blue)
+    """
+    if r == g == b:
+        return 0
+
+    r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+    max_c = max(r_norm, g_norm, b_norm)
+    min_c = min(r_norm, g_norm, b_norm)
+    delta = max_c - min_c
+
+    if delta == 0:
+        return 0
+
+    if max_c == r_norm:
+        hue = 60 * (((g_norm - b_norm) / delta) % 6)
+    elif max_c == g_norm:
+        hue = 60 * (((b_norm - r_norm) / delta) + 2)
+    else:
+        hue = 60 * (((r_norm - g_norm) / delta) + 4)
+
+    return int(hue) % 360
