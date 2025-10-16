@@ -16,8 +16,7 @@ from enum import Enum, auto
 from rpi_ws281x import ws, Color
 from components import PreviewPanel, ZoneStrip
 from utils import hue_to_rgb, get_preset_by_index, PRESET_ORDER
-import threading
-import time
+import asyncio
 import math
 
 
@@ -192,10 +191,8 @@ class LEDController:
         self.animation_intensity = anim_state.get("intensity", defaults.get("animation_intensity", 50))
         self.selected_animation_index = system_state.get("selected_animation_index", 0)
 
-        # Pulsing thread for edit mode indicator
-        self.pulse_thread = None
-        self.pulse_active = False
-        self.pulse_lock = threading.Lock()
+        # Pulsing task for edit mode indicator
+        self.pulse_task = None
 
         # Quick lamp state memory
         qa_state = config.get_quick_action_state()
@@ -204,9 +201,7 @@ class LEDController:
         # Initialize zones with colors from state
         self._initialize_zones()
 
-        # Start pulsing if edit mode is ON
-        if self.edit_mode:
-            self._start_pulse()
+        # Note: Pulsing task will be started by main.py after asyncio loop starts
 
     def _initialize_zones(self):
         """Initialize zones with colors from loaded state"""
@@ -221,7 +216,11 @@ class LEDController:
             scale = brightness / 255.0
             r, g, b = int(r * scale), int(g * scale), int(b * scale)
 
-            self.strip.set_zone_color(zone_name, r, g, b)
+            # Prepare data without showing
+            self.strip.set_zone_color(zone_name, r, g, b, show=False)
+
+        # Now send all zones to hardware at once
+        self.strip.show()
 
         # Sync preview with current zone
         self._sync_preview()
@@ -347,63 +346,68 @@ class LEDController:
         """Get current zone name"""
         return self.zone_names[self.current_zone_index]
 
-    def _pulse_zone_thread(self):
-        """Background thread that pulses the currently selected zone"""
-        cycle_duration = 1.0  # 1 second per pulse cycle (faster)
-        steps = 40  # Number of steps in one cycle
+    async def pulse_zone_loop(self):
+        """Async task that pulses the currently selected zone"""
+        cycle_duration = 1.0  # 1 second per pulse cycle
+        steps = 20  # Number of steps in one cycle (50ms between updates = 20 FPS)
 
-        while self.pulse_active:
-            for step in range(steps):
-                if not self.pulse_active:
-                    break
+        try:
+            while True:
+                for step in range(steps):
+                    # Get CURRENT zone and color (dynamically, not cached)
+                    zone_name = self._get_current_zone()
 
-                # Get CURRENT zone and color (dynamically, not cached)
-                zone_name = self._get_current_zone()
+                    # Get base color WITHOUT brightness applied
+                    if self.color_mode == ColorMode.HUE:
+                        hue = self.zone_hues[zone_name]
+                        r, g, b = hue_to_rgb(hue)
+                    else:  # PRESET
+                        preset_idx = self.zone_preset_indices[zone_name]
+                        _, (r, g, b) = get_preset_by_index(preset_idx)
 
-                # Get base color WITHOUT brightness applied
-                if self.color_mode == ColorMode.HUE:
-                    hue = self.zone_hues[zone_name]
-                    r, g, b = hue_to_rgb(hue)
-                else:  # PRESET
-                    preset_idx = self.zone_preset_indices[zone_name]
-                    _, (r, g, b) = get_preset_by_index(preset_idx)
+                    base_brightness = self.zone_brightness[zone_name]
 
-                base_brightness = self.zone_brightness[zone_name]
+                    # Sine wave for smooth pulsing (0.1 to 1.0 multiplier - deeper fade)
+                    t = step / steps
+                    brightness_scale = 0.1 + 0.9 * (math.sin(t * 2 * math.pi - math.pi/2) + 1) / 2
 
-                # Sine wave for smooth pulsing (0.1 to 1.0 multiplier - deeper fade)
-                t = step / steps
-                brightness_scale = 0.1 + 0.9 * (math.sin(t * 2 * math.pi - math.pi/2) + 1) / 2
+                    # Apply pulsing brightness
+                    pulsed_brightness = base_brightness * brightness_scale
+                    scale = pulsed_brightness / 255.0
+                    r, g, b = int(r * scale), int(g * scale), int(b * scale)
 
-                # Apply pulsing brightness
-                pulsed_brightness = base_brightness * brightness_scale
-                scale = pulsed_brightness / 255.0
-                r, g, b = int(r * scale), int(g * scale), int(b * scale)
+                    # Update zone color WITHOUT showing (prepare data only)
+                    self.strip.set_zone_color(zone_name, r, g, b, show=False)
 
-                with self.pulse_lock:
-                    self.strip.set_zone_color(zone_name, r, g, b)
+                    # Now send to hardware - this is the ONLY strip.show() call!
+                    self.strip.show()
 
-                time.sleep(cycle_duration / steps)
-
-    def _start_pulse(self):
-        """Start pulsing animation for edit mode"""
-        if self.pulse_thread and self.pulse_thread.is_alive():
-            return  # Already pulsing
-
-        self.pulse_active = True
-        self.pulse_thread = threading.Thread(target=self._pulse_zone_thread, daemon=True)
-        self.pulse_thread.start()
-
-    def _stop_pulse(self):
-        """Stop pulsing animation and restore ALL zone colors"""
-        self.pulse_active = False
-        if self.pulse_thread:
-            self.pulse_thread.join(timeout=0.5)
-
-        # Restore ALL zones to their correct colors (not just current one)
-        with self.pulse_lock:
+                    await asyncio.sleep(cycle_duration / steps)
+        except asyncio.CancelledError:
+            # Restore ALL zones to their correct colors before exiting
             for zone_name in self.zone_names:
                 r, g, b = self._get_zone_color(zone_name)
-                self.strip.set_zone_color(zone_name, r, g, b)
+                self.strip.set_zone_color(zone_name, r, g, b, show=False)
+            self.strip.show()  # Final show to apply all restored colors
+            print("Pulse task cancelled")
+            raise
+
+    def start_pulse_task(self):
+        """Start pulsing animation for edit mode"""
+        if self.pulse_task is None:
+            self.pulse_task = asyncio.create_task(self.pulse_zone_loop())
+            return self.pulse_task
+        return None
+
+    async def stop_pulse_task(self):
+        """Stop pulsing animation and restore ALL zone colors"""
+        if self.pulse_task:
+            self.pulse_task.cancel()
+            try:
+                await self.pulse_task
+            except asyncio.CancelledError:
+                pass
+            self.pulse_task = None
 
     # ===== Public API =====
 
@@ -417,7 +421,7 @@ class LEDController:
         self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_names)
         zone_name = self._get_current_zone()
 
-        # Pulsing thread will automatically pick up the new zone (no restart needed)
+        # Pulsing task will automatically pick up the new zone (no manual update needed!)
 
         # Sync preview
         self._sync_preview()
@@ -460,7 +464,7 @@ class LEDController:
             preset_name, (r, g, b) = get_preset_by_index(preset_idx)
             print(f">>> {zone_name}: Preset = '{preset_name}' (RGB: {r}, {g}, {b})")
 
-        # Don't manually apply color - pulsing thread will pick it up automatically
+        # Don't manually apply color - pulsing task will pick it up automatically
         # Only update preview
         self._sync_preview()
 
@@ -497,7 +501,7 @@ class LEDController:
 
         self.zone_brightness[zone_name] = new_brightness
 
-        # Don't manually apply brightness - pulsing thread will pick it up automatically
+        # Don't manually apply brightness - pulsing task will pick it up automatically
         # Update preview (bar indicator)
         self._sync_preview()
 
@@ -537,18 +541,18 @@ class LEDController:
         print(f"\n>>> Mode: {self.mode.name}")
 
     def toggle_edit_mode(self):
-        """Toggle edit mode ON/OFF"""
+        """Toggle edit mode ON/OFF (sync wrapper - actual start/stop handled by main.py)"""
         self.edit_mode = not self.edit_mode
 
         if self.edit_mode:
             print(f"\n>>> EDIT MODE: ON")
             print(f"    Zone: {self._get_current_zone()}")
             print(f"    Mode: {self.mode.name}")
-            self._start_pulse()  # Start pulsing the selected zone
+            # Pulsing will be started by main.py event loop
             self._sync_preview()
         else:
             print(f"\n>>> EDIT MODE: OFF")
-            self._stop_pulse()  # Stop pulsing and restore color
+            # Pulsing will be stopped by main.py event loop
 
         # Save system state
         self._save_system_state()
@@ -636,7 +640,8 @@ class LEDController:
             # Turn off all
             for zone in self.zone_names:
                 self.zone_brightness[zone] = 0
-                self.strip.set_zone_color(zone, 0, 0, 0)
+                self.strip.set_zone_color(zone, 0, 0, 0, show=False)
+            self.strip.show()  # Send all updates at once
             self.preview.clear()
             print("\n>>> POWER: OFF")
         else:
@@ -644,12 +649,17 @@ class LEDController:
             for zone in self.zone_names:
                 self.zone_brightness[zone] = 255
                 r, g, b = self._get_zone_color(zone)
-                self.strip.set_zone_color(zone, r, g, b)
+                self.strip.set_zone_color(zone, r, g, b, show=False)
+            self.strip.show()  # Send all updates at once
             self._sync_preview()
             print("\n>>> POWER: ON")
 
-    def clear_all(self):
-        """Turn off all LEDs"""
+    async def clear_all(self):
+        """Turn off all LEDs and stop pulsing"""
+        # Stop pulsing first to prevent race condition
+        if self.pulse_task:
+            await self.stop_pulse_task()
+
         self.strip.clear()
         self.preview.clear()
         print(">>> All LEDs cleared")

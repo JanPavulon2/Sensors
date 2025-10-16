@@ -20,8 +20,7 @@ import yaml
 import json
 import os
 import shutil
-import threading
-import time
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from utils.colors import rgb_to_hue
@@ -79,22 +78,16 @@ class ConfigManager:
         self.config_data = {}
         self.state_data = {}
 
-        # Thread-safety
-        self.state_lock = threading.Lock()
+        # State tracking (no locks needed with asyncio!)
         self.state_modified = False
 
-        # Auto-save thread
-        self.auto_save_thread = None
-        self.auto_save_active = False
+        # Auto-save task
+        self.auto_save_task = None
 
         # Load configuration
         self._load_config()
         self._backup_config()
         self._load_state()
-
-        # Start auto-save if enabled
-        if self.auto_save_interval > 0:
-            self._start_auto_save()
 
     # =========================================================================
     # Config Loading (YAML - Hardware Configuration)
@@ -281,16 +274,14 @@ class ConfigManager:
         }
 
     def save_state(self):
-        """Save current state to JSON file"""
+        """Save current state to JSON file (synchronous)"""
         try:
-            with self.state_lock:
-                self.state_data["last_updated"] = datetime.now().isoformat()
+            self.state_data["last_updated"] = datetime.now().isoformat()
 
-                with open(self.state_path, 'w') as f:
-                    json.dump(self.state_data, f, indent=2)
+            with open(self.state_path, 'w') as f:
+                json.dump(self.state_data, f, indent=2)
 
-                self.state_modified = False
-
+            self.state_modified = False
             print(f"State saved: {self.state_path}")
 
         except Exception as e:
@@ -301,41 +292,40 @@ class ConfigManager:
         self._load_state()
 
     # =========================================================================
-    # Auto-Save Thread
+    # Auto-Save Async Task
     # =========================================================================
 
-    def _auto_save_loop(self):
-        """Background thread that auto-saves state periodically"""
-        while self.auto_save_active:
-            time.sleep(self.auto_save_interval)
+    async def auto_save_loop(self):
+        """Async task that auto-saves state periodically"""
+        print(f"Auto-save started (every {self.auto_save_interval}s)")
+        try:
+            while True:
+                await asyncio.sleep(self.auto_save_interval)
 
-            with self.state_lock:
                 if self.state_modified:
                     self.save_state()
+        except asyncio.CancelledError:
+            print("Auto-save task cancelled")
+            # Final save before exit
+            if self.state_modified:
+                self.save_state()
+            raise
 
-    def _start_auto_save(self):
-        """Start auto-save background thread"""
-        if self.auto_save_thread and self.auto_save_thread.is_alive():
-            return
+    def start_auto_save_task(self):
+        """Start auto-save async task (must be called from async context)"""
+        if self.auto_save_interval > 0 and self.auto_save_task is None:
+            self.auto_save_task = asyncio.create_task(self.auto_save_loop())
+            return self.auto_save_task
+        return None
 
-        self.auto_save_active = True
-        self.auto_save_thread = threading.Thread(
-            target=self._auto_save_loop,
-            daemon=True,
-            name="ConfigAutoSave"
-        )
-        self.auto_save_thread.start()
-        print(f"Auto-save enabled (every {self.auto_save_interval}s)")
-
-    def stop_auto_save(self):
-        """Stop auto-save thread and perform final save"""
-        self.auto_save_active = False
-        if self.auto_save_thread:
-            self.auto_save_thread.join(timeout=2.0)
-
-        # Final save
-        if self.state_modified:
-            self.save_state()
+    async def stop_auto_save(self):
+        """Stop auto-save task and perform final save"""
+        if self.auto_save_task:
+            self.auto_save_task.cancel()
+            try:
+                await self.auto_save_task
+            except asyncio.CancelledError:
+                pass
 
     # =========================================================================
     # Public Properties - Hardware Config (Read-Only)
@@ -393,7 +383,7 @@ class ConfigManager:
 
     def get_system_state(self, key=None):
         """
-        Get system state value(s)
+        Get system state value(s) (no locks needed with asyncio!)
 
         Args:
             key: Specific key to get, or None for entire system state
@@ -401,15 +391,14 @@ class ConfigManager:
         Returns:
             Value or dict
         """
-        with self.state_lock:
-            system = self.state_data.get("system", {})
-            if key is None:
-                return system.copy()
-            return system.get(key)
+        system = self.state_data.get("system", {})
+        if key is None:
+            return system.copy()
+        return system.get(key)
 
     def update_system_state(self, **kwargs):
         """
-        Update system state fields
+        Update system state fields (no locks needed with asyncio!)
 
         Args:
             **kwargs: Key-value pairs to update in system state
@@ -417,14 +406,13 @@ class ConfigManager:
         Example:
             config.update_system_state(edit_mode=True, current_mode="BRIGHTNESS_ADJUST")
         """
-        with self.state_lock:
-            system = self.state_data.setdefault("system", {})
-            system.update(kwargs)
-            self.state_modified = True
+        system = self.state_data.setdefault("system", {})
+        system.update(kwargs)
+        self.state_modified = True
 
     def get_zone_state(self, zone_tag, key=None):
         """
-        Get zone runtime state
+        Get zone runtime state (no locks needed with asyncio!)
 
         Args:
             zone_tag: Zone tag (e.g., "lamp")
@@ -433,16 +421,15 @@ class ConfigManager:
         Returns:
             Value or dict
         """
-        with self.state_lock:
-            zones = self.state_data.get("zones", {})
-            zone = zones.get(zone_tag, {})
-            if key is None:
-                return zone.copy()
-            return zone.get(key)
+        zones = self.state_data.get("zones", {})
+        zone = zones.get(zone_tag, {})
+        if key is None:
+            return zone.copy()
+        return zone.get(key)
 
     def update_zone_state(self, zone_tag, **kwargs):
         """
-        Update zone runtime state
+        Update zone runtime state (no locks needed with asyncio!)
 
         Args:
             zone_tag: Zone tag (e.g., "lamp")
@@ -451,41 +438,36 @@ class ConfigManager:
         Example:
             config.update_zone_state("lamp", hue=180, brightness=255)
         """
-        with self.state_lock:
-            zones = self.state_data.setdefault("zones", {})
-            zone = zones.setdefault(zone_tag, {})
-            zone.update(kwargs)
-            self.state_modified = True
+        zones = self.state_data.setdefault("zones", {})
+        zone = zones.setdefault(zone_tag, {})
+        zone.update(kwargs)
+        self.state_modified = True
 
     def get_animation_state(self, key=None):
         """Get animation state"""
-        with self.state_lock:
-            anim = self.state_data.get("animation", {})
-            if key is None:
-                return anim.copy()
-            return anim.get(key)
+        anim = self.state_data.get("animation", {})
+        if key is None:
+            return anim.copy()
+        return anim.get(key)
 
     def update_animation_state(self, **kwargs):
         """Update animation state"""
-        with self.state_lock:
-            anim = self.state_data.setdefault("animation", {})
-            anim.update(kwargs)
-            self.state_modified = True
+        anim = self.state_data.setdefault("animation", {})
+        anim.update(kwargs)
+        self.state_modified = True
 
     def get_quick_action_state(self, key=None):
         """Get quick action state"""
-        with self.state_lock:
-            qa = self.state_data.get("quick_action", {})
-            if key is None:
-                return qa.copy()
-            return qa.get(key)
+        qa = self.state_data.get("quick_action", {})
+        if key is None:
+            return qa.copy()
+        return qa.get(key)
 
     def update_quick_action_state(self, **kwargs):
         """Update quick action state"""
-        with self.state_lock:
-            qa = self.state_data.setdefault("quick_action", {})
-            qa.update(kwargs)
-            self.state_modified = True
+        qa = self.state_data.setdefault("quick_action", {})
+        qa.update(kwargs)
+        self.state_modified = True
 
     # =========================================================================
     # Utility Methods
@@ -494,12 +476,11 @@ class ConfigManager:
     def reset_to_defaults(self):
         """Reset runtime state to defaults from config"""
         print("Resetting state to defaults...")
-        with self.state_lock:
-            self.state_data = self._create_default_state()
-            self.state_modified = True
+        self.state_data = self._create_default_state()
+        self.state_modified = True
         self.save_state()
 
-    def cleanup(self):
+    async def cleanup(self):
         """Cleanup resources (stop auto-save, final save)"""
         print("Cleaning up ConfigManager...")
-        self.stop_auto_save()
+        await self.stop_auto_save()

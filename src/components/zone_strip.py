@@ -43,13 +43,14 @@ class ZoneStrip:
         )
         self.strip.begin()
 
-    def set_zone_color(self, zone_name, r, g, b):
+    def set_zone_color(self, zone_name, r, g, b, show=True):
         """
         Set color for specific zone
 
         Args:
             zone_name: Name of zone (must exist in self.zones)
             r, g, b: RGB values (0-255)
+            show: If True, immediately update hardware. If False, just prepare data.
         """
         if zone_name not in self.zones:
             return
@@ -57,7 +58,7 @@ class ZoneStrip:
         # Save color
         self.zone_colors[zone_name] = (r, g, b)
 
-        # Apply to LEDs
+        # Apply to LEDs (prepares data, doesn't send yet)
         start, end = self.zones[zone_name]
         color = Color(r, g, b)
 
@@ -65,6 +66,12 @@ class ZoneStrip:
             if i < self.pixel_count:
                 self.strip.setPixelColor(i, color)
 
+        # Only send to hardware if requested (use lock-protected show())
+        if show:
+            self.show()
+
+    def show(self):
+        """Update hardware with all pending color changes"""
         self.strip.show()
 
     def get_zone_color(self, zone_name):

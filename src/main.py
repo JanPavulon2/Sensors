@@ -20,12 +20,12 @@ Modes:
     - BRIGHTNESS_EDIT: Modulator adjusts brightness
 """
 
-import time
+import asyncio
 from config_manager import ConfigManager
 from control_module import ControlModule
 from led_controller import LEDController
 
-def main():
+async def main():
     print("=" * 60)
     print("LED Control Station")
     print("=" * 60)
@@ -145,19 +145,35 @@ def main():
     print("=" * 60)
     print()
 
-    # Main loop
+    # Start async tasks
+    config.start_auto_save_task()  # Start config auto-save
+
+    # Start pulsing if edit mode is ON
+    if led.edit_mode:
+        led.start_pulse_task()
+
+    # Main polling loop
     try:
         while True:
             module.poll()  # Check hardware and call callbacks
-            time.sleep(0.01)  # 10ms polling interval
 
-    except KeyboardInterrupt:
+            # Handle pulse task start/stop based on edit_mode changes
+            if led.edit_mode and led.pulse_task is None:
+                led.start_pulse_task()
+            elif not led.edit_mode and led.pulse_task is not None:
+                await led.stop_pulse_task()
+
+            await asyncio.sleep(0.01)  # 10ms polling interval
+
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass  # Normal shutdown
+    finally:
         print("\n\nShutting down...")
-        led.clear_all()
+        await led.clear_all()
         module.cleanup()
-        config.cleanup()  # Save state and stop auto-save
+        await config.cleanup()  # Save state and stop auto-save
         print("Goodbye!")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
