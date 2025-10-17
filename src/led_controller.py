@@ -158,8 +158,8 @@ class LEDController:
         if self.animation_name in self.available_animations:
             self.selected_animation_index = self.available_animations.index(self.animation_name)
 
-        # Pulsing thread for edit mode indicator
-        self.pulse_thread = None
+        # Pulsing task for edit mode indicator
+        self.pulse_task = None  # asyncio.Task for pulsing animation
         self.pulse_active = False
         self.pulse_lock = asyncio.Lock()
 
