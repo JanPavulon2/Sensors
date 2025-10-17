@@ -50,7 +50,7 @@ async def main():
     print("    BTN1: Toggle EDIT MODE (enable/disable editing)")
     print("    BTN2: Quick action - Lamp -> Warm White @ Full")
     print("    BTN3: Power toggle (all zones ON/OFF)")
-    print("    BTN4: Toggle LAMP SOLO (lamp independent from animations)")
+    print("    BTN4: [Reserved for future use]")
     print()
     print("Modes:")
     print("  - COLOR_SELECT: Choose color (HUE smooth / PRESET jump)")
@@ -147,9 +147,10 @@ async def main():
         led.power_toggle()
 
     def handle_button4():
-        """Button 4: Toggle lamp solo mode"""
-        led.toggle_lamp_solo()
-        save_state()
+        """Button 4: [Reserved for future use]"""
+        print("[INFO] Button 4 pressed - not assigned")
+        # Reserved for future functionality
+        pass
 
     async def hardware_loop():
         """Poll hardware asynchronously"""
