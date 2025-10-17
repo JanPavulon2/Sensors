@@ -199,13 +199,9 @@ class LEDController:
         """Preview: Show color on all 8 LEDs"""
         zone_name = self._get_current_zone()
 
-        # Get color based on color_mode
-        if self.color_mode == ColorMode.HUE:
-            hue = self.zone_hues[zone_name]
-            r, g, b = hue_to_rgb(hue)
-        else:  # PRESET
-            preset_idx = self.zone_preset_indices[zone_name]
-            _, (r, g, b) = get_preset_by_index(preset_idx)
+        # Always use zone_hues as single source of truth
+        hue = self.zone_hues[zone_name]
+        r, g, b = hue_to_rgb(hue)
 
         # Apply brightness
         brightness = self.zone_brightness[zone_name]
@@ -269,13 +265,15 @@ class LEDController:
         self.preview.set_color(r, g, b)
 
     def _get_zone_color(self, zone_name):
-        """Get current RGB color for a zone"""
-        if self.color_mode == ColorMode.HUE:
-            hue = self.zone_hues[zone_name]
-            r, g, b = hue_to_rgb(hue)
-        else:  # PRESET
-            preset_idx = self.zone_preset_indices[zone_name]
-            _, (r, g, b) = get_preset_by_index(preset_idx)
+        """
+        Get current RGB color for a zone
+
+        IMPORTANT: Always uses zone_hues for actual color rendering!
+        zone_preset_indices is only UI state (which preset is "selected").
+        """
+        # Always render from HUE (single source of truth for color)
+        hue = self.zone_hues[zone_name]
+        r, g, b = hue_to_rgb(hue)
 
         brightness = self.zone_brightness[zone_name]
         scale = brightness / 255.0
@@ -298,13 +296,9 @@ class LEDController:
                 # Get CURRENT zone and color (dynamically, not cached)
                 zone_name = self._get_current_zone()
 
-                # Get base color WITHOUT brightness applied
-                if self.color_mode == ColorMode.HUE:
-                    hue = self.zone_hues[zone_name]
-                    r, g, b = hue_to_rgb(hue)
-                else:  # PRESET
-                    preset_idx = self.zone_preset_indices[zone_name]
-                    _, (r, g, b) = get_preset_by_index(preset_idx)
+                # Always use zone_hues as single source of truth
+                hue = self.zone_hues[zone_name]
+                r, g, b = hue_to_rgb(hue)
 
                 base_brightness = self.zone_brightness[zone_name]
 
@@ -325,7 +319,8 @@ class LEDController:
                 await asyncio.sleep(cycle_duration / steps)
                 
     async def _pulse_zone_task(self):
-        """Async pulsing animation for current zone"""
+        """Async pulsing animation for current zone - fixed 1s cycle"""
+        cycle_duration = 1.0  # Fixed 1 second pulse cycle (independent from animation_speed)
         steps = 40
 
         while self.pulse_active:
@@ -333,19 +328,11 @@ class LEDController:
                 if not self.pulse_active:
                     break
 
-                # Use animation_speed (1–100) to determine pulse rate dynamically
-                speed_factor = max(1, min(100, self.animation_speed))
-                cycle_duration = 2.0 - (speed_factor / 50.0)  # 2.0s → 0.0s range
-                cycle_duration = max(0.2, cycle_duration)     # prevent too fast flicker
-                
                 zone_name = self._get_current_zone()
-                
-                if self.color_mode == ColorMode.HUE:
-                    hue = self.zone_hues[zone_name]
-                    r, g, b = hue_to_rgb(hue)
-                else:  # PRESET
-                    preset_idx = self.zone_preset_indices[zone_name]
-                    _, (r, g, b) = get_preset_by_index(preset_idx)
+
+                # Always use zone_hues as single source of truth
+                hue = self.zone_hues[zone_name]
+                r, g, b = hue_to_rgb(hue)
 
                 base_brightness = self.zone_brightness[zone_name]
 
@@ -356,8 +343,6 @@ class LEDController:
                 # Apply pulsing brightness
                 pulsed_brightness = base_brightness * brightness_scale
                 scale = pulsed_brightness / 255.0
-                
-                #scale = 0.1 + 0.9 * (math.sin(t * 2 * math.pi - math.pi/2) + 1) / 2
                 r, g, b = int(r * scale), int(g * scale), int(b * scale)
 
                 self.strip.set_zone_color(zone_name, r, g, b)
@@ -440,11 +425,17 @@ class LEDController:
             r, g, b = hue_to_rgb(hue)
             print(f">>> {zone_name}: Hue = {hue}° (RGB: {r}, {g}, {b})")
         else:  # PRESET
-            # Jump between presets
+            # Jump between presets and convert to HUE
             self.zone_preset_indices[zone_name] = (self.zone_preset_indices[zone_name] + delta) % len(PRESET_ORDER)
             preset_idx = self.zone_preset_indices[zone_name]
             preset_name, (r, g, b) = get_preset_by_index(preset_idx)
-            print(f">>> {zone_name}: Preset = '{preset_name}' (RGB: {r}, {g}, {b})")
+
+            # Convert preset RGB to HUE and save it
+            from utils.colors import rgb_to_hue
+            hue = rgb_to_hue(r, g, b)
+            self.zone_hues[zone_name] = hue
+
+            print(f">>> {zone_name}: Preset = '{preset_name}' (Hue: {hue}°)")
 
         # Don't manually apply color - pulsing thread will pick it up automatically
         # Only update preview
@@ -583,11 +574,20 @@ class LEDController:
             # Set lamp to warm white immediately
             preset_idx = PRESET_ORDER.index("warm_white")
             self.zone_preset_indices["lamp"] = preset_idx
+            _, (r, g, b) = get_preset_by_index(preset_idx)
+
+            # Convert to HUE and save
+            from utils.colors import rgb_to_hue
+            self.zone_hues["lamp"] = rgb_to_hue(r, g, b)
             self.zone_brightness["lamp"] = 255
 
             # Apply to strip immediately
-            _, (r, g, b) = get_preset_by_index(preset_idx)
             self.strip.set_zone_color("lamp", r, g, b)
+
+            # If animation is running, restart it to exclude lamp
+            if self.animation_enabled:
+                # Restart animation with lamp excluded
+                asyncio.create_task(self._restart_animation_with_exclusions())
 
             print(f"\n>>> LAMP SOLO: ON")
             print("    Lamp -> Warm White @ Full Brightness (state saved)")
@@ -604,6 +604,10 @@ class LEDController:
                 r, g, b = self._get_zone_color("lamp")
                 self.strip.set_zone_color("lamp", r, g, b)
 
+                # If animation is running, restart it to include lamp
+                if self.animation_enabled:
+                    asyncio.create_task(self._restart_animation_with_exclusions())
+
                 print(f"\n>>> LAMP SOLO: OFF")
                 print(f"    Lamp restored: brightness={self.lamp_solo_state['brightness']}/255")
 
@@ -611,6 +615,11 @@ class LEDController:
             else:
                 print(f"\n>>> LAMP SOLO: OFF")
                 print("    (No saved state to restore)")
+
+    async def _restart_animation_with_exclusions(self):
+        """Helper to restart animation with current exclusions (lamp_solo)"""
+        await self.stop_animation()
+        await self.start_animation()
 
     def quick_lamp_white(self):
         """

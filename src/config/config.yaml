@@ -13,7 +13,7 @@ hardware:
       brightness: 100
     strip:
       gpio: 18
-      count: 48
+      count: 45
       color_order: BRG
       brightness: 255
 
@@ -22,37 +22,37 @@ zones:
     tag: lamp
     pixel_count: 19      # 57 physical LEDs (19 * 3)
     enabled: true
-    order: 1
+    order: 2
 
   - name: Top
     tag: top
     pixel_count: 4       # 12 physical LEDs (4 * 3)
     enabled: true
-    order: 2
+    order: 3
 
   - name: Right
     tag: right
     pixel_count: 3       # 9 physical LEDs (3 * 3)
     enabled: true
-    order: 3
+    order: 4
 
   - name: Bottom
     tag: bottom
     pixel_count: 4       # 12 physical LEDs (4 * 3)
     enabled: true
-    order: 4
+    order: 5
 
   - name: Left
     tag: left
     pixel_count: 3       # 9 physical LEDs (3 * 3)
     enabled: true
-    order: 5
+    order: 6
 
   - name: Strip
     tag: strip
-    pixel_count: 15      # 45 physical LEDs (15 * 3)
+    pixel_count: 12      # 45 physical LEDs (15 * 3)
     enabled: true
-    order: 6
+    order: 1
 
 animations:
   breathe:
