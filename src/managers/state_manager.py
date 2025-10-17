@@ -21,7 +21,6 @@ class StateManager:
 
     async def save(self):
         """Asynchronously save state to JSON."""
-        print(f"AsyncManager: saving... {self.state}")
         async with aiofiles.open(self.path, "w", encoding="utf-8") as f:
             await f.write(json.dumps(self.state, indent=2))
 

@@ -163,14 +163,16 @@ class LEDController:
         self.pulse_active = False
         self.pulse_lock = asyncio.Lock()
 
-        # Quick lamp state memory (for restoring after quick action)
-        self.lamp_saved_state = None  # (hue, preset_idx, brightness, color_mode)
+        # Quick lamp white mode (BTN2)
+        self.lamp_white_mode = False  # When True, lamp is in white mode and should not pulse
+        self.lamp_saved_state = None  # Saved state for restoring after white mode
 
         # Initialize with default colors
         self._initialize_zones()
 
-        # Start pulsing since edit_mode is ON by default
-        self._start_pulse()
+        # Start pulsing ONLY if edit_mode is ON
+        if self.edit_mode:
+            self._start_pulse()
 
 
     def _initialize_zones(self):
@@ -330,6 +332,11 @@ class LEDController:
 
                 zone_name = self._get_current_zone()
 
+                # SKIP pulsing lamp if lamp_white_mode is ON (lamp is in white mode)
+                if zone_name == "lamp" and self.lamp_white_mode:
+                    await asyncio.sleep(cycle_duration / steps)
+                    continue
+
                 # Always use zone_hues as single source of truth
                 hue = self.zone_hues[zone_name]
                 r, g, b = hue_to_rgb(hue)
@@ -380,13 +387,13 @@ class LEDController:
         r, g, b = self._get_zone_color(old_zone_name)
         self.strip.set_zone_color(old_zone_name, r, g, b)
 
-        # Now switch to new zone, SKIPPING lamp if lamp_solo is active
+        # Now switch to new zone, SKIPPING lamp if lamp_white_mode is active
         for _ in range(len(self.zone_names)):  # Max iterations to avoid infinite loop
             self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_names)
             zone_name = self._get_current_zone()
 
-            # Skip lamp if lamp_solo is ON
-            if zone_name == "lamp" and self.lamp_solo:
+            # Skip lamp if lamp_white_mode is ON
+            if zone_name == "lamp" and self.lamp_white_mode:
                 continue  # Try next zone
             else:
                 break  # Found valid zone
@@ -417,6 +424,11 @@ class LEDController:
             return
 
         zone_name = self._get_current_zone()
+
+        # Block editing lamp when in white mode
+        if zone_name == "lamp" and self.lamp_white_mode:
+            print("[INFO] Lamp is in white mode - press BTN2 to exit and enable editing")
+            return
 
         if self.color_mode == ColorMode.HUE:
             # Smooth hue adjustment
@@ -623,83 +635,147 @@ class LEDController:
 
     def quick_lamp_white(self):
         """
-        Quick action: Toggle lamp between warm white and previous state
-        First press: Save current state, set warm white @ full
-        Second press: Restore previous state
+        Quick action: Toggle lamp white mode (BTN2)
+
+        First press:  Save state → warm white @ 255 → lamp_white_mode=ON
+        Second press: Restore state → lamp_white_mode=OFF
+
+        lamp_white_mode:
+        - Excludes lamp from pulsing (edit mode doesn't affect it)
+        - Excludes lamp from zone selector (can't select it)
+        - Excludes lamp from animations
+        - All other zones work normally
         """
-        if self.lamp_saved_state is None:
-            # Save current state and set warm white
+        if not self.lamp_white_mode:
+            # ENTERING white mode
             self.lamp_saved_state = (
                 self.zone_hues["lamp"],
                 self.zone_preset_indices["lamp"],
                 self.zone_brightness["lamp"],
-                self.color_mode
+                self.color_mode,
+                self._get_zone_color("lamp"),  # Save actual RGB (for whites)
             )
+
+            # Enable white mode (excludes lamp from pulsing/animations/zone selector)
+            self.lamp_white_mode = True
+
+            # If lamp is currently selected (pulsing), switch to next zone
+            current_zone = self._get_current_zone()
+            if current_zone == "lamp":
+                self.change_zone(1)  # Move to next zone
+                print("    (Auto-switched to next zone)")
+
+            # If animation is running, restart it to exclude lamp
+            if self.animation_enabled:
+                asyncio.create_task(self._restart_animation_with_exclusions())
 
             # Set to warm white
             preset_idx = PRESET_ORDER.index("warm_white")
             self.zone_preset_indices["lamp"] = preset_idx
             self.zone_brightness["lamp"] = 255
 
-            # Apply to strip immediately
-            _, (r, g, b) = get_preset_by_index(preset_idx)
+            # Apply to strip immediately with direct RGB
+            _, (r, g, b) = get_preset_by_index(preset_idx)  # (255, 200, 150)
             self.strip.set_zone_color("lamp", r, g, b)
 
-            print("\n>>> QUICK ACTION: Lamp -> Warm White @ Full Brightness")
-            print("    (Previous state saved - press again to restore)")
+            # Store hue for consistency
+            from utils.colors import rgb_to_hue
+            self.zone_hues["lamp"] = rgb_to_hue(r, g, b)
+
+            print("\n>>> LAMP WHITE MODE: ON")
+            print("    Lamp -> Warm White @ Full")
+            print("    Lamp excluded from: pulsing, zone selector, animations")
         else:
-            # Restore previous state
-            hue, preset_idx, brightness, color_mode = self.lamp_saved_state
-            self.zone_hues["lamp"] = hue
-            self.zone_preset_indices["lamp"] = preset_idx
-            self.zone_brightness["lamp"] = brightness
-            self.color_mode = color_mode
+            # EXITING white mode
+            if self.lamp_saved_state:
+                hue, preset_idx, brightness, color_mode, saved_rgb = self.lamp_saved_state
+                self.zone_hues["lamp"] = hue
+                self.zone_preset_indices["lamp"] = preset_idx
+                self.zone_brightness["lamp"] = brightness
+                self.color_mode = color_mode
 
-            # Apply to strip immediately
-            r, g, b = self._get_zone_color("lamp")
-            self.strip.set_zone_color("lamp", r, g, b)
+                # Apply saved RGB
+                r, g, b = saved_rgb
+                self.strip.set_zone_color("lamp", r, g, b)
 
-            self.lamp_saved_state = None  # Clear saved state
+                self.lamp_saved_state = None
 
-            print("\n>>> QUICK ACTION: Lamp -> Previous state restored")
-            print(f"    Brightness: {brightness}/255")
+                print("\n>>> LAMP WHITE MODE: OFF")
+                print(f"    Lamp restored: brightness={brightness}/255")
+            else:
+                print("\n>>> LAMP WHITE MODE: OFF")
+
+            # Disable white mode (re-include lamp in pulsing/animations/zone selector)
+            self.lamp_white_mode = False
+
+            # If animation is running, restart it to include lamp
+            if self.animation_enabled:
+                asyncio.create_task(self._restart_animation_with_exclusions())
 
     def power_toggle(self):
-        """Toggle power for all zones (ON/OFF) - saves and restores brightness"""
+        """Toggle power for all zones (ON/OFF) - saves and restores brightness and animation state"""
         # Check if any zone has brightness > 0
         any_on = any(self.zone_brightness[zone] > 0 for zone in self.zone_names)
 
         if any_on:
-            # Turning OFF: Save current brightness and turn off
+            # Turning OFF: Save current brightness and animation state, then turn off
             if not hasattr(self, 'power_saved_brightness'):
                 self.power_saved_brightness = {}
 
+            # Save brightness
             for zone in self.zone_names:
-                # Save current brightness
                 self.power_saved_brightness[zone] = self.zone_brightness[zone]
-                # Turn off
+
+            # Save animation state and stop it
+            self.power_saved_animation_enabled = self.animation_enabled
+            if self.animation_enabled:
+                asyncio.create_task(self.stop_animation())
+
+            # Turn off all zones
+            for zone in self.zone_names:
                 self.zone_brightness[zone] = 0
                 self.strip.set_zone_color(zone, 0, 0, 0)
 
             self.preview.clear()
-            print("\n>>> POWER: OFF (brightness saved)")
+            print("\n>>> POWER: OFF (brightness and animation saved)")
         else:
-            # Turning ON: Restore saved brightness
+            # Turning ON: Restore saved brightness and animation state
             if hasattr(self, 'power_saved_brightness') and self.power_saved_brightness:
                 # Restore saved brightness
                 for zone in self.zone_names:
-                    saved = self.power_saved_brightness.get(zone, 64)  # Default 64 if not saved
+                    saved = self.power_saved_brightness.get(zone, 64)
                     self.zone_brightness[zone] = saved
-                    r, g, b = self._get_zone_color(zone)
-                    self.strip.set_zone_color(zone, r, g, b)
+
+                    # Special case: preserve lamp white mode color
+                    if zone == "lamp" and self.lamp_white_mode:
+                        # Apply warm white directly, not from zone_hues
+                        preset_idx = PRESET_ORDER.index("warm_white")
+                        _, (r, g, b) = get_preset_by_index(preset_idx)
+                        self.strip.set_zone_color(zone, r, g, b)
+                    else:
+                        r, g, b = self._get_zone_color(zone)
+                        self.strip.set_zone_color(zone, r, g, b)
                 print("\n>>> POWER: ON (brightness restored)")
             else:
                 # No saved state, use default brightness (64)
                 for zone in self.zone_names:
                     self.zone_brightness[zone] = 64
-                    r, g, b = self._get_zone_color(zone)
-                    self.strip.set_zone_color(zone, r, g, b)
+
+                    # Special case: preserve lamp white mode color
+                    if zone == "lamp" and self.lamp_white_mode:
+                        # Apply warm white directly, not from zone_hues
+                        preset_idx = PRESET_ORDER.index("warm_white")
+                        _, (r, g, b) = get_preset_by_index(preset_idx)
+                        self.strip.set_zone_color(zone, r, g, b)
+                    else:
+                        r, g, b = self._get_zone_color(zone)
+                        self.strip.set_zone_color(zone, r, g, b)
                 print("\n>>> POWER: ON (default brightness)")
+
+            # Restore animation if it was running
+            if hasattr(self, 'power_saved_animation_enabled') and self.power_saved_animation_enabled:
+                asyncio.create_task(self.start_animation())
+                print("    Animation restarted")
 
             self._sync_preview()
 
@@ -742,8 +818,8 @@ class LEDController:
             else:
                 params["color"] = (255, 255, 255)
 
-        # Exclude lamp from animation if lamp_solo is ON
-        excluded_zones = ["lamp"] if self.lamp_solo else []
+        # Exclude lamp from animation if lamp_white_mode is ON
+        excluded_zones = ["lamp"] if self.lamp_white_mode else []
 
         # Start animation
         await self.animation_engine.start(self.animation_name, excluded_zones=excluded_zones, **params)

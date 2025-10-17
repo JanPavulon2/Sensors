@@ -1,47 +1,47 @@
 {
-  "mode": "COLOR_SELECT",
+  "mode": "ANIMATION_PARAM",
   "color_mode": "PRESET",
-  "edit_mode": true,
+  "edit_mode": false,
   "lamp_solo": false,
   "lamp_solo_state": null,
   "animation": {
     "enabled": false,
-    "name": "color_fade",
-    "speed": 100,
+    "name": "snake",
+    "speed": 32,
     "color": null,
     "color2": null,
     "intensity": 100
   },
   "zones": {
     "strip": {
-      "hue": 329,
-      "brightness": 128,
-      "preset": 16
+      "hue": 30,
+      "brightness": 32,
+      "preset": 1
     },
     "lamp": {
-      "hue": 282,
+      "hue": 28,
       "brightness": 255,
-      "preset": 12
+      "preset": 17
     },
     "top": {
-      "hue": 280,
+      "hue": 209,
       "brightness": 32,
-      "preset": 10
+      "preset": 9
     },
     "right": {
-      "hue": 120,
+      "hue": 0,
       "brightness": 32,
-      "preset": 5
+      "preset": 18
     },
     "bottom": {
-      "hue": 60,
+      "hue": 89,
       "brightness": 32,
-      "preset": 0
+      "preset": 4
     },
     "left": {
-      "hue": 282,
-      "brightness": 255,
-      "preset": 12
+      "hue": 218,
+      "brightness": 32,
+      "preset": 19
     }
   }
 }

@@ -18,6 +18,12 @@ hardware:
       brightness: 255
 
 zones:
+  - name: Strip
+    tag: strip
+    pixel_count: 12      # 45 physical LEDs (15 * 3)
+    enabled: true
+    order: 1
+
   - name: Lamp
     tag: lamp
     pixel_count: 19      # 57 physical LEDs (19 * 3)
@@ -48,11 +54,6 @@ zones:
     enabled: true
     order: 6
 
-  - name: Strip
-    tag: strip
-    pixel_count: 12      # 45 physical LEDs (15 * 3)
-    enabled: true
-    order: 1
 
 animations:
   breathe:
