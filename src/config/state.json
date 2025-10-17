@@ -19,9 +19,9 @@
       "preset": 16
     },
     "lamp": {
-      "hue": 30,
+      "hue": 282,
       "brightness": 255,
-      "preset": 1
+      "preset": 12
     },
     "top": {
       "hue": 280,

@@ -140,7 +140,10 @@ def rgb_to_hue(r, g, b):
     """
     Convert RGB (0-255) to hue (0-360)
 
-    Converts RGB color to hue angle. Returns 0 for grayscale colors.
+    Converts RGB color to hue angle. Returns 0 for grayscale/white colors.
+
+    NOTE: For white/warm_white/cool_white presets, this returns 0 (neutral)
+    since they have low saturation. Use rgb_to_hsv() if you need saturation info.
 
     Args:
         r: Red value (0-255)
@@ -151,9 +154,10 @@ def rgb_to_hue(r, g, b):
         Hue value in degrees (0-360)
 
     Example:
-        hue = rgb_to_hue(255, 0, 0)    # 0 (Red)
-        hue = rgb_to_hue(0, 255, 0)    # 120 (Green)
-        hue = rgb_to_hue(0, 0, 255)    # 240 (Blue)
+        hue = rgb_to_hue(255, 0, 0)      # 0 (Red)
+        hue = rgb_to_hue(0, 255, 0)      # 120 (Green)
+        hue = rgb_to_hue(0, 0, 255)      # 240 (Blue)
+        hue = rgb_to_hue(255, 255, 255)  # 0 (White - no hue)
     """
     if r == g == b:
         return 0
@@ -162,6 +166,20 @@ def rgb_to_hue(r, g, b):
     max_c = max(r_norm, g_norm, b_norm)
     min_c = min(r_norm, g_norm, b_norm)
     delta = max_c - min_c
+
+    # Special handling for low saturation (white/gray colors)
+    saturation = delta / max_c if max_c > 0 else 0
+    if saturation < 0.2:
+        # For white-ish colors, derive hue from RGB ratio
+        # warm_white (255,200,150): yellowish -> ~30°
+        # white (255,255,255): neutral -> 0°
+        # cool_white (200,220,255): blueish -> ~210°
+        if r > g and r > b:
+            return 30  # Warm (reddish/yellow tint)
+        elif b > r and b > g:
+            return 210  # Cool (blue tint)
+        else:
+            return 0  # Neutral white
 
     if delta == 0:
         return 0
