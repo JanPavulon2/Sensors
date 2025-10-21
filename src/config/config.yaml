@@ -30,29 +30,31 @@ zones:
     enabled: true
     order: 2
 
-  - name: Top
-    tag: top
-    pixel_count: 4       # 12 physical LEDs (4 * 3)
+  - name: Left
+    tag: left
+    pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 3
 
-  - name: Right
-    tag: right
-    pixel_count: 3       # 9 physical LEDs (3 * 3)
+  - name: Top
+    tag: top
+    pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true
     order: 4
 
-  - name: Bottom
-    tag: bottom
-    pixel_count: 4       # 12 physical LEDs (4 * 3)
+  - name: Right
+    tag: right
+    pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 5
 
-  - name: Left
-    tag: left
-    pixel_count: 3       # 9 physical LEDs (3 * 3)
+  - name: Bottom
+    tag: bottom
+    pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true
     order: 6
+
+
 
 
 animations:
