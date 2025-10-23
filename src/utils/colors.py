@@ -1,109 +1,14 @@
 """
-Color utility functions
+Color conversion utilities
+
+Pure functions for color space conversions and color distance calculations.
+Preset color data is loaded from config/colors.yaml via ColorManager.
 """
 
-# Predefined colors - easy to access standard colors
-# Format: name -> (r, g, b) tuple (0-255)
-PRESET_COLORS = {
-    # Basic colors
-    "red": (255, 0, 0),
-    "green": (0, 255, 0),
-    "blue": (0, 0, 255),
-    "yellow": (255, 255, 0),
-    "cyan": (0, 255, 255),
-    "magenta": (255, 0, 255),
-
-    # Whites
-    "white": (255, 255, 255),
-    "warm_white": (255, 200, 150),  # Cozy warm white
-    "cool_white": (200, 220, 255),  # Cool daylight white
-
-    # Oranges
-    "orange": (255, 128, 0),
-    "amber": (255, 191, 0),
-
-    # Purples
-    "purple": (128, 0, 255),
-    "violet": (180, 0, 255),
-    "indigo": (75, 0, 130),
-
-    # Pinks
-    "pink": (255, 128, 192),
-    "hot_pink": (255, 0, 128),
-
-    # Natural tones
-    "mint": (170, 255, 195),
-    "lime": (128, 255, 0),
-    "sky_blue": (135, 206, 235),
-    "ocean": (0, 128, 255),
-    "lavender": (200, 150, 255),
-
-    # Off
-    "off": (0, 0, 0),
-}
-
-# List of preset color names in a nice order for cycling
-PRESET_ORDER = [
-    "red",
-    "orange",
-    "amber",
-    "yellow",
-    "lime",
-    "green",
-    "mint",
-    "cyan",
-    "sky_blue",
-    "ocean",
-    "blue",
-    "indigo",
-    "violet",
-    "purple",
-    "magenta",
-    "hot_pink",
-    "pink",
-    "warm_white",
-    "white",
-    "cool_white",
-]
+from typing import Tuple
 
 
-def get_preset_color(name):
-    """
-    Get RGB values for a preset color
-
-    Args:
-        name: Name of preset color (e.g., "red", "warm_white")
-
-    Returns:
-        (r, g, b) tuple or None if color doesn't exist
-
-    Example:
-        r, g, b = get_preset_color("warm_white")
-        if rgb:
-            strip.set_color(r, g, b)
-    """
-    return PRESET_COLORS.get(name)
-
-
-def get_preset_by_index(index):
-    """
-    Get preset color by index in PRESET_ORDER
-
-    Args:
-        index: Index in preset list (wraps around)
-
-    Returns:
-        (name, (r, g, b)) tuple
-
-    Example:
-        name, (r, g, b) = get_preset_by_index(0)  # Returns ("red", (255, 0, 0))
-    """
-    index = index % len(PRESET_ORDER)
-    name = PRESET_ORDER[index]
-    return name, PRESET_COLORS[name]
-
-
-def hue_to_rgb(hue):
+def hue_to_rgb(hue: int) -> Tuple[int, int, int]:
     """
     Convert hue (0-360) to RGB (0-255)
 
@@ -136,14 +41,12 @@ def hue_to_rgb(hue):
         return (255, 0, int((360 - hue) * 4.25))
 
 
-def rgb_to_hue(r, g, b):
+def rgb_to_hue(r: int, g: int, b: int) -> int:
     """
     Convert RGB (0-255) to hue (0-360)
 
     Converts RGB color to hue angle. Returns 0 for grayscale/white colors.
-
-    NOTE: For white/warm_white/cool_white presets, this returns 0 (neutral)
-    since they have low saturation. Use rgb_to_hsv() if you need saturation info.
+    Note: Loses saturation information!
 
     Args:
         r: Red value (0-255)
@@ -192,3 +95,99 @@ def rgb_to_hue(r, g, b):
         hue = 60 * (((r_norm - g_norm) / delta) + 4)
 
     return int(hue) % 360
+
+
+def rgb_distance(rgb1: Tuple[int, int, int], rgb2: Tuple[int, int, int]) -> float:
+    """
+    Calculate Euclidean distance between two RGB colors
+
+    Used for finding closest preset.
+
+    Args:
+        rgb1, rgb2: RGB tuples (0-255 each)
+
+    Returns:
+        Distance (0.0 - ~441.67 for max distance)
+
+    Example:
+        dist = rgb_distance((255, 0, 0), (255, 128, 0))
+        # Returns distance between red and orange
+    """
+    r1, g1, b1 = rgb1
+    r2, g2, b2 = rgb2
+    return ((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2) ** 0.5
+
+
+def find_closest_preset_name(rgb: Tuple[int, int, int], color_manager) -> str:
+    """
+    Find closest preset by RGB distance
+
+    Args:
+        rgb: Target RGB tuple
+        color_manager: ColorManager instance
+
+    Returns:
+        Preset name (e.g., "red", "warm_white")
+
+    Example:
+        from managers.color_manager import ColorManager
+        cm = ColorManager()
+        closest = find_closest_preset_name((255, 100, 0), cm)
+        # Returns "orange" or closest match
+    """
+    preset_colors = color_manager.preset_colors
+    preset_order = color_manager.preset_order
+
+    min_distance = float('inf')
+    closest_preset = preset_order[0]  # Default to first
+
+    for preset_name in preset_order:
+        preset_rgb = preset_colors[preset_name]
+        distance = rgb_distance(rgb, preset_rgb)
+        if distance < min_distance:
+            min_distance = distance
+            closest_preset = preset_name
+
+    return closest_preset
+
+
+def hue_to_name(hue: int) -> str:
+    """
+    Convert hue to approximate color name (for logging)
+
+    Args:
+        hue: Hue value (0-360)
+
+    Returns:
+        Color name string
+
+    Example:
+        hue_to_name(0)    # "red"
+        hue_to_name(120)  # "green"
+        hue_to_name(240)  # "blue"
+    """
+    # Simple mapping
+    if hue < 15 or hue >= 345:
+        return "red"
+    elif hue < 45:
+        return "orange"
+    elif hue < 75:
+        return "yellow"
+    elif hue < 105:
+        return "lime"
+    elif hue < 135:
+        return "green"
+    elif hue < 165:
+        return "cyan"
+    elif hue < 195:
+        return "sky blue"
+    elif hue < 225:
+        return "blue"
+    elif hue < 255:
+        return "indigo"
+    elif hue < 285:
+        return "violet"
+    elif hue < 315:
+        return "magenta"
+    else:
+        return "pink"

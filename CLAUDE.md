@@ -42,18 +42,25 @@ rpi_ws281x (hardware driver)
 
 ### Key Architecture Principles
 
-1. **Single Source of Truth for Colors**: `zone_hues` dict (0-360 hue values) is the authoritative source. `zone_preset_indices` is UI state only.
+1. **Color Model**: Uses `Color` class from `models/color.py`. Each zone has a `Color` object (single source of truth). Supports HUE, PRESET, RGB, and WHITE modes.
 
-2. **Asyncio Everywhere**: All long-running operations (animations, pulsing, hardware polling) use `asyncio.create_task()` and `await`. No blocking sleeps.
+2. **Modular Configuration**: Config split into separate YAML files (hardware.yaml, zones.yaml, colors.yaml, animations.yaml, parameters.yaml) loaded via ConfigManager include system.
 
-3. **State Persistence**: `StateManager` auto-saves state after every user interaction. Config is read-only (`config.yaml`).
+3. **Asyncio Everywhere**: All long-running operations (animations, pulsing, hardware polling) use `asyncio.create_task()` and `await`. No blocking sleeps.
 
-4. **Zone-Based Control**: LEDs grouped into logical zones (lamp, top, right, bottom, left, strip). Each zone has independent color/brightness.
+4. **State Persistence**: `StateManager` auto-saves state after every user interaction. Brightness is 0-100%, colors use Color.to_dict() format.
 
-5. **Mode System**:
-   - **Main modes**: COLOR_SELECT → BRIGHTNESS_ADJUST → ANIMATION_SELECT → ANIMATION_PARAM
-   - **Sub-modes**: COLOR_SELECT has HUE/PRESET, ANIMATION_PARAM has SPEED/COLOR1/COLOR2/INTENSITY
-   - **Edit mode**: Global toggle - when OFF, encoders are disabled
+5. **Animation Engine**: All animation lifecycle managed through `AnimationEngine`. No manual animation state flags - use `animation_engine.is_running()`.
+
+6. **ParamID System**: Universal parameter identifiers (ZONE_COLOR_HUE, ZONE_COLOR_PRESET, ZONE_BRIGHTNESS, ANIM_SPEED, ANIM_INTENSITY) defined in `models/enums.py`.
+
+7. **Zone-Based Control**: LEDs grouped into logical zones (lamp, top, right, bottom, left, strip). Each zone has independent color/brightness.
+
+8. **Two-Mode System**:
+   - **STATIC mode**: Zone editing (default). Cycle zones with upper encoder, adjust zone params with lower encoder.
+   - **ANIMATION mode**: Animation control. Select animation with upper encoder, adjust anim params with lower encoder.
+   - **Toggle**: BTN4 switches between modes. Automatically starts/stops animations.
+   - **Edit mode**: BTN1 toggles ON/OFF. When OFF, encoders disabled.
 
 ### Critical Components
 
@@ -61,18 +68,24 @@ rpi_ws281x (hardware driver)
 Central state machine. Owns all LED state and business logic.
 
 **Key State**:
-- `zone_hues`: Dict[str, int] - hue 0-360 for each zone (SINGLE SOURCE OF TRUTH)
-- `zone_brightness`: Dict[str, int] - brightness 0-255
-- `zone_preset_indices`: Dict[str, int] - UI state only (which preset is "selected")
-- `mode`: Main operating mode (COLOR_SELECT, BRIGHTNESS_ADJUST, etc.)
+- `zone_colors`: Dict[str, Color] - Color objects for each zone (SINGLE SOURCE OF TRUTH)
+- `zone_brightness`: Dict[str, int] - brightness 0-100%
+- `main_mode`: MainMode.STATIC or MainMode.ANIMATION
+- `current_param`: ParamID (e.g., ZONE_COLOR_HUE, ANIM_SPEED)
+- `current_zone_index`: Index into zone_names list
 - `edit_mode`: Global enable/disable for editing
 - `lamp_white_mode`: Special mode where lamp is locked to warm white and excluded from all operations
+- `animation_engine`: AnimationEngine instance - manages all animation lifecycle
 
 **Key Methods**:
-- `_get_zone_color(zone_name)`: Always renders from `zone_hues` (not presets!)
-- `adjust_color(delta)`: In PRESET mode, converts preset RGB→HUE and saves to `zone_hues`
-- `_start_pulse()` / `_stop_pulse()`: Async pulsing animation (1s cycle, independent from animation speed)
-- `change_zone(delta)`: Skips lamp when `lamp_white_mode=True`
+- `_get_zone_color(zone_name)`: Renders Color object to RGB with brightness applied
+- `handle_upper_rotation(delta)`: Context-sensitive (change zone in STATIC, select animation in ANIMATION)
+- `handle_upper_click()`: Start/stop animation in ANIMATION mode
+- `handle_lower_rotation(delta)`: Adjust current parameter value
+- `handle_lower_click()`: Cycle parameters
+- `_start_pulse()` / `_stop_pulse()`: Async pulsing animation (1s cycle, fixed)
+- `toggle_main_mode()`: Switch STATIC ↔ ANIMATION, auto-start/stop animations
+- `animation_engine.is_running()`: Check animation state (NOT a manual flag)
 
 #### ZoneStrip (`src/components/zone_strip.py`)
 Hardware abstraction for WS2811 LED strips divided into zones.
@@ -110,31 +123,38 @@ Async JSON persistence. Saves to `src/config/state.json` after every user action
 
 ### Color System Architecture
 
-**Critical**: The system has two parallel color representations that must stay in sync:
+**Critical**: Uses `Color` class (models/color.py) as single source of truth.
 
-1. **HUE (0-360)** - `zone_hues` dict - SINGLE SOURCE OF TRUTH for rendering
-2. **PRESET** - `zone_preset_indices` dict - UI state only (which preset is selected)
+**Color class supports 4 modes**:
+1. **HUE**: Hue value (0-360°) with full saturation
+2. **PRESET**: Named presets from ColorManager (e.g., "red", "ocean", "warm_white")
+3. **RGB**: Direct RGB values (0-255)
+4. **WHITE**: Special white mode (warm/cool/neutral)
 
-**Color Flow in PRESET Mode**:
+**Color Flow**:
 ```
-User rotates encoder
+User adjusts color (HUE or PRESET)
     ↓
-adjust_color() in PRESET mode
+handle_lower_rotation()
     ↓
-Increment zone_preset_indices[zone]
+Color.adjust_hue(delta) OR Color.next_preset(delta, color_manager)
     ↓
-Get preset RGB from PRESET_ORDER
+Returns NEW Color object (immutable pattern)
     ↓
-Convert RGB → HUE via rgb_to_hue()
+zone_colors[zone] = new_color
     ↓
-Save HUE to zone_hues[zone]  ← SINGLE SOURCE OF TRUTH
-    ↓
-Pulsing/rendering reads zone_hues via _get_zone_color()
+Pulsing/rendering: color.to_rgb() → (r, g, b)
 ```
 
-**Why this matters**: PRESET mode is a UI convenience. The actual color is ALWAYS stored and rendered as HUE. This allows switching between HUE/PRESET modes without losing color information.
+**State Persistence**:
+- Save: `Color.to_dict()` → `{"mode": "PRESET", "preset_name": "red"}`
+- Load: `Color.from_dict(data, color_manager)` → Color object
 
-**Known limitation**: `rgb_to_hue()` loses saturation information, so white presets (255,255,255) render as full-saturation colors. Low-saturation whites are mapped to hue values (warm=30°, cool=210°, neutral=0°) but still render saturated.
+**Key Methods**:
+- `color.to_rgb()`: Render to (r, g, b) tuple
+- `color.to_hue()`: Get hue value (0-360)
+- `color.adjust_hue(delta)`: Return new Color with adjusted hue
+- `color.next_preset(delta, mgr)`: Return new Color with next/prev preset
 
 ### lamp_white_mode System
 

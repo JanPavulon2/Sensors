@@ -1,47 +1,66 @@
 {
-  "mode": "ANIMATION_PARAM",
+  "mode": "COLOR_SELECT",
   "color_mode": "PRESET",
-  "edit_mode": false,
+  "edit_mode": true,
   "lamp_solo": false,
   "lamp_solo_state": null,
   "animation": {
-    "enabled": false,
-    "name": "snake",
-    "speed": 32,
+    "enabled": true,
+    "name": "color_fade",
+    "speed": 78,
     "color": null,
     "color2": null,
-    "intensity": 100
+    "intensity": 82
   },
   "zones": {
     "strip": {
-      "hue": 30,
-      "brightness": 32,
-      "preset": 1
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "ocean"
+      },
+      "brightness": 15
     },
     "lamp": {
-      "hue": 28,
-      "brightness": 255,
-      "preset": 17
-    },
-    "top": {
-      "hue": 209,
-      "brightness": 32,
-      "preset": 9
-    },
-    "right": {
-      "hue": 0,
-      "brightness": 32,
-      "preset": 18
-    },
-    "bottom": {
-      "hue": 89,
-      "brightness": 32,
-      "preset": 4
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "red"
+      },
+      "brightness": 100
     },
     "left": {
-      "hue": 218,
-      "brightness": 32,
-      "preset": 19
+      "color": {
+        "mode": "HUE",
+        "hue": 60
+      },
+      "brightness": 100
+    },
+    "top": {
+      "color": {
+        "mode": "HUE",
+        "hue": 300
+      },
+      "brightness": 100
+    },
+    "right": {
+      "color": {
+        "mode": "HUE",
+        "hue": 197
+      },
+      "brightness": 95
+    },
+    "bottom": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "warm_white"
+      },
+      "brightness": 100
     }
-  }
+  },
+  "lamp_white_mode": false,
+  "lamp_white_saved_state": null,
+  "main_mode": "ANIMATION",
+  "static_parameter": "COLOR_HUE",
+  "animation_parameter": "SPEED",
+  "current_param": "ANIM_SPEED",
+  "current_zone_index": 2
 }
