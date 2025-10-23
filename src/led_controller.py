@@ -15,7 +15,7 @@ Hardware:
 from rpi_ws281x import ws, Color as RGBColor  # Rename to avoid conflict with models.Color
 from components import PreviewPanel, ZoneStrip
 from utils import hue_to_rgb
-from utils.logger import get_logger
+from utils.logger import get_logger, LogLevel, LogCategory
 from animations import AnimationEngine
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
 from models import load_parameters, get_parameter
@@ -29,6 +29,9 @@ import asyncio
 # Parameter cycling order for each mode
 STATIC_PARAMS = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
 ANIMATION_PARAMS = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
+
+# Module-level logger
+log = get_logger()
 
 
 class LEDController:
@@ -71,9 +74,6 @@ class LEDController:
         """
         self.config_manager = config_manager
         self.state = state
-
-        # Initialize logger
-        self.logger = get_logger()
 
         # Get managers from ConfigManager (dependency injection)
         self.color_manager: ColorManager = config_manager.color_manager
@@ -173,18 +173,17 @@ class LEDController:
         self.animation_color2 = anim_state.get("color2", None)
         self.animation_intensity = anim_state.get("intensity", 100)
 
-        # FUTURE-PROOF: Per-zone animation state (for HYBRID mode)
-        # This prepares architecture for per-zone animations without breaking current code
-        # In HYBRID mode, each zone can have its own animation running independently
-        self.zone_animations = {}
-        for zone_name in self.zone_names:
-            zone_anim_state = state.get("zones", {}).get(zone_name, {}).get("animation", {})
-            self.zone_animations[zone_name] = {
-                "enabled": zone_anim_state.get("enabled", False),
-                "name": zone_anim_state.get("name", "breathe"),
-                "speed": zone_anim_state.get("speed", 50),
-                "intensity": zone_anim_state.get("intensity", 100),
-            }
+        # FUTURE: Per-zone animation state (for HYBRID mode - not implemented yet)
+        # Commented out to avoid confusion - enable when implementing per-zone animations
+        # self.zone_animations = {}
+        # for zone_name in self.zone_names:
+        #     zone_anim_state = state.get("zones", {}).get(zone_name, {}).get("animation", {})
+        #     self.zone_animations[zone_name] = {
+        #         "enabled": zone_anim_state.get("enabled", False),
+        #         "name": zone_anim_state.get("name", "breathe"),
+        #         "speed": zone_anim_state.get("speed", 50),
+        #         "intensity": zone_anim_state.get("intensity", 100),
+        #     }
 
         # Animation list for selection (ordered)
         self.available_animations = ["breathe", "color_fade", "snake", "color_snake"]
@@ -353,40 +352,6 @@ class LEDController:
         """Get current zone name"""
         return self.zone_names[self.current_zone_index]
 
-    async def _pulse_zone_thread(self):
-        """Background thread that pulses the currently selected zone"""
-        cycle_duration = 1.0  # 1 second per pulse cycle (faster)
-        steps = 40  # Number of steps in one cycle
-
-        while self.pulse_active:
-            for step in range(steps):
-                if not self.pulse_active:
-                    break
-
-                # Get CURRENT zone and color (dynamically, not cached)
-                zone_name = self._get_current_zone()
-
-                # Use Color model as single source of truth
-                r, g, b = self.zone_colors[zone_name].to_rgb()
-
-                base_brightness = self.zone_brightness[zone_name]
-
-                # Sine wave for smooth pulsing (0.1 to 1.0 multiplier - deeper fade)
-                t = step / steps
-                brightness_scale = 0.1 + 0.9 * (math.sin(t * 2 * math.pi - math.pi/2) + 1) / 2
-
-                # Apply pulsing brightness
-                pulsed_brightness = base_brightness * brightness_scale
-                scale = pulsed_brightness / 255.0
-                r, g, b = int(r * scale), int(g * scale), int(b * scale)
-
-                # with self.pulse_lock:
-                async with self.pulse_lock:
-                    self.strip.set_zone_color(zone_name, r, g, b)
-
-                # time.sleep(cycle_duration / steps)
-                await asyncio.sleep(cycle_duration / steps)
-                
     async def _pulse_zone_task(self):
         """Async pulsing animation for current zone - fixed 1s cycle"""
         cycle_duration = 1.0  # Fixed 1 second pulse cycle (independent from animation_speed)
@@ -688,179 +653,23 @@ class LEDController:
 
     def select_animation(self, delta):
         """
-        Select animation in ANIMATION_SELECT mode
+        Select animation (cycle through available animations)
 
         Args:
             delta: -1 for previous, +1 for next
         """
-        if self.mode != Mode.ANIMATION_SELECT:
-            return
-
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
         self.animation_name = self.available_animations[self.selected_animation_index]
 
-        print(f"\n>>> Animation: {self.animation_name}")
-        print(f"    [{self.selected_animation_index + 1}/{len(self.available_animations)}]")
-
-        # Update preview
+        log.log(
+            LogCategory.ANIMATION,
+            "Animation selected",
+            name=self.animation_name,
+            index=f"{self.selected_animation_index + 1}/{len(self.available_animations)}"
+        )
         self._sync_preview()
 
-    # ===== NEW: Unified Parameter System =====
-
-    def cycle_parameter(self):
-        """
-        Cycle through parameters (Upper encoder CLICK)
-        COLOR → BRIGHTNESS → ANIMATION → ANIM_SPEED → ANIM_INTENSITY → (loop)
-
-        Only works when edit_mode=ON
-        """
-        if not self.edit_mode:
-            print("[INFO] Enter edit mode first to cycle parameters")
-            return
-
-        # Cycle through parameters
-        params = list(Parameter)
-        idx = params.index(self.current_parameter)
-        self.current_parameter = params[(idx + 1) % len(params)]
-
-        # Update preview_mode based on new parameter
-        if self.current_parameter == Parameter.COLOR:
-            self.preview_mode = PreviewMode.COLOR_DISPLAY
-        elif self.current_parameter == Parameter.BRIGHTNESS:
-            self.preview_mode = PreviewMode.BAR_INDICATOR
-        elif self.current_parameter == Parameter.ANIMATION:
-            self.preview_mode = PreviewMode.ANIMATION_PREVIEW
-        elif self.current_parameter in (Parameter.ANIM_SPEED, Parameter.ANIM_INTENSITY):
-            self.preview_mode = PreviewMode.BAR_INDICATOR
-
-        self._sync_preview()
-        print(f"\n>>> Parameter: {self.current_parameter.name}")
-
-        # Show current value
-        if self.current_parameter == Parameter.COLOR:
-            zone_name = self._get_current_zone()
-            hue = self.zone_hues[zone_name]
-            print(f"    Color Mode: {self.color_mode.name}, Hue: {hue}°")
-        elif self.current_parameter == Parameter.BRIGHTNESS:
-            zone_name = self._get_current_zone()
-            brightness = self.zone_brightness[zone_name]
-            print(f"    Brightness: {brightness}/255")
-        elif self.current_parameter == Parameter.ANIMATION:
-            print(f"    Animation: {self.animation_name} [{self.selected_animation_index + 1}/{len(self.available_animations)}]")
-        elif self.current_parameter == Parameter.ANIM_SPEED:
-            print(f"    Speed: {self.animation_speed}/100")
-        elif self.current_parameter == Parameter.ANIM_INTENSITY:
-            print(f"    Intensity: {self.animation_intensity}/100")
-
-    def adjust_parameter(self, delta):
-        """
-        Adjust currently selected parameter value (Lower encoder ROTATION)
-        Dispatches to appropriate handler based on current_parameter
-
-        Only works when edit_mode=ON
-        """
-        if not self.edit_mode:
-            return
-
-        zone_name = self._get_current_zone()
-
-        # Block editing lamp when in white mode
-        if zone_name == "lamp" and self.lamp_white_mode and self.current_parameter in (Parameter.COLOR, Parameter.BRIGHTNESS):
-            print("[INFO] Lamp is in white mode - press BTN2 to exit and enable editing")
-            return
-
-        if self.current_parameter == Parameter.COLOR:
-            # Adjust color (HUE or PRESET)
-            if self.color_mode == ColorMode.HUE:
-                self.zone_hues[zone_name] = (self.zone_hues[zone_name] + delta * 10) % 360
-                hue = self.zone_hues[zone_name]
-                r, g, b = hue_to_rgb(hue)
-                print(f">>> {zone_name}: Hue = {hue}° (RGB: {r}, {g}, {b})")
-            else:  # PRESET
-                self.zone_preset_indices[zone_name] = (self.zone_preset_indices[zone_name] + delta) % len(PRESET_ORDER)
-                preset_idx = self.zone_preset_indices[zone_name]
-                preset_name, (r, g, b) = get_preset_by_index(preset_idx)
-
-                # Convert preset RGB to HUE and save it
-                from utils.colors import rgb_to_hue
-                hue = rgb_to_hue(r, g, b)
-                self.zone_hues[zone_name] = hue
-
-                print(f">>> {zone_name}: Preset = '{preset_name}' (Hue: {hue}°)")
-
-            self._sync_preview()
-
-        elif self.current_parameter == Parameter.BRIGHTNESS:
-            # Adjust brightness (8 levels: 0, 32, 64, 96, 128, 160, 192, 224, 255)
-            current = self.zone_brightness[zone_name]
-            current_level = round(current / 32)
-            new_level = max(0, min(8, current_level + delta))
-            new_brightness = new_level * 32
-            if new_level == 8:
-                new_brightness = 255
-
-            self.zone_brightness[zone_name] = new_brightness
-            self._sync_preview()
-            print(f">>> {zone_name}: Brightness = {new_brightness}/255 (level {new_level}/8)")
-
-        elif self.current_parameter == Parameter.ANIMATION:
-            # Select animation
-            self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
-            self.animation_name = self.available_animations[self.selected_animation_index]
-            print(f"\n>>> Animation: {self.animation_name}")
-            print(f"    [{self.selected_animation_index + 1}/{len(self.available_animations)}]")
-            self._sync_preview()
-
-        elif self.current_parameter == Parameter.ANIM_SPEED:
-            # Adjust animation speed
-            self.animation_speed = max(1, min(100, self.animation_speed + delta * 2))
-
-            # Update live if animation is running
-            if self.animation_engine.is_running():
-                self.animation_engine.update_param("speed", self.animation_speed)
-
-            print(f">>> Animation speed = {self.animation_speed}/100")
-            self._sync_preview()
-
-        elif self.current_parameter == Parameter.ANIM_INTENSITY:
-            # Adjust animation intensity
-            self.animation_intensity = max(1, min(100, self.animation_intensity + delta * 2))
-
-            # Update live if animation is running
-            if self.animation_engine.is_running():
-                self.animation_engine.update_param("intensity", self.animation_intensity)
-
-            print(f">>> Animation intensity = {self.animation_intensity}/100")
-            self._sync_preview()
-
-    def parameter_click(self):
-        """
-        Context-sensitive action for Lower encoder CLICK
-
-        - COLOR parameter: Toggle HUE ↔ PRESET
-        - ANIMATION parameter: Start/Stop animation
-        - Other parameters: No action (or could cycle sub-parameters)
-        """
-        if self.current_parameter == Parameter.COLOR:
-            # Toggle HUE <-> PRESET
-            if self.color_mode == ColorMode.HUE:
-                self.color_mode = ColorMode.PRESET
-            else:
-                self.color_mode = ColorMode.HUE
-
-            print(f"\n>>> Color Mode: {self.color_mode.name}")
-            self._sync_preview()
-
-        elif self.current_parameter == Parameter.ANIMATION:
-            # Toggle animation ON/OFF
-            if self.animation_engine.is_running():
-                asyncio.create_task(self.stop_animation())
-            else:
-                asyncio.create_task(self.start_animation())
-
-        # Other parameters: no click action (can be extended later)
-
-    # ===== NEW: Two-Mode System (STATIC vs ANIMATION) =====
+    # ===== Two-Mode System (STATIC vs ANIMATION) =====
 
     def toggle_main_mode(self):
         """
@@ -946,15 +755,9 @@ class LEDController:
         if self.main_mode == MainMode.STATIC:
             # Change zone
             self.change_zone(delta)
-
         else:  # ANIMATION mode
             # Select animation
-            self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
-            self.animation_name = self.available_animations[self.selected_animation_index]
-
-            print(f"\n>>> Animation: {self.animation_name}")
-            print(f"    [{self.selected_animation_index + 1}/{len(self.available_animations)}]")
-            self._sync_preview()
+            self.select_animation(delta)
 
     def handle_upper_click(self):
         """
