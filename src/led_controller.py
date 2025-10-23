@@ -294,10 +294,10 @@ class LEDController:
                 num_leds = 0
                 led_brightness = 0
             else:
-                # Map 1-255 to levels 1-8
+                # Map 1-100 to levels 1-8
                 num_leds = max(1, min(8, int((value / max_value) * 8) + (1 if value % 32 > 0 else 0)))
-                # LED brightness = zone brightness (no scaling)
-                led_brightness = value / 255.0
+                # LED brightness = zone brightness (0-100% → 0-1.0 scale)
+                led_brightness = value / 100.0
         else:
             # For other parameters: traditional bar (0-8 LEDs at full brightness)
             num_leds = max(0, min(8, int((value / max_value) * 8)))

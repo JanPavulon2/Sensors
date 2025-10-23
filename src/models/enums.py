@@ -65,3 +65,23 @@ class ParamID(Enum):
     # These can be used by multiple animations
     LENGTH = auto()            # Length in pixels (e.g., snake length)
     HUE_OFFSET = auto()        # Hue offset in degrees (e.g., rainbow spacing)
+
+
+
+class LogLevel(Enum):
+    """Log severity levels"""
+    DEBUG = auto()
+    INFO = auto()
+    WARN = auto()
+    ERROR = auto()
+
+
+class LogCategory(Enum):
+    """Log categories for grouping related events"""
+    CONFIG = auto()      # Configuration loading, validation
+    HARDWARE = auto()    # GPIO, encoders, buttons, LEDs
+    STATE = auto()       # State changes, mode switches
+    COLOR = auto()       # Color adjustments, mode changes
+    ANIMATION = auto()   # Animation start/stop/params
+    ZONE = auto()        # Zone selection, zone operations
+    SYSTEM = auto()      # Startup, shutdown, errors

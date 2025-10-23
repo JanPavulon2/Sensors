@@ -8,25 +8,8 @@ Max 3-4 lines per action for readability on terminal.
 from enum import Enum, auto
 from typing import Optional, Any
 from datetime import datetime
-
-
-class LogLevel(Enum):
-    """Log severity levels"""
-    DEBUG = auto()
-    INFO = auto()
-    WARN = auto()
-    ERROR = auto()
-
-
-class LogCategory(Enum):
-    """Log categories for grouping related events"""
-    CONFIG = auto()      # Configuration loading, validation
-    HARDWARE = auto()    # GPIO, encoders, buttons, LEDs
-    STATE = auto()       # State changes, mode switches
-    COLOR = auto()       # Color adjustments, mode changes
-    ANIMATION = auto()   # Animation start/stop/params
-    ZONE = auto()        # Zone selection, zone operations
-    SYSTEM = auto()      # Startup, shutdown, errors
+from functools import partial
+from models.enums import LogLevel, LogCategory
 
 
 # ANSI color codes for terminal output
@@ -109,16 +92,16 @@ class Logger:
         """
         self.min_level = min_level
         self.use_colors = use_colors
-
-    def _should_log(self, level: LogLevel) -> bool:
-        """Check if message should be logged based on level"""
-        level_priority = {
+        self.level_priority = {
             LogLevel.DEBUG: 0,
             LogLevel.INFO: 1,
             LogLevel.WARN: 2,
             LogLevel.ERROR: 3,
         }
-        return level_priority[level] >= level_priority[self.min_level]
+        
+    def _should_log(self, level: LogLevel) -> bool:
+        """Check if message should be logged based on level"""
+        return self.level_priority[level] >= self.level_priority[self.min_level]
 
     def _colorize(self, text: str, color: str) -> str:
         """Apply color to text if colors enabled"""
@@ -207,6 +190,10 @@ class Logger:
 
     # Convenience methods for each category
 
+    def config(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
+        """Log hardware event (GPIO, encoders, buttons, LEDs)"""
+        self.log(LogCategory.CONFIG, message, level, **kwargs)
+
     def hardware(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
         """Log hardware event (GPIO, encoders, buttons, LEDs)"""
         self.log(LogCategory.HARDWARE, message, level, **kwargs)
@@ -230,63 +217,6 @@ class Logger:
     def system(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
         """Log system event (startup, shutdown, errors)"""
         self.log(LogCategory.SYSTEM, message, level, **kwargs)
-
-    # Convenience methods for common patterns
-
-    def encoder_event(self, encoder_name: str, action: str, delta: Optional[int] = None):
-        """Log encoder rotation or button press"""
-        kwargs = {"encoder": encoder_name, "action": action}
-        if delta is not None:
-            kwargs["delta"] = delta
-        self.hardware(f"Encoder: {action}", **kwargs)
-
-    def button_event(self, button_num: int, action: str):
-        """Log button press"""
-        self.hardware(f"Button {button_num}: {action}", button=f"BTN{button_num}")
-
-    def mode_change(self, old_mode: str, new_mode: str):
-        """Log mode change"""
-        self.state("Mode changed", mode_from=old_mode, mode_to=new_mode)
-
-    def zone_change(self, old_zone: str, new_zone: str):
-        """Log zone selection"""
-        self.zone("Zone changed", zone_from=old_zone, zone_to=new_zone)
-
-    def color_adjust(self, zone: str, color_from: str, color_to: str, mode: str):
-        """Log color adjustment"""
-        self.color(
-            "Color adjusted",
-            zone=zone,
-            mode=mode,
-            color=f"{color_from} → {color_to}"
-        )
-
-    def brightness_adjust(self, zone: str, brightness_from: int, brightness_to: int):
-        """Log brightness adjustment"""
-        self.color(
-            "Brightness adjusted",
-            zone=zone,
-            brightness=f"{brightness_from}% → {brightness_to}%"
-        )
-
-    def animation_start(self, animation_name: str, zones: list):
-        """Log animation start"""
-        self.animation(
-            "Animation started",
-            animation=animation_name,
-            zones=", ".join(zones)
-        )
-
-    def animation_stop(self, animation_name: str):
-        """Log animation stop"""
-        self.animation("Animation stopped", animation=animation_name)
-
-    def animation_param_change(self, param_name: str, value_from: Any, value_to: Any):
-        """Log animation parameter change"""
-        self.animation(
-            f"Parameter changed: {param_name}",
-            value=f"{value_from} → {value_to}"
-        )
 
     def error(self, category: LogCategory, message: str, exception: Optional[Exception] = None):
         """Log error with optional exception"""
@@ -316,3 +246,8 @@ def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = Tru
     """
     global _logger
     _logger = Logger(min_level=min_level, use_colors=use_colors)
+
+def get_category_logger(category: LogCategory):
+    """Return a simple function bound to a specific category"""
+    base = get_logger()
+    return partial(base.log, category)

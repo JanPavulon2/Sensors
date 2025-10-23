@@ -1,13 +1,13 @@
 {
   "mode": "COLOR_SELECT",
   "color_mode": "PRESET",
-  "edit_mode": true,
+  "edit_mode": false,
   "lamp_solo": false,
   "lamp_solo_state": null,
   "animation": {
     "enabled": false,
-    "name": "breathe",
-    "speed": 100,
+    "name": "color_snake",
+    "speed": 66,
     "color": null,
     "color2": null,
     "intensity": 82
@@ -18,42 +18,42 @@
         "mode": "PRESET",
         "preset_name": "ocean"
       },
-      "brightness": 15
+      "brightness": 100
     },
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "blue"
       },
-      "brightness": 10
+      "brightness": 100
     },
     "left": {
       "color": {
         "mode": "HUE",
         "hue": 60
       },
-      "brightness": 30
+      "brightness": 100
     },
     "top": {
       "color": {
         "mode": "HUE",
         "hue": 300
       },
-      "brightness": 40
+      "brightness": 100
     },
     "right": {
       "color": {
         "mode": "HUE",
         "hue": 197
       },
-      "brightness": 45
+      "brightness": 90
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
         "preset_name": "warm_white"
       },
-      "brightness": 30
+      "brightness": 100
     }
   },
   "lamp_white_mode": false,
@@ -61,6 +61,6 @@
   "main_mode": "STATIC",
   "static_parameter": "COLOR_HUE",
   "animation_parameter": "SPEED",
-  "current_param": "ZONE_BRIGHTNESS",
+  "current_param": "ZONE_COLOR_HUE",
   "current_zone_index": 1
 }

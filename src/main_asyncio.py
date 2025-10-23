@@ -21,6 +21,8 @@ Modes:
 
 import sys
 import asyncio
+from utils.logger import get_logger, configure_logger
+from models.enums import LogLevel 
 from control_module import ControlModule
 from led_controller import LEDController
 from managers.config_manager import ConfigManager
@@ -31,7 +33,13 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 
+configure_logger(LogLevel.DEBUG)
+log = get_logger()
+    
+    
 async def main():
+    log.system("Logger test")
+    
     print("=" * 60)
     print("LED Control Station")
     print("=" * 60)

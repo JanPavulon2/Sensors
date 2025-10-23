@@ -8,11 +8,12 @@ Loads modular YAML files and initializes sub-managers.
 import yaml
 from pathlib import Path
 from typing import List, Optional, Dict, TYPE_CHECKING
-from utils.logger import get_logger, LogLevel, LogCategory
+from utils.logger import get_logger, get_category_logger, LogLevel, LogCategory
 
 if TYPE_CHECKING:
     from models.zone import Zone
 
+log = get_category_logger(LogCategory.CONFIG)
 
 class ConfigManager:
     """
@@ -46,7 +47,6 @@ class ConfigManager:
         self.config_path = Path(config_path)
         self.factory_defaults_path = Path(defaults_path)
         self.data = {}
-        self.logger = get_logger()
 
         # Sub-managers (initialized in load())
         self.hardware_manager = None
@@ -68,8 +68,6 @@ class ConfigManager:
         Returns:
             Merged config data dict
         """
-        log = self.logger  # Shorthand
-
         try:
             # Resolve path relative to src/ directory
             src_dir = Path(__file__).parent.parent
@@ -80,16 +78,16 @@ class ConfigManager:
 
             # Check for include system
             if 'include' in main_config:
-                log.log(LogCategory.CONFIG, "Using include-based configuration")
+                log("Using include-based configuration")
                 self.data = self._load_with_includes(main_config['include'], src_dir / self.config_path.parent)
             else:
                 # Monolithic config (backward compatibility)
-                log.log(LogCategory.CONFIG, "Using monolithic configuration")
+                log("Using monolithic configuration")
                 self.data = main_config
 
         except Exception as ex:
-            log.error(LogCategory.CONFIG, "Failed to load config.yaml", exception=ex)
-            log.log(LogCategory.CONFIG, "Falling back to factory defaults", level=LogLevel.WARN)
+            log("Failed to load config.yaml", LogLevel.ERROR, exception=ex)
+            log("Falling back to factory defaults", LogLevel.WARN)
 
             # Load factory defaults
             src_dir = Path(__file__).parent.parent
