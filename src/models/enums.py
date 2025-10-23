@@ -30,6 +30,11 @@ class PreviewMode(Enum):
     BAR_INDICATOR = auto()    # LED bar indicator (N of 8 LEDs lit)
     ANIMATION_PREVIEW = auto() # Mini animation preview
 
+class ColorMode(Enum):
+    """Color representation modes"""
+    HUE = auto()       # Hue-based (0-360°, full saturation)
+    PRESET = auto()    # Named preset from colors.yaml
+    RGB = auto()       # Direct RGB (for future custom colors)
 
 class ParamID(Enum):
     """

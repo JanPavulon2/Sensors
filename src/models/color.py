@@ -6,16 +6,12 @@ Uses ColorManager for preset data and utils.colors for conversion functions.
 """
 
 from enum import Enum, auto
+from .enums import ColorMode
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from utils.colors import hue_to_rgb, rgb_to_hue, find_closest_preset_name
 
 
-class ColorMode(Enum):
-    """Color representation modes"""
-    HUE = auto()       # Hue-based (0-360°, full saturation)
-    PRESET = auto()    # Named preset from colors.yaml
-    RGB = auto()       # Direct RGB (for future custom colors)
 
 
 @dataclass

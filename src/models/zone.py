@@ -20,7 +20,7 @@ class Zone:
         name: Display name (e.g., "Lamp", "Top", "Bed Backlight") - user-friendly, capitalized
         tag: Technical identifier (e.g., "lamp", "top", "bed") - lowercase, used in code/state
         pixel_count: Number of addressable pixels in the zone
-        enabled: Whether the zone is physically connected
+        enabled: Whether the zone is enabled for display/animation/etc 
         order: Order in the strip (1, 2, 3...) - for auto-calculating indices
 
     Calculated properties:

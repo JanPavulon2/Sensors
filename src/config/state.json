@@ -5,9 +5,9 @@
   "lamp_solo": false,
   "lamp_solo_state": null,
   "animation": {
-    "enabled": true,
-    "name": "color_fade",
-    "speed": 78,
+    "enabled": false,
+    "name": "breathe",
+    "speed": 100,
     "color": null,
     "color2": null,
     "intensity": 82
@@ -25,42 +25,42 @@
         "mode": "PRESET",
         "preset_name": "red"
       },
-      "brightness": 100
+      "brightness": 10
     },
     "left": {
       "color": {
         "mode": "HUE",
         "hue": 60
       },
-      "brightness": 100
+      "brightness": 30
     },
     "top": {
       "color": {
         "mode": "HUE",
         "hue": 300
       },
-      "brightness": 100
+      "brightness": 40
     },
     "right": {
       "color": {
         "mode": "HUE",
         "hue": 197
       },
-      "brightness": 95
+      "brightness": 45
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
         "preset_name": "warm_white"
       },
-      "brightness": 100
+      "brightness": 30
     }
   },
   "lamp_white_mode": false,
   "lamp_white_saved_state": null,
-  "main_mode": "ANIMATION",
+  "main_mode": "STATIC",
   "static_parameter": "COLOR_HUE",
   "animation_parameter": "SPEED",
-  "current_param": "ANIM_SPEED",
-  "current_zone_index": 2
+  "current_param": "ZONE_BRIGHTNESS",
+  "current_zone_index": 1
 }

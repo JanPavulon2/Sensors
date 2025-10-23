@@ -76,8 +76,8 @@ class LEDController:
         self.logger = get_logger()
 
         # Get managers from ConfigManager (dependency injection)
-        self.color_manager = config_manager.color_manager
-        self.animation_manager = config_manager.animation_manager
+        self.color_manager: ColorManager = config_manager.color_manager
+        self.animation_manager: AnimationManager = config_manager.animation_manager
 
         # Load parameters (global registry)
         load_parameters()  # Populates global PARAMETERS registry

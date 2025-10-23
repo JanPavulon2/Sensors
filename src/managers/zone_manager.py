@@ -25,11 +25,11 @@ class ZoneManager:
             {"name": "Lamp", "tag": "lamp", "total_leds": 57, "enabled": True, "order": 1},
             {"name": "Top", "tag": "top", "total_leds": 12, "enabled": True, "order": 2},
         ]
-        zone_mgr = ZoneManager(zones_config)
-        zone_mgr.print_summary()
+        zone_manager = ZoneManager(zones_config)
+        zone_manager.print_summary()
 
-        lamp = zone_mgr.get_zone("lamp")
-        zones_dict = zone_mgr.get_zone_dict()  # {"lamp": [0, 18], "top": [19, 22]}
+        lamp = zone_manager.get_zone("lamp")
+        zones_dict = zone_manager.get_zone_dict()  # {"lamp": [0, 18], "top": [19, 22]}
     """
 
     def __init__(self, zones_config: List[dict]):
