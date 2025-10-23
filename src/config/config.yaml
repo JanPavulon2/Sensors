@@ -1,73 +1,9 @@
-hardware:
-  encoders:
-    zone_selector: { clk: 5, dt: 6, sw: 13 }
-    modulator: { clk: 16, dt: 20, sw: 21 }
+# Main Configuration File
+# Uses include system to load modular config files
 
-  buttons: [22, 26, 23, 24]
-
-  leds:
-    preview:
-      gpio: 19
-      count: 8
-      color_order: GRB
-      brightness: 100
-    strip:
-      gpio: 18
-      count: 45
-      color_order: BRG
-      brightness: 255
-
-zones:
-  - name: Strip
-    tag: strip
-    pixel_count: 12      # 45 physical LEDs (15 * 3)
-    enabled: true
-    order: 1
-
-  - name: Lamp
-    tag: lamp
-    pixel_count: 19      # 57 physical LEDs (19 * 3)
-    enabled: true
-    order: 2
-
-  - name: Top
-    tag: top
-    pixel_count: 4       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 3
-
-  - name: Right
-    tag: right
-    pixel_count: 3       # 9 physical LEDs (3 * 3)
-    enabled: true
-    order: 4
-
-  - name: Bottom
-    tag: bottom
-    pixel_count: 4       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 5
-
-  - name: Left
-    tag: left
-    pixel_count: 3       # 9 physical LEDs (3 * 3)
-    enabled: true
-    order: 6
-
-
-animations:
-  breathe:
-    default_speed: 50
-    default_intensity: 100
-    min_speed: 1
-    max_speed: 100
-  color_fade:
-    default_speed: 30
-    default_start_hue: 0
-    min_speed: 1
-    max_speed: 100
-  snake:
-    default_speed: 60
-    default_color: [255, 255, 255]
-    min_speed: 1
-    max_speed: 100
+# Include list - files loaded in order and merged
+include:
+  - hardware.yaml
+  - zones.yaml
+  - animations.yaml
+  - colors.yaml

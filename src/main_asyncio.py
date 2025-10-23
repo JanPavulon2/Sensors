@@ -19,11 +19,17 @@ Modes:
     - BRIGHTNESS_EDIT: Modulator adjusts brightness
 """
 
+import sys
 import asyncio
 from control_module import ControlModule
 from led_controller import LEDController
 from managers.config_manager import ConfigManager
 from managers.state_manager import StateManager
+
+# Configure UTF-8 encoding for terminal output (support unicode icons)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 async def main():
     print("=" * 60)
@@ -38,43 +44,57 @@ async def main():
     print("  - Modulator: Encoder 2")
     print()
     print("Controls:")
-    print("  ENCODER 1 (Zone Selector):")
+    print("  TWO MODES: STATIC (zone editing) <-> ANIMATION (animation control)")
+    print("  Toggle with BTN4")
+    print()
+    print("  === STATIC MODE (default) ===")
+    print("  ENCODER 1 (Upper):")
     print("    Rotate: Change zone (lamp -> top -> right -> bottom -> left)")
-    print("    Click:  Switch MODE (COLOR -> BRIGHTNESS -> ANIMATION -> PARAM)")
+    print("    Click:  (unused)")
+    print("  ENCODER 2 (Lower):")
+    print("    Rotate: Adjust parameter value")
+    print("    Click:  Cycle parameter (COLOR_HUE -> COLOR_PRESET -> BRIGHTNESS)")
     print()
-    print("  ENCODER 2 (Modulator):")
-    print("    Rotate: Adjust parameter (active only in EDIT MODE)")
-    print("    Click:  Switch SUB-MODE (HUE<->PRESET, or animation params)")
+    print("  === ANIMATION MODE ===")
+    print("  ENCODER 1 (Upper):")
+    print("    Rotate: Select animation (breathe -> color_fade -> snake -> color_snake)")
+    print("    Click:  Start/Stop animation")
+    print("  ENCODER 2 (Lower):")
+    print("    Rotate: Adjust parameter value")
+    print("    Click:  Cycle parameter (SPEED -> INTENSITY)")
     print()
-    print("  BUTTONS:")
+    print("  === BUTTONS (all modes) ===")
     print("    BTN1: Toggle EDIT MODE (enable/disable editing)")
-    print("    BTN2: Quick action - Lamp -> Warm White @ Full")
+    print("    BTN2: Quick Lamp White (warm white @ full brightness)")
     print("    BTN3: Power toggle (all zones ON/OFF)")
-    print("    BTN4: [Reserved for future use]")
-    print()
-    print("Modes:")
-    print("  - COLOR_SELECT: Choose color (HUE smooth / PRESET jump)")
-    print("  - BRIGHTNESS_ADJUST: Adjust brightness (0-255)")
-    print("  - ANIMATION_SELECT: Choose animation (TODO)")
-    print("  - ANIMATION_PARAM: Adjust animation params (TODO)")
+    print("    BTN4: Toggle STATIC/ANIMATION mode")
     print()
     print("Starting...")
     print("=" * 60)
 
-    # load configuration and state
+    # Load configuration (SINGLE ENTRY POINT)
+    # ConfigManager loads all YAMLs and creates sub-managers
     config_manager = ConfigManager()
-    config = config_manager.load()
+    config_manager.load()
 
-    # Override zones in config dict with processed zones from zone_manager
-    # This ensures LEDController gets {"lamp": [0,18], ...} format
-    config["zones"] = config_manager.zones
-
+    # Load state
     state_manager = StateManager()
     state = await state_manager.load()
 
-    # Initialize hardware and controller
-    module = ControlModule(config)
-    led = LEDController(config, state)
+    # Initialize hardware and controller (dependency injection)
+    # ControlModule expects nested structure - provide hardware sub-dict
+    # TODO: Refactor ControlModule to use HardwareManager directly
+    hardware_config = {
+        "hardware": {
+            "encoders": config_manager.data.get("encoders", {}),
+            "buttons": config_manager.data.get("buttons", []),
+            "leds": config_manager.data.get("leds", {})
+        }
+    }
+    module = ControlModule(hardware_config)
+
+    # LEDController receives ConfigManager (not raw dict)
+    led = LEDController(config_manager, state)
 
     # Helper function to save state
     def save_state():
@@ -85,52 +105,23 @@ async def main():
     # Connect hardware events to LED controller
 
     def handle_zone_change(delta):
-        """Zone selector rotated - change zone"""
-        led.change_zone(delta)
+        """Upper encoder rotated - context-sensitive (zone select or animation select)"""
+        led.handle_upper_rotation(delta)  # NEW: Two-mode system
         save_state()
 
     def handle_zone_selector_click():
-        """Zone selector button clicked - switch main mode (when edit_mode=ON)"""
-        led.switch_mode()
+        """Upper encoder clicked - cycle parameters (context-sensitive)"""
+        led.handle_upper_click()  # NEW: Two-mode system
         save_state()
 
     def handle_modulator(delta):
-        """Modulator rotated - adjust parameter based on mode"""
-        if not led.edit_mode:
-            return  # Encoder 2 inactive when not in edit mode
+        """Lower encoder rotated - adjust parameter value (context-sensitive)"""
+        led.handle_lower_rotation(delta)  # NEW: Two-mode system
+        save_state()
 
-        if led.mode.name == "COLOR_SELECT":
-            if led.color_mode.name == "HUE":
-                led.adjust_color(delta * 10)  # 10 degrees per click for HUE
-            else:  # PRESET
-                led.adjust_color(delta)  # 1 step per click for PRESET
-            save_state()
-        elif led.mode.name == "BRIGHTNESS_ADJUST":
-            led.adjust_brightness(delta)  # 1 level per click (8 levels total)
-            save_state()
-        elif led.mode.name == "ANIMATION_SELECT":
-            led.select_animation(delta)  # Select animation
-            save_state()
-        elif led.mode.name == "ANIMATION_PARAM":
-            if led.anim_param_mode.name == "SPEED":
-                led.adjust_animation_speed(delta * 2)  # faster change
-                save_state()
-            else:
-                print(f"[TODO] Animation param adjust: {led.anim_param_mode}")
-    
     def handle_modulator_click():
-        """Modulator button clicked - switch sub-mode or start/stop animation"""
-        if led.mode.name == "COLOR_SELECT":
-            led.switch_color_submode()  # HUE <-> PRESET
-        elif led.mode.name == "ANIMATION_SELECT":
-            # Toggle animation on/off
-            if led.animation_enabled:
-                asyncio.create_task(led.stop_animation())
-            else:
-                asyncio.create_task(led.start_animation())
-        elif led.mode.name == "ANIMATION_PARAM":
-            led.switch_anim_param_submode()  # SPEED <-> COLOR1 <-> COLOR2 <-> INTENSITY
-
+        """Lower encoder clicked - context-sensitive action"""
+        led.handle_lower_click()  # NEW: Two-mode system
         save_state()
 
     def handle_button1():
@@ -141,16 +132,17 @@ async def main():
     def handle_button2():
         """Button 2: Quick action - Lamp warm white"""
         led.quick_lamp_white()
+        save_state()
 
     def handle_button3():
         """Button 3: Power toggle"""
         led.power_toggle()
+        save_state()
 
     def handle_button4():
-        """Button 4: [Reserved for future use]"""
-        print("[INFO] Button 4 pressed - not assigned")
-        # Reserved for future functionality
-        pass
+        """Button 4: Toggle STATIC/ANIMATION mode"""
+        led.toggle_main_mode()
+        save_state()
 
     async def hardware_loop():
         """Poll hardware asynchronously"""
@@ -178,14 +170,18 @@ async def main():
     # Print initial status
     status = led.get_status()
     print(f"\nInitial state:")
+    print(f"  Mode: {led.main_mode.name}")
     print(f"  Edit Mode: {status['edit_mode']}")
-    print(f"  Mode: {status['mode']}")
-    print(f"  Color Mode: {status['color_mode']}")
-    print(f"  Zone: {status['zones']}")
-    # print(f"  Brightness: {status['brightness']}/255")
-    print(f"  Lamp Solo: {status['lamp_solo']}")
+    if led.main_mode.name == "STATIC":
+        print(f"  Current Zone: {led._get_current_zone()}")
+        print(f"  Parameter: {led.current_param.name}")
+    else:
+        print(f"  Current Animation: {led.animation_name}")
+        print(f"  Parameter: {led.current_param.name}")
     print()
-    print("TIP: Press BTN1 to enter EDIT MODE and start editing!")
+    print("TIP: Press BTN1 to toggle EDIT MODE")
+    print("TIP: Press BTN4 to toggle STATIC/ANIMATION mode")
+    print("TIP: Click upper encoder to cycle parameters in current mode")
     print("Press Ctrl+C to exit")
     print("=" * 60)
     print()
@@ -200,19 +196,23 @@ async def main():
         print("\nShutting down...")
     finally:
         # Always cleanup on exit
-        print("Stopping animations...")
-        await led.stop_animation()  # Stop any running animation
-        print("Stopping pulsing...")
-        led._stop_pulse()  # Stop pulsing task
-        await asyncio.sleep(0.1)  # Give time for colors to be restored
-        print("Clearing all LEDs...")
-        led.clear_all()
-        print("Cleaning up GPIO...")
-        module.cleanup()
         print("Saving final state...")
         state_manager.update_from_led(led)
         await state_manager.save()
         print("Final state saved. Goodbye!")
+        
+        print("Stopping animations...")
+        await led.stop_animation()  # Stop any running animation
+        
+        print("Stopping pulsing...")
+        led._stop_pulse()  # Stop pulsing task
+        await asyncio.sleep(0.1)  # Give time for colors to be restored
+        
+        print("Clearing all LEDs...")
+        led.clear_all()
+        
+        print("Cleaning up GPIO...")
+        module.cleanup()
 
 
 

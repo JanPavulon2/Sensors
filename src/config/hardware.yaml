@@ -1,0 +1,28 @@
+# Hardware Configuration
+# GPIO pin assignments for encoders, buttons, and LED strips
+
+encoders:
+  zone_selector:
+    clk: 5
+    dt: 6
+    sw: 13
+    
+  modulator:
+    clk: 16
+    dt: 20
+    sw: 21
+
+buttons: [22, 26, 23, 24]
+
+leds:
+  preview:
+    gpio: 19
+    count: 8
+    color_order: GRB
+    brightness: 100
+
+  strip:
+    gpio: 18
+    count: 45
+    color_order: BRG
+    brightness: 255

@@ -10,6 +10,7 @@ from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
+from animations.color_snake import ColorSnakeAnimation
 
 
 class AnimationEngine:
@@ -34,6 +35,7 @@ class AnimationEngine:
         'breathe': BreatheAnimation,
         'color_fade': ColorFadeAnimation,
         'snake': SnakeAnimation,
+        'color_snake': ColorSnakeAnimation,
     }
 
     def __init__(self, strip, zones: Dict[str, list]):

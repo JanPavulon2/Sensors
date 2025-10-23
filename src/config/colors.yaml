@@ -1,0 +1,60 @@
+# Color Presets Configuration
+# Defines all available preset colors for LED Controller
+
+presets:
+  # Basic colors
+  red:       { rgb: [255, 0, 0],     category: basic }
+  green:     { rgb: [0, 255, 0],     category: basic }
+  blue:      { rgb: [0, 0, 255],     category: basic }
+  yellow:    { rgb: [255, 255, 0],   category: basic }
+  cyan:      { rgb: [0, 255, 255],   category: basic }
+  magenta:   { rgb: [255, 0, 255],   category: basic }
+
+  # Whites (low saturation - need special RGB handling)
+  warm_white: { rgb: [255, 200, 150], category: white, description: "Cozy warm white" }
+  white:      { rgb: [255, 255, 255], category: white, description: "Pure white" }
+  cool_white: { rgb: [200, 220, 255], category: white, description: "Cool daylight white" }
+
+  # Warm tones
+  orange:    { rgb: [255, 128, 0],   category: warm }
+  amber:     { rgb: [255, 191, 0],   category: warm }
+  pink:      { rgb: [255, 128, 192], category: warm }
+  hot_pink:  { rgb: [255, 0, 128],   category: warm }
+
+  # Cool tones
+  purple:    { rgb: [128, 0, 255],   category: cool }
+  violet:    { rgb: [180, 0, 255],   category: cool }
+  indigo:    { rgb: [75, 0, 130],    category: cool }
+
+  # Natural tones
+  mint:      { rgb: [170, 255, 195], category: natural }
+  lime:      { rgb: [128, 255, 0],   category: natural }
+  sky_blue:  { rgb: [135, 206, 235], category: natural }
+  ocean:     { rgb: [0, 128, 255],   category: natural }
+  lavender:  { rgb: [200, 150, 255], category: natural }
+
+  # Special
+  off:       { rgb: [0, 0, 0],       category: special, description: "All LEDs off" }
+
+# Preset cycling order
+preset_order:
+  - red
+  - orange
+  - amber
+  - yellow
+  - lime
+  - green
+  - mint
+  - cyan
+  - sky_blue
+  - ocean
+  - blue
+  - indigo
+  - violet
+  - purple
+  - magenta
+  - hot_pink
+  - pink
+  - warm_white
+  - white
+  - cool_white

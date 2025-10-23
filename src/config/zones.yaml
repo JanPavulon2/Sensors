@@ -1,0 +1,63 @@
+# Zone Configuration
+# Zone definitions and zone parameters
+
+# Zone parameter definitions (shared by all zones)
+zone_parameters:
+  ZONE_COLOR:
+    type: COLOR
+    color_modes: [HUE, PRESET]
+    default: 0
+    description: "Zone color"
+
+  ZONE_BRIGHTNESS:
+    type: PERCENTAGE
+    default: 100
+    min: 0
+    max: 100
+    step: 5
+    wraps: false
+    unit: "%"
+    description: "Zone brightness (0-100%)"
+
+  ZONE_REVERSED:
+    type: BOOLEAN
+    default: false
+    description: "Reverse pixel order (for future)"
+
+# Zone definitions (each zone only defines unique values)
+zones:
+  - name: Strip
+    tag: strip
+    pixel_count: 12      # 45 physical LEDs (15 * 3)
+    enabled: true
+    order: 1
+
+  - name: Lamp
+    tag: lamp
+    pixel_count: 19      # 57 physical LEDs (19 * 3)
+    enabled: true
+    order: 2
+
+  - name: Left
+    tag: left
+    pixel_count: 4       # 9 physical LEDs (3 * 3)
+    enabled: true
+    order: 3
+
+  - name: Top
+    tag: top
+    pixel_count: 3       # 12 physical LEDs (4 * 3)
+    enabled: true
+    order: 4
+
+  - name: Right
+    tag: right
+    pixel_count: 4       # 9 physical LEDs (3 * 3)
+    enabled: true
+    order: 5
+
+  - name: Bottom
+    tag: bottom
+    pixel_count: 3       # 12 physical LEDs (4 * 3)
+    enabled: true
+    order: 6
