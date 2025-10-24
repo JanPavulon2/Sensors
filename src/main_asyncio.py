@@ -90,16 +90,7 @@ async def main():
     state = await state_manager.load()
 
     # Initialize hardware and controller (dependency injection)
-    # ControlModule expects nested structure - provide hardware sub-dict
-    # TODO: Refactor ControlModule to use HardwareManager directly
-    hardware_config = {
-        "hardware": {
-            "encoders": config_manager.data.get("encoders", {}),
-            "buttons": config_manager.data.get("buttons", []),
-            "leds": config_manager.data.get("leds", {})
-        }
-    }
-    module = ControlModule(hardware_config)
+    module = ControlModule(config_manager.hardware_manager)
 
     # LEDController receives ConfigManager (not raw dict)
     led = LEDController(config_manager, state)
@@ -113,23 +104,23 @@ async def main():
     # Connect hardware events to LED controller
 
     def handle_zone_change(delta):
-        """Upper encoder rotated - context-sensitive (zone select or animation select)"""
-        led.handle_upper_rotation(delta)  # NEW: Two-mode system
+        """Selector encoder rotated - context-sensitive (zone select or animation select)"""
+        led.handle_selector_rotation(delta)
         save_state()
 
     def handle_zone_selector_click():
-        """Upper encoder clicked - cycle parameters (context-sensitive)"""
-        led.handle_upper_click()  # NEW: Two-mode system
+        """Selector encoder clicked - context-sensitive action"""
+        led.handle_selector_click()
         save_state()
 
     def handle_modulator(delta):
-        """Lower encoder rotated - adjust parameter value (context-sensitive)"""
-        led.handle_lower_rotation(delta)  # NEW: Two-mode system
+        """Modulator encoder rotated - adjust parameter value (context-sensitive)"""
+        led.handle_modulator_rotation(delta)
         save_state()
 
     def handle_modulator_click():
-        """Lower encoder clicked - context-sensitive action"""
-        led.handle_lower_click()  # NEW: Two-mode system
+        """Modulator encoder clicked - cycle parameters"""
+        led.handle_modulator_click()
         save_state()
 
     def handle_button1():
@@ -166,8 +157,8 @@ async def main():
     #         await asyncio.sleep(10)
              
     # Assign callbacks
-    module.on_zone_selector_rotate = handle_zone_change
-    module.on_zone_selector_click = handle_zone_selector_click
+    module.on_selector_rotate = handle_zone_change
+    module.on_selector_click = handle_zone_selector_click
     module.on_modulator_rotate = handle_modulator
     module.on_modulator_click = handle_modulator_click
     module.on_button[0] = handle_button1
@@ -184,7 +175,7 @@ async def main():
         print(f"  Current Zone: {led._get_current_zone()}")
         print(f"  Parameter: {led.current_param.name}")
     else:
-        print(f"  Current Animation: {led.animation_name}")
+        print(f"  Current Animation: {led.animation_id}")
         print(f"  Parameter: {led.current_param.name}")
     print()
     print("TIP: Press BTN1 to toggle EDIT MODE")

@@ -15,6 +15,7 @@ Hardware:
 import time
 import math
 import asyncio
+from typing import Dict, List, Optional
 from rpi_ws281x import ws, Color as RGBColor  # Rename to avoid conflict with models.Color
 from components import PreviewPanel, ZoneStrip
 from utils.logger import get_logger, LogLevel, LogCategory
@@ -50,7 +51,7 @@ class LEDController:
         led.switch_mode()  # COLOR_EDIT -> BRIGHTNESS_EDIT
     """
 
-    def __init__(self, config_manager, state):
+    def __init__(self, config_manager: ConfigManager, state: Dict):
         """
         Initialize LED Controller
 
@@ -62,7 +63,7 @@ class LEDController:
             ConfigManager is the single source of truth for all configuration.
             LEDController receives managers via dependency injection.
         """
-        self.state = state
+        self.state: Dict = state
         
         # Get ConfigManager and submanagers from it (dependency injection)
         self.config_manager: ConfigManager = config_manager
@@ -104,25 +105,26 @@ class LEDController:
         )
 
         # Global state
-        self.edit_mode = state.get("edit_mode", True)
+        self.edit_mode: bool = state.get("edit_mode", True)
 
         # Lamp white mode (desk lamp mode - lamp excluded from everything)
-        self.lamp_white_mode = state.get("lamp_white_mode", False)
-        self.lamp_white_saved_state = state.get("lamp_white_saved_state", None)
+        self.lamp_white_mode: bool = state.get("lamp_white_mode", False)
+        self.lamp_white_saved_state: Optional[Dict] = state.get("lamp_white_saved_state", None)
 
         # Two-mode system (STATIC vs ANIMATION) - load from state
         try:
-            self.main_mode = MainMode[state.get("main_mode", "STATIC")]
+            self.main_mode: MainMode = MainMode[state.get("main_mode", "STATIC")]
         except KeyError:
             self.main_mode = MainMode.STATIC
 
         # Current parameter (using ParamID)
         try:
-            self.current_param = ParamID[state.get("current_param", "ZONE_COLOR_HUE")]
+            self.current_param: ParamID = ParamID[state.get("current_param", "ZONE_COLOR_HUE")]
         except KeyError:
             self.current_param = ParamID.ZONE_COLOR_HUE
 
         # Set preview_mode based on current mode and parameter
+        self.preview_mode: PreviewMode
         if self.main_mode == MainMode.STATIC:
             if self.current_param == ParamID.ZONE_BRIGHTNESS:
                 self.preview_mode = PreviewMode.BAR_INDICATOR
@@ -131,13 +133,12 @@ class LEDController:
         else:  # ANIMATION mode
             self.preview_mode = PreviewMode.BAR_INDICATOR
 
-        # Zone selection - load from state
-        # self.zone_names = list(zones.keys())
-        self.current_zone_index = state.get("current_zone_index", 0)
+        # Zone selection
+        self.current_zone_index: int = state.get("current_zone_index", 0)
 
-        # Parameters per zone (using Color model)
-        self.zone_colors = {}  # Dict[str, Color] - SINGLE SOURCE OF TRUTH
-        self.zone_brightness = {}  # Dict[str, int] - 0-100%
+        # Parameters per zone (using Color model - SINGLE SOURCE OF TRUTH)
+        self.zone_colors: Dict[str, Color] = {}
+        self.zone_brightness: Dict[str, int] = {}  # 0-100%
 
         for zone_name in self.zone_names:
             zone_state = state["zones"][zone_name]
@@ -155,17 +156,16 @@ class LEDController:
             self.zone_brightness[zone_name] = zone_state.get("brightness", 100)
 
         # Animation system
-        self.animation_engine = AnimationEngine(self.strip, zones)
+        self.animation_engine: AnimationEngine = AnimationEngine(self.strip, zones)
 
-        # Animation state from config
+        # Animation state
         anim_state = state.get("animation", {})
-        # Store whether animation should auto-start (for state persistence)
-        self._animation_should_run = anim_state.get("enabled", False)
-        self.animation_id = anim_state.get("id", "breathe")
-        self.animation_speed = anim_state.get("speed", 50)
-        self.animation_color = anim_state.get("color", None)  # None = use zone colors
-        self.animation_color2 = anim_state.get("color2", None)
-        self.animation_intensity = anim_state.get("intensity", 100)
+        self._animation_should_run: bool = anim_state.get("enabled", False)
+        self.animation_id: str = anim_state.get("id", "breathe")
+        self.animation_speed: int = anim_state.get("speed", 50)
+        self.animation_color: Optional[tuple] = anim_state.get("color", None)
+        self.animation_color2: Optional[tuple] = anim_state.get("color2", None)
+        self.animation_intensity: int = anim_state.get("intensity", 100)
 
         # FUTURE: Per-zone animation state (for HYBRID mode - not implemented yet)
         # Commented out to avoid confusion - enable when implementing per-zone animations
@@ -346,6 +346,32 @@ class LEDController:
         """Get current zone name"""
         return self.zone_names[self.current_zone_index]
 
+    def get_excluded_zones(self) -> list:
+        """
+        Get list of zones to exclude from operations
+
+        Centralized exclusion logic based on runtime state (lamp_white_mode).
+
+        Returns:
+            List of zone tags to exclude (e.g., ["lamp"])
+        """
+        excluded = []
+        if self.lamp_white_mode:
+            excluded.append("lamp")
+        return excluded
+
+    def should_skip_zone(self, zone_name: str) -> bool:
+        """
+        Check if zone should be skipped for current operation
+
+        Args:
+            zone_name: Zone tag to check
+
+        Returns:
+            True if zone should be skipped
+        """
+        return zone_name in self.get_excluded_zones()
+
     async def _pulse_zone_task(self):
         """Async pulsing animation for current zone - fixed 1s cycle"""
         cycle_duration = 1.0  # Fixed 1 second pulse cycle (independent from animation_speed)
@@ -358,8 +384,8 @@ class LEDController:
 
                 zone_name = self._get_current_zone()
 
-                # SKIP pulsing lamp if lamp_white_mode is ON (lamp is in white mode)
-                if zone_name == "lamp" and self.lamp_white_mode:
+                # Skip excluded zones (e.g., lamp in white mode)
+                if self.should_skip_zone(zone_name):
                     await asyncio.sleep(cycle_duration / steps)
                     continue
 
@@ -412,13 +438,13 @@ class LEDController:
         r, g, b = self._get_zone_color(old_zone_name)
         self.strip.set_zone_color(old_zone_name, r, g, b)
 
-        # Now switch to new zone, SKIPPING lamp if lamp_white_mode is active
+        # Now switch to new zone, skipping excluded zones
         for _ in range(len(self.zone_names)):  # Max iterations to avoid infinite loop
             self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_names)
             zone_name = self._get_current_zone()
 
-            # Skip lamp if lamp_white_mode is ON
-            if zone_name == "lamp" and self.lamp_white_mode:
+            # Skip excluded zones
+            if self.should_skip_zone(zone_name):
                 continue  # Try next zone
             else:
                 break  # Found valid zone
@@ -613,8 +639,8 @@ class LEDController:
             else:
                 params["color"] = (255, 255, 255)
 
-        # Exclude lamp from animation if lamp_white_mode is ON
-        excluded_zones = ["lamp"] if self.lamp_white_mode else []
+        # Get excluded zones from centralized logic
+        excluded_zones = self.get_excluded_zones()
 
         # Start animation via engine
         await self.animation_engine.start(self.animation_id, excluded_zones=excluded_zones, **params)
@@ -737,23 +763,24 @@ class LEDController:
             elif self.current_param == ParamID.ZONE_BRIGHTNESS:
                 print(f"    Brightness: {self.zone_brightness[zone_name]}%")
 
-    def handle_upper_rotation(self, delta):
+    def handle_selector_rotation(self, delta: int):
         """
-        Handle upper encoder ROTATION (context-sensitive)
+        Handle selector encoder ROTATION (context-sensitive)
 
         STATIC mode: Change zone
         ANIMATION mode: Select animation
+
+        Args:
+            delta: Rotation direction (-1 or +1)
         """
         if self.main_mode == MainMode.STATIC:
-            # Change zone
             self.change_zone(delta)
         else:  # ANIMATION mode
-            # Select animation
             self.select_animation(delta)
 
-    def handle_upper_click(self):
+    def handle_selector_click(self):
         """
-        Handle upper encoder CLICK (context-sensitive)
+        Handle selector encoder CLICK (context-sensitive)
 
         STATIC mode: (unused)
         ANIMATION mode: Start/Stop animation
@@ -774,12 +801,15 @@ class LEDController:
         else:
             asyncio.create_task(self.start_animation())
 
-    def handle_lower_rotation(self, delta):
+    def handle_modulator_rotation(self, delta: int):
         """
-        Handle lower encoder ROTATION (context-sensitive)
+        Handle modulator encoder ROTATION (context-sensitive)
 
         STATIC mode: Adjust parameter value (color, brightness)
         ANIMATION mode: Adjust parameter value (speed, intensity)
+
+        Args:
+            delta: Rotation direction (-1 or +1)
         """
         if not self.edit_mode:
             return
@@ -787,9 +817,9 @@ class LEDController:
         if self.main_mode == MainMode.STATIC:
             zone_name = self._get_current_zone()
 
-            # Block editing lamp when in white mode
-            if zone_name == "lamp" and self.lamp_white_mode:
-                print("[INFO] Lamp is in white mode - press BTN2 to exit")
+            # Block editing excluded zones
+            if self.should_skip_zone(zone_name):
+                log.log(LogCategory.SYSTEM, "Zone is excluded from editing", zone=zone_name, reason="lamp_white_mode")
                 return
 
             if self.current_param == ParamID.ZONE_COLOR_HUE:
@@ -840,9 +870,9 @@ class LEDController:
                 print(f">>> Animation intensity = {self.animation_intensity}/100")
                 self._sync_preview()
 
-    def handle_lower_click(self):
+    def handle_modulator_click(self):
         """
-        Handle lower encoder CLICK (context-sensitive)
+        Handle modulator encoder CLICK (context-sensitive)
 
         Both modes: Cycle parameters
         """
