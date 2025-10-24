@@ -161,7 +161,7 @@ class LEDController:
         anim_state = state.get("animation", {})
         # Store whether animation should auto-start (for state persistence)
         self._animation_should_run = anim_state.get("enabled", False)
-        self.animation_name = anim_state.get("name", "breathe")
+        self.animation_id = anim_state.get("id", "breathe")
         self.animation_speed = anim_state.get("speed", 50)
         self.animation_color = anim_state.get("color", None)  # None = use zone colors
         self.animation_color2 = anim_state.get("color2", None)
@@ -179,11 +179,11 @@ class LEDController:
         #         "intensity": zone_anim_state.get("intensity", 100),
         #     }
 
-        # Animation list for selection (ordered)
-        self.available_animations = ["breathe", "color_fade", "snake", "color_snake"]
+        # Animation list for selection (from AnimationManager)
+        self.available_animations = self.animation_manager.get_animation_ids()
         self.selected_animation_index = 0
-        if self.animation_name in self.available_animations:
-            self.selected_animation_index = self.available_animations.index(self.animation_name)
+        if self.animation_id in self.available_animations:
+            self.selected_animation_index = self.available_animations.index(self.animation_id)
 
         # Pulsing task for edit mode indicator
         self.pulse_task = None  # asyncio.Task for pulsing animation
@@ -445,7 +445,7 @@ class LEDController:
                 print(f"    Zone: {self._get_current_zone()}")
                 self._start_pulse()  # Start pulsing the selected zone
             else:
-                print(f"    Animation: {self.animation_name}")
+                print(f"    Animation: {self.animation_id}")
             self._sync_preview()
         else:
             print(f"\n>>> EDIT MODE: OFF")
@@ -596,10 +596,10 @@ class LEDController:
         }
 
         # Add animation-specific parameters
-        if self.animation_name == "breathe":
+        if self.animation_id == "breathe":
             params["color"] = self.animation_color
             params["intensity"] = self.animation_intensity
-        elif self.animation_name == "color_fade":
+        elif self.animation_id == "color_fade":
             # Use current zone hue as starting point if no color specified
             if self.animation_color:
                 # Convert RGB to hue (approximate)
@@ -607,7 +607,7 @@ class LEDController:
             else:
                 zone_name = self._get_current_zone()
                 params["start_hue"] = self.zone_colors[zone_name].to_hue()
-        elif self.animation_name == "snake":
+        elif self.animation_id == "snake":
             if self.animation_color:
                 params["color"] = tuple(self.animation_color)
             else:
@@ -617,14 +617,14 @@ class LEDController:
         excluded_zones = ["lamp"] if self.lamp_white_mode else []
 
         # Start animation via engine
-        await self.animation_engine.start(self.animation_name, excluded_zones=excluded_zones, **params)
+        await self.animation_engine.start(self.animation_id, excluded_zones=excluded_zones, **params)
 
         # Cache brightness values for animations
         for zone_name in self.zone_names:
             brightness = self.zone_brightness[zone_name]
             self.animation_engine.current_animation.set_zone_brightness_cache(zone_name, brightness)
 
-        print(f"\n>>> ANIMATION STARTED: {self.animation_name}")
+        print(f"\n>>> ANIMATION STARTED: {self.animation_id}")
         print(f"    Speed: {self.animation_speed}/100")
 
     async def stop_animation(self):
@@ -653,12 +653,12 @@ class LEDController:
             delta: -1 for previous, +1 for next
         """
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
-        self.animation_name = self.available_animations[self.selected_animation_index]
+        self.animation_id = self.available_animations[self.selected_animation_index]
 
         log.log(
             LogCategory.ANIMATION,
             "Animation selected",
-            name=self.animation_name,
+            id=self.animation_id,
             index=f"{self.selected_animation_index + 1}/{len(self.available_animations)}"
         )
         self._sync_preview()
@@ -697,9 +697,7 @@ class LEDController:
             if not self.animation_engine.is_running():
                 asyncio.create_task(self.start_animation())
 
-            print(f"\n>>> MODE: ANIMATION")
-            print(f"    Current animation: {self.animation_name}")
-            print(f"    Parameter: {self.current_param.name}")
+            log.log(LogCategory.SYSTEM, "Mode switched to ANIMATION", animation_id=self.animation_id, parameter=self.current_param.name)
             if self.current_param == ParamID.ANIM_SPEED:
                 print(f"    Speed: {self.animation_speed}/100")
             elif self.current_param == ParamID.ANIM_INTENSITY:
@@ -904,7 +902,7 @@ class LEDController:
             "lamp_white_saved_state": self.lamp_white_saved_state,
             "animation": {
                 "enabled": self.animation_engine.is_running(),
-                "name": self.animation_name,
+                "id": self.animation_id,
                 "speed": self.animation_speed,
                 "color": self.animation_color,
                 "color2": self.animation_color2,

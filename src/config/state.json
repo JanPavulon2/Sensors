@@ -1,13 +1,13 @@
 {
   "mode": "COLOR_SELECT",
   "color_mode": "PRESET",
-  "edit_mode": true,
+  "edit_mode": false,
   "lamp_solo": false,
   "lamp_solo_state": null,
   "animation": {
     "enabled": false,
-    "name": "color_fade",
-    "speed": 63,
+    "id": "breathe",
+    "speed": 91,
     "color": null,
     "color2": null,
     "intensity": 94
@@ -30,16 +30,16 @@
     "left": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "hot_pink"
+        "preset_name": "ocean"
       },
-      "brightness": 100
+      "brightness": 10
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 300
+        "mode": "PRESET",
+        "preset_name": "orange"
       },
-      "brightness": 100
+      "brightness": 40
     },
     "right": {
       "color": {
@@ -51,7 +51,7 @@
     "bottom": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cyan"
+        "preset_name": "green"
       },
       "brightness": 100
     }
@@ -61,6 +61,6 @@
   "main_mode": "STATIC",
   "static_parameter": "COLOR_HUE",
   "animation_parameter": "SPEED",
-  "current_param": "ZONE_BRIGHTNESS",
-  "current_zone_index": 0
+  "current_param": "ZONE_COLOR_PRESET",
+  "current_zone_index": 5
 }
