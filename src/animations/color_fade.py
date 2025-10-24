@@ -5,8 +5,10 @@ Smooth transition through hue spectrum (rainbow effect).
 """
 
 import asyncio
+from typing import List
 from animations.base import BaseAnimation
 from utils import hue_to_rgb
+from models.zone import Zone
 
 
 class ColorFadeAnimation(BaseAnimation):
@@ -29,7 +31,7 @@ class ColorFadeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[Zone],
         speed: int = 50,
         start_hue: int = 0,
         **kwargs

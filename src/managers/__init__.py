@@ -8,5 +8,6 @@ from .animation_manager import AnimationManager
 from .hardware_manager import HardwareManager
 from .state_manager import StateManager
 from .zone_manager import ZoneManager
+from .parameter_manager import ParameterManager
 
-__all__ = ['ConfigManager', 'ColorManager', 'AnimationManager', 'HardwareManager', 'StateManager', 'ZoneManager']
+__all__ = ['ConfigManager', 'ColorManager', 'AnimationManager', 'HardwareManager', 'StateManager', 'ZoneManager', 'ParameterManager']

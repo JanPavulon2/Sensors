@@ -5,8 +5,11 @@ LED strip divided into addressable zones (e.g., top, right, bottom, left).
 Each zone can have independent colors.
 """
 
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 from rpi_ws281x import PixelStrip, Color
+
+if TYPE_CHECKING:
+    from models.zone import Zone
 
 
 class ZoneStrip:
@@ -16,13 +19,16 @@ class ZoneStrip:
     Args:
         gpio: GPIO pin number
         pixel_count: Number of addressable pixels
-        zones: Dict of zone definitions, e.g.:
-               {"top": [0, 3], "right": [4, 6], "bottom": [7, 10], "left": [11, 13]}
+        zones: List of Zone objects with start_index, end_index, tag, etc.
         color_order: Color order constant from ws module
         brightness: LED brightness 0-255
 
     Example:
-        zones = {"top": [0, 3], "right": [4, 6]}
+        from models.zone import Zone
+        zones = [
+            Zone(name="Top", tag="top", pixel_count=4, enabled=True, order=1, start_index=0, end_index=3),
+            Zone(name="Right", tag="right", pixel_count=3, enabled=True, order=2, start_index=4, end_index=6)
+        ]
         strip = ZoneStrip(gpio=18, pixel_count=14, zones=zones, color_order=ws.WS2811_STRIP_RBG)
 
         strip.set_zone_color("top", 255, 0, 0)  # Red
@@ -33,7 +39,7 @@ class ZoneStrip:
         self,
         gpio: int,
         pixel_count: int,
-        zones: Dict[str, List[int]],
+        zones: List['Zone'],
         color_order: Optional[int] = None,
         brightness: int = 32
     ) -> None:
@@ -42,7 +48,7 @@ class ZoneStrip:
         Args:
             gpio: GPIO pin (e.g., 18 for PWM)
             pixel_count: Total number of LED pixels
-            zones: Dict mapping zone names to [start, end] indices
+            zones: List of Zone objects
             color_order: WS281x color constant (e.g., ws.WS2811_STRIP_BRG)
             brightness: Global brightness 0-255
         """
@@ -52,8 +58,13 @@ class ZoneStrip:
             color_order = ws.WS2811_STRIP_RGB  # Default
 
         self.pixel_count: int = pixel_count
-        self.zones: Dict[str, List[int]] = zones
-        self.zone_colors: Dict[str, Tuple[int, int, int]] = {name: (0, 0, 0) for name in zones}
+
+        # Build internal zone mapping from Zone objects
+        self.zones: Dict[str, List[int]] = {
+            zone.tag: [zone.start_index, zone.end_index]
+            for zone in zones if zone.enabled
+        }
+        self.zone_colors: Dict[str, Tuple[int, int, int]] = {zone.tag: (0, 0, 0) for zone in zones if zone.enabled}
 
         # PixelStrip constructor parameters:
         # - num: number of pixels

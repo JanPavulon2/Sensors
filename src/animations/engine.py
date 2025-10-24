@@ -5,12 +5,13 @@ Manages animation lifecycle, switching between animations, and updating strip.
 """
 
 import asyncio
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
+from models.zone import Zone
 
 
 class AnimationEngine:
@@ -38,13 +39,13 @@ class AnimationEngine:
         'color_snake': ColorSnakeAnimation,
     }
 
-    def __init__(self, strip, zones: Dict[str, list]):
+    def __init__(self, strip, zones: List[Zone]):
         """
         Initialize animation engine
 
         Args:
             strip: ZoneStrip instance
-            zones: Dict of zone definitions {name: [start, end]}
+            zones: List of Zone objects
         """
         self.strip = strip
         self.zones = zones
@@ -77,10 +78,10 @@ class AnimationEngine:
 
         # Cache current zone colors for animations that need them
         # Note: Brightness is cached by LEDController (has actual 0-100% values)
-        for zone_name in self.zones:
-            color = self.strip.get_zone_color(zone_name)
+        for zone in self.zones:
+            color = self.strip.get_zone_color(zone.tag)
             if color:
-                self.current_animation.set_zone_color_cache(zone_name, *color)
+                self.current_animation.set_zone_color_cache(zone.tag, *color)
 
         # Start animation loop
         self.animation_task = asyncio.create_task(self._run_loop())

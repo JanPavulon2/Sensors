@@ -7,8 +7,9 @@ Smooth fade in/out effect (breathing) for all zones synchronously.
 import asyncio
 import math
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from animations.base import BaseAnimation
+from models.zone import Zone
 
 
 class BreatheAnimation(BaseAnimation):
@@ -31,7 +32,7 @@ class BreatheAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[Zone],
         speed: int = 50,
         color: Optional[Tuple[int, int, int]] = None,
         intensity: int = 100,

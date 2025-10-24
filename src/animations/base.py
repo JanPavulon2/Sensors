@@ -5,7 +5,8 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional
+from typing import Dict, Tuple, AsyncIterator, Optional, List
+from models.zone import Zone
 
 
 class BaseAnimation:
@@ -16,7 +17,7 @@ class BaseAnimation:
     to update LED colors frame by frame.
 
     Args:
-        zones: Dict of zone definitions {name: [start, end]}
+        zones: List of Zone objects
         speed: Animation speed (1-100, where 100 is fastest)
         **kwargs: Animation-specific parameters
 
@@ -25,7 +26,7 @@ class BaseAnimation:
             strip.set_zone_color(zone_name, r, g, b)
     """
 
-    def __init__(self, zones: Dict[str, list], speed: int = 50, excluded_zones=None, **kwargs):
+    def __init__(self, zones: List[Zone], speed: int = 50, excluded_zones=None, **kwargs):
         self.zones = zones
         self.excluded_zones = excluded_zones or []
         self.speed = max(1, min(100, speed))  # Clamp 1-100
@@ -33,8 +34,12 @@ class BaseAnimation:
         self.zone_colors = {}  # Cache current zone colors
         self.zone_brightness = {}  # Cache current zone brightness
 
-        # Filter out excluded zones
-        self.active_zones = {k: v for k, v in zones.items() if k not in self.excluded_zones}
+        # Filter out excluded zones and build dict for compatibility
+        self.active_zones = {
+            zone.tag: [zone.start_index, zone.end_index]
+            for zone in zones
+            if zone.tag not in self.excluded_zones
+        }
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int]]:
         """

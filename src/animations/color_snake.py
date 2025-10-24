@@ -7,6 +7,7 @@ Multi-pixel colorful snake travels through all zones sequentially.
 import asyncio
 from typing import Tuple, List
 from animations.base import BaseAnimation
+from models.zone import Zone
 
 
 class ColorSnakeAnimation(BaseAnimation):

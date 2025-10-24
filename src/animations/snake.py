@@ -5,8 +5,9 @@ Single pixel travels through all zones sequentially.
 """
 
 import asyncio
-from typing import Tuple
+from typing import Tuple, List
 from animations.base import BaseAnimation
+from models.zone import Zone
 
 
 class SnakeAnimation(BaseAnimation):
@@ -30,7 +31,7 @@ class SnakeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[Zone],
         speed: int = 50,
         color: Tuple[int, int, int] = (255, 255, 255),
         **kwargs

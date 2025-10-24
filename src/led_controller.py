@@ -12,28 +12,17 @@ Hardware:
   Zones: lamp(19px), top(4px), right(3px), bottom(4px), left(3px)
 """
 
-from rpi_ws281x import ws, Color as RGBColor  # Rename to avoid conflict with models.Color
-from components import PreviewPanel, ZoneStrip
-from utils import hue_to_rgb
-from utils.logger import get_logger, LogLevel, LogCategory
-from animations import AnimationEngine
-from models import Color, ColorMode, MainMode, PreviewMode, ParamID
-# from models import load_parameters, get_parameter  # OLD - replaced by ParameterManager
-from managers.color_manager import ColorManager
-from managers.animation_manager import AnimationManager
-from managers.parameter_manager import ParameterManager
 import time
 import math
 import asyncio
+from rpi_ws281x import ws, Color as RGBColor  # Rename to avoid conflict with models.Color
+from components import PreviewPanel, ZoneStrip
+from utils.logger import get_logger, LogLevel, LogCategory
+from animations import AnimationEngine
+from models import Color, ColorMode, MainMode, PreviewMode, ParamID
+from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
 
-
-# OLD: Parameter cycling order for each mode (hardcoded)
-# STATIC_PARAMS = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
-# ANIMATION_PARAMS = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
-
-# Module-level logger
 log = get_logger()
-
 
 class LEDController:
     """
@@ -73,17 +62,15 @@ class LEDController:
             ConfigManager is the single source of truth for all configuration.
             LEDController receives managers via dependency injection.
         """
-        self.config_manager = config_manager
         self.state = state
-
-        # Get managers from ConfigManager (dependency injection)
+        
+        # Get ConfigManager and submanagers from it (dependency injection)
+        self.config_manager: ConfigManager = config_manager
         self.color_manager: ColorManager = config_manager.color_manager
         self.animation_manager: AnimationManager = config_manager.animation_manager
         self.parameter_manager: ParameterManager = config_manager.parameter_manager
-
-        # OLD: Load parameters (global registry)
-        # load_parameters()  # Populates global PARAMETERS registry - REPLACED by ParameterManager
-
+        self.hardware_manager: HardwareManager = config_manager.hardware_manager
+        
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
         self.static_params = [pid for pid in zone_params.keys() if pid != ParamID.ZONE_REVERSED]  # Exclude REVERSED for now
@@ -93,13 +80,10 @@ class LEDController:
         self.animation_params = [pid for pid in anim_params.keys() if pid in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]]
 
         # Get zones from ConfigManager
-        zones = config_manager.zones  # Dict[str, [start, end]]
-        self.zone_names = list(zones.keys())
+        zones = config_manager.get_enabled_zones()  # List[Zone]
+        self.zone_names = [zone.tag for zone in zones]
 
         # Hardware setup via HardwareManager (dependency injection)
-        # Preview and Strip are on SEPARATE GPIOs
-        # Preview: GPIO 19, RGB hardware
-        # Strip: GPIO 18, BRG hardware
         hardware_manager = config_manager.hardware_manager
 
         preview_config = hardware_manager.get_led_strip("preview")
@@ -148,7 +132,7 @@ class LEDController:
             self.preview_mode = PreviewMode.BAR_INDICATOR
 
         # Zone selection - load from state
-        self.zone_names = list(zones.keys())
+        # self.zone_names = list(zones.keys())
         self.current_zone_index = state.get("current_zone_index", 0)
 
         # Parameters per zone (using Color model)

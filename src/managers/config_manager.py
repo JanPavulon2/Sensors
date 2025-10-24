@@ -87,13 +87,6 @@ class ConfigManager:
                 self.data = main_config
 
         except Exception as ex:
-            # Print traceback immediately to see the error
-            import traceback
-            print("="*80)
-            print("CONFIG LOADING ERROR:")
-            traceback.print_exc()
-            print("="*80)
-
             log("Failed to load config.yaml", LogLevel.ERROR, error=str(ex), error_type=type(ex).__name__)
             log("Falling back to factory defaults", LogLevel.WARN)
 
