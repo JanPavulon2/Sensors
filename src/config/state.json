@@ -6,11 +6,11 @@
   "lamp_solo_state": null,
   "animation": {
     "enabled": true,
-    "id": "snake",
-    "speed": 100,
+    "id": "breathe",
+    "speed": 74,
     "color": null,
     "color2": null,
-    "intensity": 94
+    "intensity": 100
   },
   "zones": {
     "strip": {
@@ -18,42 +18,42 @@
         "mode": "PRESET",
         "preset_name": "ocean"
       },
-      "brightness": 20
+      "brightness": 100
     },
     "lamp": {
       "color": {
         "mode": "HUE",
-        "hue": 30
+        "hue": 140
       },
-      "brightness": 100
+      "brightness": 50
     },
     "left": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "ocean"
+        "mode": "HUE",
+        "hue": 299
       },
       "brightness": 20
     },
     "top": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "cyan"
       },
-      "brightness": 30
+      "brightness": 100
     },
     "right": {
       "color": {
         "mode": "HUE",
         "hue": 7
       },
-      "brightness": 60
+      "brightness": 100
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
         "preset_name": "green"
       },
-      "brightness": 50
+      "brightness": 100
     }
   },
   "lamp_white_mode": false,
@@ -61,6 +61,6 @@
   "main_mode": "ANIMATION",
   "static_parameter": "COLOR_HUE",
   "animation_parameter": "SPEED",
-  "current_param": "ANIM_SPEED",
-  "current_zone_index": 3
+  "current_param": "ANIM_INTENSITY",
+  "current_zone_index": 2
 }

@@ -44,7 +44,7 @@ class ParameterManager:
             config_data: Config dict with parameter sections:
                 - 'zone_parameters'
                 - 'animation_base_parameters'
-                - 'additional_animation_parameters'
+                - 'animation_additional_parameters'
         """
         self.parameters: Dict[ParamID, Parameter] = {}
         self._process_data(config_data)
@@ -63,7 +63,7 @@ class ParameterManager:
         sections = [
             'zone_parameters',
             'animation_base_parameters',
-            'additional_animation_parameters'
+            'animation_additional_parameters'
         ]
 
         param_count = 0
@@ -114,7 +114,7 @@ class ParameterManager:
             total=param_count,
             zone_params=len(data.get('zone_parameters', {})),
             anim_base=len(data.get('animation_base_parameters', {})),
-            anim_additional=len(data.get('additional_animation_parameters', {}))
+            anim_additional=len(data.get('animation_additional_parameters', {}))
         )
 
     def get_parameter(self, param_id: ParamID) -> Optional[Parameter]:
@@ -163,23 +163,22 @@ class ParameterManager:
         }
 
     def print_summary(self):
-        """Print parameter summary for debugging"""
-        print("=" * 80)
-        print("PARAMETERS CONFIGURATION")
-        print("=" * 80)
-
-        # Group by type
+        """Log parameter summary for debugging"""
         zone_params = self.get_zone_parameters()
         anim_params = self.get_animation_parameters()
 
-        print(f"\nZone Parameters ({len(zone_params)}):")
+        log("=" * 80)
+        log("PARAMETERS CONFIGURATION")
+        log("=" * 80)
+
+        log(f"\nZone Parameters ({len(zone_params)}):")
         for param_id, param in zone_params.items():
-            print(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
+            log(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
 
-        print(f"\nAnimation Parameters ({len(anim_params)}):")
+        log(f"\nAnimation Parameters ({len(anim_params)}):")
         for param_id, param in anim_params.items():
-            print(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
+            log(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
 
-        print("-" * 80)
-        print(f"Total parameters: {len(self.parameters)}")
-        print("=" * 80)
+        log("-" * 80)
+        log(f"Total parameters: {len(self.parameters)}")
+        log("=" * 80)

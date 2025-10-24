@@ -8,6 +8,7 @@ import asyncio
 from typing import Tuple, List
 from animations.base import BaseAnimation
 from models.zone import Zone
+from utils.colors import hue_to_rgb
 
 
 class ColorSnakeAnimation(BaseAnimation):
@@ -32,7 +33,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[Zone],
         speed: int = 50,
         length: int = 5,
         hue_offset: int = 30,
@@ -58,34 +59,6 @@ class ColorSnakeAnimation(BaseAnimation):
             self.total_pixels += pixel_count
 
         self.current_position = 0
-
-    def _hue_to_rgb(self, hue: int) -> Tuple[int, int, int]:
-        """
-        Convert hue (0-360) to RGB
-
-        Args:
-            hue: Hue value (0-360 degrees)
-
-        Returns:
-            RGB tuple (0-255 each)
-        """
-        hue = hue % 360
-        h = hue / 60.0
-        c = 255
-        x = int(c * (1 - abs(h % 2 - 1)))
-
-        if h < 1:
-            return (c, x, 0)
-        elif h < 2:
-            return (x, c, 0)
-        elif h < 3:
-            return (0, c, x)
-        elif h < 4:
-            return (0, x, c)
-        elif h < 5:
-            return (x, 0, c)
-        else:
-            return (c, 0, x)
 
     def _get_pixel_location(self, absolute_position: int) -> Tuple[str, int]:
         """
@@ -123,7 +96,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
             # Calculate color with rainbow gradient
             hue = (self.base_hue + (i * self.hue_offset)) % 360
-            r, g, b = self._hue_to_rgb(hue)
+            r, g, b = hue_to_rgb(hue)
 
             # Get zone and pixel location
             zone_name, pixel_in_zone = self._get_pixel_location(pos)

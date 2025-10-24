@@ -45,11 +45,25 @@ animation_base_parameters:
     default: 50
     min: 1
     max: 100
-    step: 2
+    step: 10
     wraps: false
     unit: "%"
     description: "Animation speed (1-100%)"
 
+  ANIM_PRIMARY_COLOR_HUE:
+    type: COLOR
+    color_modes: [HUE]
+    default: 0
+    min: 0
+    max: 360
+    step: 10
+    wraps: true
+    unit: "°"
+    description: "Primary animation color (hue 0-360°)"
+
+# ===== ADDITIONAL ANIMATION PARAMETERS =====
+# Optional parameters used by specific animations
+animation_additional_parameters:
   ANIM_INTENSITY:
     type: PERCENTAGE
     default: 100
@@ -58,28 +72,29 @@ animation_base_parameters:
     step: 5
     wraps: false
     unit: "%"
-    description: "Animation intensity (0-100%)"
+    description: "Animation intensity (brightness modulation depth, used in breathe, pulse, etc.)"
 
-# ===== ADDITIONAL ANIMATION PARAMETERS =====
-# Optional parameters used by specific animations
-additional_animation_parameters:
-  ANIM_COLOR_1:
+  ANIM_SECONDARY_COLOR_HUE:
     type: COLOR
-    color_modes: [HUE, PRESET]
-    default: 0
-    description: "Primary animation color"
-
-  ANIM_COLOR_2:
-    type: COLOR
-    color_modes: [HUE, PRESET]
+    color_modes: [HUE]
     default: 120
-    description: "Secondary animation color"
+    min: 0
+    max: 360
+    step: 10
+    wraps: true
+    unit: "°"
+    description: "Secondary animation color (hue 0-360°, for multi-color animations)"
 
-  ANIM_COLOR_3:
+  ANIM_TERTIARY_COLOR_HUE:
     type: COLOR
-    color_modes: [HUE, PRESET]
+    color_modes: [HUE]
     default: 240
-    description: "Tertiary animation color"
+    min: 0
+    max: 360
+    step: 10
+    wraps: true
+    unit: "°"
+    description: "Tertiary animation color (hue 0-360°, for multi-color animations)"
 
   ANIM_LENGTH:
     type: RANGE_CUSTOM

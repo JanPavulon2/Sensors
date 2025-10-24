@@ -23,7 +23,7 @@ import math
 import asyncio
 from typing import Dict, List, Optional
 from rpi_ws281x import ws, Color as RGBColor  # Rename to avoid conflict with models.Color
-from components import PreviewPanel, ZoneStrip
+from components import PreviewPanel, ZoneStrip, PreviewController
 from utils.logger import get_logger, LogLevel, LogCategory
 from animations import AnimationEngine
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
@@ -58,6 +58,7 @@ class LEDController:
         led.toggle_main_mode()  # STATIC ↔ ANIMATION
     """
 
+
     def __init__(self, config_manager: ConfigManager, state: Dict):
         """
         Initialize LED Controller
@@ -74,10 +75,10 @@ class LEDController:
         
         # Get ConfigManager and submanagers from it (dependency injection)
         self.config_manager: ConfigManager = config_manager
-        self.color_manager: ColorManager = config_manager.color_manager
-        self.animation_manager: AnimationManager = config_manager.animation_manager
-        self.parameter_manager: ParameterManager = config_manager.parameter_manager
-        self.hardware_manager: HardwareManager = config_manager.hardware_manager
+        self.color_manager: ColorManager = config_manager.color_manager # pyright: ignore[reportAttributeAccessIssue]
+        self.animation_manager: AnimationManager = config_manager.animation_manager # pyright: ignore[reportAttributeAccessIssue]
+        self.parameter_manager: ParameterManager = config_manager.parameter_manager # pyright: ignore[reportAttributeAccessIssue]
+        self.hardware_manager: HardwareManager = config_manager.hardware_manager # pyright: ignore[reportAttributeAccessIssue]
         
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
@@ -89,18 +90,20 @@ class LEDController:
 
         # Get zones from ConfigManager
         zones = config_manager.get_enabled_zones()  # List[Zone]
+        self.zones = zones  # Store Zone objects for future use
         self.zone_names = [zone.tag for zone in zones]
 
         # Hardware setup via HardwareManager (dependency injection)
         hardware_manager = config_manager.hardware_manager
 
         preview_config = hardware_manager.get_led_strip("preview")
-        self.preview = PreviewPanel(
+        self.preview_panel = PreviewPanel(
             gpio=preview_config["gpio"],  # Separate GPIO for preview
             count=preview_config["count"],
             color_order=ws.WS2811_STRIP_GRB,  # Preview panel is GRB (CJMCU-2812-8)
-            brightness=preview_config["brightness"]  # Full hardware brightness
+            brightness=255  # Max hardware brightness (software handles brightness via RGB scaling)
         )
+        self.preview_controller = PreviewController(self.preview_panel)
 
         strip_config = hardware_manager.get_led_strip("strip")
         self.strip = ZoneStrip(
@@ -108,7 +111,7 @@ class LEDController:
             pixel_count=strip_config["count"],  # Total: 99 physical LEDs / 3 = 33 pixels
             zones=zones,
             color_order=ws.WS2811_STRIP_BRG,  # Strip uses BRG
-            brightness=strip_config["brightness"]  # Full hardware brightness
+            brightness=255  # Max hardware brightness (software handles brightness via RGB scaling)
         )
 
         # Global state
@@ -138,7 +141,7 @@ class LEDController:
             else:
                 self.preview_mode = PreviewMode.COLOR_DISPLAY
         else:  # ANIMATION mode
-            self.preview_mode = PreviewMode.BAR_INDICATOR
+            self.preview_mode = PreviewMode.ANIMATION_PREVIEW
 
         # Zone selection
         self.current_zone_index: int = state.get("current_zone_index", 0)
@@ -204,120 +207,60 @@ class LEDController:
             r, g, b = self._get_zone_color(zone_name)
             self.strip.set_zone_color(zone_name, r, g, b)
 
+        # self.preview_controller
         # Sync preview with current zone
         self._sync_preview()
 
     def _sync_preview(self):
         """
         Sync preview panel based on current mode and preview_mode
-        This is the central dispatcher for preview updates
+
+        Delegates to PreviewController for rendering.
         """
+
         if self.preview_mode == PreviewMode.COLOR_DISPLAY:
-            self._preview_show_color()
+            zone_tag = self._get_current_zone()
+            rgb = self.zone_colors[zone_tag].to_rgb()
+            brightness = self.zone_brightness[zone_tag]
+            self.preview_controller.show_color(rgb, brightness)
+
         elif self.preview_mode == PreviewMode.BAR_INDICATOR:
-            self._preview_show_bar()
+            self._sync_preview_bar()
+
         elif self.preview_mode == PreviewMode.ANIMATION_PREVIEW:
-            self._preview_show_animation()
-
-    def _preview_show_color(self):
-        """Preview: Show color on all 8 LEDs"""
-        zone_name = self._get_current_zone()
-
-        # Get RGB from Color model (handles HUE/PRESET/WHITE automatically)
-        r, g, b = self.zone_colors[zone_name].to_rgb()
-
-        # Apply brightness
-        brightness = self.zone_brightness[zone_name]
-        scale = brightness / 100.0  # Changed from /255 to /100
-        r, g, b = int(r * scale), int(g * scale), int(b * scale)
-
-        self.preview.set_color(r, g, b)
-
-    def _preview_show_bar(self):
-        """
-        Preview: Show LED bar (N of 8 LEDs) for numeric value
-
-        NEW: For BRIGHTNESS parameter - 8 discrete levels
-        - Level is determined by brightness value (0-255 divided into 8 levels)
-        - Number of LEDs = level (1-8)
-        - LED brightness = zone brightness (same as actual zone)
-        - Example: brightness=128 → level 4 → 4 LEDs at brightness 128
-        """
-        zone_name = self._get_current_zone()
-
-        # Determine what value to show based on current parameter
+            # Start animation preview based on selected animation
+            self.preview_controller.start_animation_preview(
+                self.animation_id,
+                speed=self.animation_speed
+            )
+    
+    def _sync_preview_bar(self):
+        """Sync preview bar indicator based on current parameter"""
+        zone_tag = self._get_current_zone()
         value = None
         max_value = 100
         base_color = (255, 255, 255)
-        is_brightness_param = False
 
-        if self.main_mode == MainMode.STATIC:
-            if self.current_param == ParamID.ZONE_BRIGHTNESS:
-                value = self.zone_brightness[zone_name]
-                max_value = 100  # Changed from 255 to 100%
-                # Get zone color at FULL brightness
-                base_color = self.zone_colors[zone_name].to_rgb()
-                is_brightness_param = True
+        if self.main_mode == MainMode.STATIC and self.current_param == ParamID.ZONE_BRIGHTNESS:
+            value = self.zone_brightness[zone_tag]
+            base_color = self.zone_colors[zone_tag].to_rgb()
+
         elif self.main_mode == MainMode.ANIMATION:
             if self.current_param == ParamID.ANIM_SPEED:
                 value = self.animation_speed
-                max_value = 100
-                base_color = (128, 128, 128)  # Gray bar for speed
             elif self.current_param == ParamID.ANIM_INTENSITY:
                 value = self.animation_intensity
-                max_value = 100
-                base_color = (128, 128, 128)  # Gray bar for intensity
 
-        # Fallback to color display if no bar-compatible parameter
-        if value is None:
-            self._preview_show_color()
-            return
-
-        # Calculate level (0-8) and actual LED brightness
-        if is_brightness_param:
-            # For brightness: 8 discrete levels based on brightness value
-            # Level 0: 0 LEDs, Level 1: 1 LED at brightness X, ..., Level 8: 8 LEDs at brightness X
-            if value == 0:
-                num_leds = 0
-                led_brightness = 0
-            else:
-                # Map 1-100 to levels 1-8
-                num_leds = max(1, min(8, int((value / max_value) * 8) + (1 if value % 32 > 0 else 0)))
-                # LED brightness = zone brightness (0-100% → 0-1.0 scale)
-                led_brightness = value / 100.0
+        # Show bar or fallback to color display
+        if value is not None:
+            self.preview_controller.show_bar(value, max_value, base_color)
         else:
-            # For other parameters: traditional bar (0-8 LEDs at full brightness)
-            num_leds = max(0, min(8, int((value / max_value) * 8)))
-            led_brightness = 1.0
-
-        # Apply brightness to color
-        r, g, b = base_color
-        r = int(r * led_brightness)
-        g = int(g * led_brightness)
-        b = int(b * led_brightness)
-
-        # Set LED bar (right to left, since CJMCU is upside down)
-        for i in range(8):
-            # Reverse index: 0->7, 1->6, 2->5, etc.
-            reversed_i = 7 - i
-            if i < num_leds:
-                self.preview.strip.setPixelColor(reversed_i, RGBColor(r, g, b))
-            else:
-                self.preview.strip.setPixelColor(reversed_i, RGBColor(0, 0, 0))
-        self.preview.strip.show()
-
-    def _preview_show_animation(self):
-        """Preview: Show mini animation (placeholder for now)"""
-        # TODO: Implement mini animations for preview
-        # For now, just show the selected animation name color
-        if self.animation_color:
-            r, g, b = self.animation_color
-        else:
-            # Show current zone color as preview
-            zone_name = self._get_current_zone()
-            r, g, b = self._get_zone_color(zone_name)
-        self.preview.set_color(r, g, b)
-
+            rgb = self.zone_colors[zone_tag].to_rgb()
+            brightness = self.zone_brightness[zone_tag]
+            self.preview_controller.show_color(rgb, brightness)
+        
+        
+        
     def _get_zone_color(self, zone_name):
         """
         Get current RGB color for a zone with brightness applied
@@ -337,8 +280,23 @@ class LEDController:
         return int(r * scale), int(g * scale), int(b * scale)
 
     def _get_current_zone(self):
-        """Get current zone name"""
+        """Get current zone tag (str)"""
         return self.zone_names[self.current_zone_index]
+
+    def _get_zone_by_tag(self, tag: str):
+        """
+        Get Zone object by tag
+
+        Args:
+            tag: Zone tag (e.g., "lamp", "top")
+
+        Returns:
+            Zone object or None if not found
+        """
+        for zone in self.zones:
+            if zone.tag == tag:
+                return zone
+        return None
 
     def get_excluded_zones(self) -> list:
         """
@@ -555,7 +513,7 @@ class LEDController:
                 self.zone_brightness[zone] = 0
                 self.strip.set_zone_color(zone, 0, 0, 0)
 
-            self.preview.clear()
+            self.preview_panel.clear()
             log.log(LogCategory.SYSTEM, "Power OFF", saved="brightness and animation state")
         else:
             # Turning ON: Restore saved brightness and animation state
@@ -589,40 +547,56 @@ class LEDController:
     def clear_all(self):
         """Turn off all LEDs"""
         self.strip.clear()
-        self.preview.clear()
+        self.preview_panel.clear()
         log.log(LogCategory.SYSTEM, "All LEDs cleared")
 
     def _build_animation_params(self) -> Dict:
         """
-        Build animation-specific parameters
+        Build animation-specific parameters with zone brightness applied
+
+        Animations receive colors that already have zone brightness baked in,
+        so they match the brightness of static mode.
 
         Returns:
             Dict of animation parameters
         """
         params = {"speed": self.animation_speed}
 
+        # Get current zone for reference (use its brightness/color)
+        zone_tag = self._get_current_zone()
+
         if self.animation_id == "breathe":
-            params["color"] = self.animation_color
+            # Breathe: don't pass color parameter so animation uses per-zone cached colors
+            # Colors will be cached in start_animation() via _cache_zone_colors()
             params["intensity"] = self.animation_intensity
+
         elif self.animation_id == "color_fade":
             if self.animation_color:
                 params["start_hue"] = 0
             else:
-                zone_name = self._get_current_zone()
-                params["start_hue"] = self.zone_colors[zone_name].to_hue()
+                params["start_hue"] = self.zone_colors[zone_tag].to_hue()
+
         elif self.animation_id == "snake":
             if self.animation_color:
-                params["color"] = tuple(self.animation_color)
+                # Apply current zone brightness to animation color
+                brightness_scale = self.zone_brightness[zone_tag] / 100.0
+                r, g, b = self.animation_color
+                params["color"] = (int(r * brightness_scale), int(g * brightness_scale), int(b * brightness_scale))
             else:
-                params["color"] = (255, 255, 255)
+                # Use zone color with brightness already applied
+                params["color"] = self._get_zone_color(zone_tag)
 
         return params
 
-    def _cache_zone_brightness(self):
-        """Cache brightness values for current animation"""
-        for zone_name in self.zone_names:
-            brightness = self.zone_brightness[zone_name]
-            self.animation_engine.current_animation.set_zone_brightness_cache(zone_name, brightness)
+    def _cache_zone_colors(self):
+        """Cache current zone colors with brightness for breathe animation"""
+        if not self.animation_engine.current_animation:
+            return
+
+        for zone_tag in self.zone_names:
+            # Get color with brightness already applied
+            r, g, b = self._get_zone_color(zone_tag)
+            self.animation_engine.current_animation.set_zone_color_cache(zone_tag, r, g, b)
 
     async def start_animation(self):
         """Start the currently selected animation"""
@@ -634,13 +608,14 @@ class LEDController:
         if self.edit_mode and self.pulse_active:
             self._stop_pulse()
 
-        # Build parameters and start animation
+        # Build parameters (with brightness already applied) and start animation
         params = self._build_animation_params()
         excluded_zones = self.get_excluded_zones()
         await self.animation_engine.start(self.animation_id, excluded_zones=excluded_zones, **params)
 
-        # Cache brightness values
-        self._cache_zone_brightness()
+        # Cache zone colors for breathe animation (per-zone colors)
+        if self.animation_id == "breathe":
+            self._cache_zone_colors()
 
         log.log(LogCategory.ANIMATION, "Animation started", id=self.animation_id, speed=f"{self.animation_speed}/100")
 
@@ -662,13 +637,22 @@ class LEDController:
 
         log.log(LogCategory.ANIMATION, "Animation stopped")
 
+    async def _restart_animation(self):
+        """Restart animation (stop then start with new animation_id)"""
+        await self.stop_animation()
+        await self.start_animation()
+
     def select_animation(self, delta):
         """
         Select animation (cycle through available animations)
 
+        Automatically restarts animation if one is currently running.
+
         Args:
             delta: -1 for previous, +1 for next
         """
+        was_running = self.animation_engine.is_running()
+
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
         self.animation_id = self.available_animations[self.selected_animation_index]
 
@@ -678,7 +662,13 @@ class LEDController:
             id=self.animation_id,
             index=f"{self.selected_animation_index + 1}/{len(self.available_animations)}"
         )
+
+        # Update preview first (before restarting animation)
         self._sync_preview()
+
+        # Restart animation if it was running
+        if was_running:
+            asyncio.create_task(self._restart_animation())
 
     # ===== Two-Mode System (STATIC vs ANIMATION) =====
 
@@ -701,6 +691,11 @@ class LEDController:
         if not self.animation_engine.is_running():
             asyncio.create_task(self.start_animation())
 
+        # asyncio.create_task(self.preview_ctrl.start_animation_preview(
+        #     self.animation_engine.get_preview_generator("snake"),
+        #     speed=self.animation_speed
+        # ))
+                
         # Log with parameter-specific details
         log_kwargs = {"animation_id": self.animation_id, "parameter": self.current_param.name}
         if self.current_param == ParamID.ANIM_SPEED:
@@ -895,12 +890,13 @@ class LEDController:
         self.current_param = params[(idx + 1) % len(params)]
 
         # Update preview mode based on new parameter
-        if self.current_param == ParamID.ZONE_BRIGHTNESS:
+        parameter = self.current_param
+        if parameter == ParamID.ZONE_BRIGHTNESS:
             self.preview_mode = PreviewMode.BAR_INDICATOR
-        elif self.current_param in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]:
-            self.preview_mode = PreviewMode.BAR_INDICATOR
-        else:
+        elif parameter in (ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET):
             self.preview_mode = PreviewMode.COLOR_DISPLAY
+        elif parameter in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]:
+            self.preview_mode = PreviewMode.ANIMATION_PREVIEW
 
         self._sync_preview()
 

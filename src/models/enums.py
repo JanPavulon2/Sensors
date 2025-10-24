@@ -53,17 +53,16 @@ class ParamID(Enum):
     ZONE_REVERSED = auto()     # Reverse pixel order (bool) - for future
 
     # === ANIMATION PARAMETERS (ANIMATION mode) ===
-    ANIM_SPEED = auto()        # Animation speed (1-100%)
-    ANIM_INTENSITY = auto()    # Animation intensity (1-100%)
+    # Base parameters (shared by all animations)
+    ANIM_SPEED = auto()                 # Animation speed (1-100%)
+    ANIM_PRIMARY_COLOR_HUE = auto()     # Primary animation color hue (0-360°)
 
-    # Animation colors
-    ANIM_COLOR_1 = auto()      # Primary animation color
-    ANIM_COLOR_2 = auto()      # Secondary animation color
-    ANIM_COLOR_3 = auto()      # Tertiary animation color
-
-    # Animation-specific parameters
-    ANIM_LENGTH = auto()       # Animation length in pixels (e.g., snake length)
-    ANIM_HUE_OFFSET = auto()   # Hue offset in degrees (e.g., rainbow spacing)
+    # Additional parameters (optional, used by specific animations)
+    ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
+    ANIM_SECONDARY_COLOR_HUE = auto()   # Secondary animation color hue (0-360°)
+    ANIM_TERTIARY_COLOR_HUE = auto()    # Tertiary animation color hue (0-360°)
+    ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
+    ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
 
 
 
