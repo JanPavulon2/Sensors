@@ -1,0 +1,102 @@
+# Parameter Definitions
+# Central configuration for all adjustable parameters in the system
+# Used by ParameterManager to provide validation, constraints, and metadata
+
+# ===== ZONE PARAMETERS (STATIC mode) =====
+# Parameters for zone editing
+zone_parameters:
+  ZONE_COLOR_HUE:
+    type: COLOR
+    color_modes: [HUE]
+    default: 0
+    min: 0
+    max: 360
+    step: 10
+    wraps: true
+    unit: "°"
+    description: "Zone color adjustment via HUE (0-360°)"
+
+  ZONE_COLOR_PRESET:
+    type: COLOR
+    color_modes: [PRESET]
+    default: 0
+    description: "Zone color selection via named presets"
+
+  ZONE_BRIGHTNESS:
+    type: PERCENTAGE
+    default: 100
+    min: 0
+    max: 100
+    step: 10
+    wraps: false
+    unit: "%"
+    description: "Zone brightness (0-100%)"
+
+  ZONE_REVERSED:
+    type: BOOLEAN
+    default: false
+    description: "Reverse pixel order in zone (for future use)"
+
+# ===== ANIMATION BASE PARAMETERS =====
+# Parameters shared by all animations
+animation_base_parameters:
+  ANIM_SPEED:
+    type: PERCENTAGE
+    default: 50
+    min: 1
+    max: 100
+    step: 2
+    wraps: false
+    unit: "%"
+    description: "Animation speed (1-100%)"
+
+  ANIM_INTENSITY:
+    type: PERCENTAGE
+    default: 100
+    min: 0
+    max: 100
+    step: 5
+    wraps: false
+    unit: "%"
+    description: "Animation intensity (0-100%)"
+
+# ===== ADDITIONAL ANIMATION PARAMETERS =====
+# Optional parameters used by specific animations
+additional_animation_parameters:
+  ANIM_COLOR_1:
+    type: COLOR
+    color_modes: [HUE, PRESET]
+    default: 0
+    description: "Primary animation color"
+
+  ANIM_COLOR_2:
+    type: COLOR
+    color_modes: [HUE, PRESET]
+    default: 120
+    description: "Secondary animation color"
+
+  ANIM_COLOR_3:
+    type: COLOR
+    color_modes: [HUE, PRESET]
+    default: 240
+    description: "Tertiary animation color"
+
+  ANIM_LENGTH:
+    type: RANGE_CUSTOM
+    default: 5
+    min: 2
+    max: 20
+    step: 1
+    wraps: false
+    unit: "px"
+    description: "Animation length in pixels (e.g., snake length)"
+
+  ANIM_HUE_OFFSET:
+    type: RANGE_CUSTOM
+    default: 30
+    min: 1
+    max: 180
+    step: 5
+    wraps: false
+    unit: "°"
+    description: "Hue offset in degrees (e.g., rainbow spacing)"

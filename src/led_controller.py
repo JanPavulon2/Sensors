@@ -18,17 +18,18 @@ from utils import hue_to_rgb
 from utils.logger import get_logger, LogLevel, LogCategory
 from animations import AnimationEngine
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
-from models import load_parameters, get_parameter
+# from models import load_parameters, get_parameter  # OLD - replaced by ParameterManager
 from managers.color_manager import ColorManager
 from managers.animation_manager import AnimationManager
+from managers.parameter_manager import ParameterManager
 import time
 import math
 import asyncio
 
 
-# Parameter cycling order for each mode
-STATIC_PARAMS = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
-ANIMATION_PARAMS = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
+# OLD: Parameter cycling order for each mode (hardcoded)
+# STATIC_PARAMS = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
+# ANIMATION_PARAMS = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
 
 # Module-level logger
 log = get_logger()
@@ -78,9 +79,18 @@ class LEDController:
         # Get managers from ConfigManager (dependency injection)
         self.color_manager: ColorManager = config_manager.color_manager
         self.animation_manager: AnimationManager = config_manager.animation_manager
+        self.parameter_manager: ParameterManager = config_manager.parameter_manager
 
-        # Load parameters (global registry)
-        load_parameters()  # Populates global PARAMETERS registry
+        # OLD: Load parameters (global registry)
+        # load_parameters()  # Populates global PARAMETERS registry - REPLACED by ParameterManager
+
+        # Build parameter cycling lists from ParameterManager
+        zone_params = self.parameter_manager.get_zone_parameters()
+        self.static_params = [pid for pid in zone_params.keys() if pid != ParamID.ZONE_REVERSED]  # Exclude REVERSED for now
+
+        anim_params = self.parameter_manager.get_animation_parameters()
+        # Only use base animation params (SPEED, INTENSITY) for cycling
+        self.animation_params = [pid for pid in anim_params.keys() if pid in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]]
 
         # Get zones from ConfigManager
         zones = config_manager.zones  # Dict[str, [start, end]]
@@ -697,7 +707,7 @@ class LEDController:
             self._sync_preview()
 
             # Switch current param to first animation param
-            self.current_param = ANIMATION_PARAMS[0]
+            self.current_param = self.animation_params[0]
 
             # Auto-start animation if not already running
             if not self.animation_engine.is_running():
@@ -716,7 +726,7 @@ class LEDController:
             self.main_mode = MainMode.STATIC
 
             # Switch current param to first static param
-            self.current_param = STATIC_PARAMS[0]
+            self.current_param = self.static_params[0]
 
             # Stop animation if running
             if self.animation_engine.is_running():
@@ -860,9 +870,9 @@ class LEDController:
 
         # Get appropriate cycling list based on mode
         if self.main_mode == MainMode.STATIC:
-            params = STATIC_PARAMS
+            params = self.static_params
         else:  # ANIMATION mode
-            params = ANIMATION_PARAMS
+            params = self.animation_params
 
         # Cycle to next parameter
         idx = params.index(self.current_param)

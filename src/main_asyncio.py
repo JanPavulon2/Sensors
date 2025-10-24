@@ -92,6 +92,16 @@ async def main():
     # Initialize hardware and controller (dependency injection)
     # ControlModule expects nested structure - provide hardware sub-dict
     # TODO: Refactor ControlModule to use HardwareManager directly
+
+    # Debug: Check what's in the merged config
+    log.system("Checking merged config structure", level=LogLevel.DEBUG)
+    log.system(f"Config top-level keys", level=LogLevel.DEBUG, keys=str(list(config_manager.data.keys())))
+
+    if "encoders" in config_manager.data:
+        log.system("Encoders found", level=LogLevel.DEBUG, count=len(config_manager.data["encoders"]))
+    else:
+        log.system("ERROR: encoders not in config!", level=LogLevel.ERROR)
+
     hardware_config = {
         "hardware": {
             "encoders": config_manager.data.get("encoders", {}),
@@ -99,6 +109,7 @@ async def main():
             "leds": config_manager.data.get("leds", {})
         }
     }
+
     module = ControlModule(hardware_config)
 
     # LEDController receives ConfigManager (not raw dict)

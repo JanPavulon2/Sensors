@@ -1,69 +1,8 @@
 # Animation Configuration
-# Animation definitions and parameters
+# Animation metadata and parameter assignments
+# (Parameter definitions are in parameters.yaml)
 
-# Animation base parameters (shared by all animations)
-animation_base_parameters:
-  ANIM_SPEED:
-    type: PERCENTAGE
-    default: 50
-    min: 1
-    max: 100
-    step: 5
-    wraps: false
-    unit: "%"
-    description: "Animation speed (1-100%)"
-
-  ANIM_COLOR_1:
-    type: COLOR
-    color_modes: [HUE, PRESET]
-    default: 0
-    description: "Primary animation color"
-
-# Additional animation parameters (optional, used by specific animations)
-additional_animation_parameters:
-  ANIM_INTENSITY:
-    type: PERCENTAGE
-    default: 100
-    min: 0
-    max: 100
-    step: 5
-    wraps: false
-    unit: "%"
-    description: "Animation intensity (0-100%)"
-
-  ANIM_COLOR_2:
-    type: COLOR
-    color_modes: [HUE, PRESET]
-    default: 120
-    description: "Secondary animation color"
-
-  ANIM_COLOR_3:
-    type: COLOR
-    color_modes: [HUE, PRESET]
-    default: 240
-    description: "Tertiary animation color"
-
-  LENGTH:
-    type: RANGE_CUSTOM
-    default: 5
-    min: 2
-    max: 20
-    step: 1
-    wraps: false
-    unit: "px"
-    description: "Length in pixels (e.g., snake length)"
-
-  HUE_OFFSET:
-    type: RANGE_CUSTOM
-    default: 30
-    min: 1
-    max: 180
-    step: 5
-    wraps: false
-    unit: "°"
-    description: "Hue offset in degrees (e.g., rainbow spacing)"
-
-# Animation definitions (each animation inherits base params + defines specific ones)
+# Animation definitions
 animations:
   breathe:
     display_name: "Breathe"
@@ -87,4 +26,4 @@ animations:
     display_name: "Color Snake"
     tag: color_snake
     description: "Multi-pixel rainbow snake"
-    parameters: [LENGTH, HUE_OFFSET]  # Base (SPEED, COLOR_1) + LENGTH + HUE_OFFSET
+    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base (ANIM_SPEED, ANIM_INTENSITY) + LENGTH + HUE_OFFSET

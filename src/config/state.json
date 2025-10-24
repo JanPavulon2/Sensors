@@ -6,8 +6,8 @@
   "lamp_solo_state": null,
   "animation": {
     "enabled": false,
-    "name": "snake",
-    "speed": 15,
+    "name": "color_snake",
+    "speed": 67,
     "color": null,
     "color2": null,
     "intensity": 82
@@ -25,14 +25,14 @@
         "mode": "PRESET",
         "preset_name": "blue"
       },
-      "brightness": 100
+      "brightness": 10
     },
     "left": {
       "color": {
-        "mode": "HUE",
-        "hue": 60
+        "mode": "PRESET",
+        "preset_name": "violet"
       },
-      "brightness": 100
+      "brightness": 10
     },
     "top": {
       "color": {
@@ -46,21 +46,21 @@
         "mode": "HUE",
         "hue": 7
       },
-      "brightness": 40
+      "brightness": 100
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
         "preset_name": "cyan"
       },
-      "brightness": 100
+      "brightness": 10
     }
   },
   "lamp_white_mode": false,
   "lamp_white_saved_state": null,
-  "main_mode": "STATIC",
+  "main_mode": "ANIMATION",
   "static_parameter": "COLOR_HUE",
   "animation_parameter": "SPEED",
-  "current_param": "ZONE_COLOR_PRESET",
-  "current_zone_index": 0
+  "current_param": "ANIM_SPEED",
+  "current_zone_index": 1
 }

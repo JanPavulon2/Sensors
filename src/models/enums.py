@@ -56,15 +56,14 @@ class ParamID(Enum):
     ANIM_SPEED = auto()        # Animation speed (1-100%)
     ANIM_INTENSITY = auto()    # Animation intensity (1-100%)
 
-    # Animation colors (for future - not all animations use these)
+    # Animation colors
     ANIM_COLOR_1 = auto()      # Primary animation color
     ANIM_COLOR_2 = auto()      # Secondary animation color
     ANIM_COLOR_3 = auto()      # Tertiary animation color
 
-    # === GENERIC REUSABLE PARAMETERS ===
-    # These can be used by multiple animations
-    LENGTH = auto()            # Length in pixels (e.g., snake length)
-    HUE_OFFSET = auto()        # Hue offset in degrees (e.g., rainbow spacing)
+    # Animation-specific parameters
+    ANIM_LENGTH = auto()       # Animation length in pixels (e.g., snake length)
+    ANIM_HUE_OFFSET = auto()   # Hue offset in degrees (e.g., rainbow spacing)
 
 
 

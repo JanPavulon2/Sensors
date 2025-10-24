@@ -53,6 +53,7 @@ class ConfigManager:
         self.zone_manager = None
         self.animation_manager = None
         self.color_manager = None
+        self.parameter_manager = None
 
     def load(self):
         """
@@ -86,7 +87,14 @@ class ConfigManager:
                 self.data = main_config
 
         except Exception as ex:
-            log("Failed to load config.yaml", LogLevel.ERROR, exception=ex)
+            # Print traceback immediately to see the error
+            import traceback
+            print("="*80)
+            print("CONFIG LOADING ERROR:")
+            traceback.print_exc()
+            print("="*80)
+
+            log("Failed to load config.yaml", LogLevel.ERROR, error=str(ex), error_type=type(ex).__name__)
             log("Falling back to factory defaults", LogLevel.WARN)
 
             # Load factory defaults
@@ -120,14 +128,15 @@ class ConfigManager:
                     file_data = yaml.safe_load(f)
                     if file_data:
                         merged.update(file_data)
-                        print(f"  ✓ Loaded {filename}")
+                        log(f"Loaded {filename}", keys=str(list(file_data.keys())))
             except FileNotFoundError:
-                print(f"  ✗ File not found: {filename}")
+                log(f"File not found: {filename}", LogLevel.ERROR)
                 raise
             except Exception as ex:
-                print(f"  ✗ Error loading {filename}: {ex}")
+                log(f"Error loading {filename}", LogLevel.ERROR, error=str(ex))
                 raise
 
+        log("Config merge complete", total_keys=len(merged), keys=str(list(merged.keys())[:10]))
         return merged
 
     def _initialize_managers(self):
@@ -139,11 +148,13 @@ class ConfigManager:
         - ZoneManager: Zone collection with auto-calculated indices
         - AnimationManager: Animation metadata and parameters
         - ColorManager: Color preset definitions
+        - ParameterManager: Parameter definitions and validation
         """
         from managers.hardware_manager import HardwareManager
         from managers.zone_manager import ZoneManager
         from managers.animation_manager import AnimationManager
         from managers.color_manager import ColorManager
+        from managers.parameter_manager import ParameterManager
 
         # HardwareManager - inject merged config data
         try:
@@ -179,7 +190,14 @@ class ConfigManager:
             }
             self.color_manager = ColorManager(color_data)
         except Exception as ex:
-            print(f"[WARN] Failed to initialize ColorManager: {ex}")
+            log("Failed to initialize ColorManager", LogLevel.WARN, error=str(ex))
+
+        # ParameterManager - inject merged config data (no file loading)
+        try:
+            self.parameter_manager = ParameterManager(self.data)
+            self.parameter_manager.print_summary()
+        except Exception as ex:
+            log("Failed to initialize ParameterManager", LogLevel.WARN, error=str(ex))
 
     # ===== Convenience Properties =====
 
