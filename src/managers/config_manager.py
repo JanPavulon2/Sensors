@@ -155,7 +155,7 @@ class ConfigManager:
             self.hardware_manager.data = self.data
             self.hardware_manager.print_summary()
         except Exception as ex:
-            print(f"[WARN] Failed to initialize HardwareManager: {ex}")
+            log("Failed to initialize HardwareManager", LogLevel.WARN, error=str(ex))
 
         # ZoneManager - inject zones list from merged config
         zones_config = self.data.get("zones", [])
@@ -164,7 +164,7 @@ class ConfigManager:
                 self.zone_manager = ZoneManager(zones_config)
                 self.zone_manager.print_summary()
             except Exception as ex:
-                print(f"[WARN] Failed to initialize ZoneManager: {ex}")
+                log("Failed to initialize ZoneManager", LogLevel.WARN, error=str(ex))
         else:
             print("[WARN] No zones defined in config!")
 
@@ -173,7 +173,7 @@ class ConfigManager:
             self.animation_manager = AnimationManager(self.data)
             self.animation_manager.print_summary()
         except Exception as ex:
-            print(f"[WARN] Failed to initialize AnimationManager: {ex}")
+            log("Failed to initialize AnimationManager", LogLevel.WARN, error=str(ex))
 
         # ColorManager - inject merged config data (no file loading)
         try:

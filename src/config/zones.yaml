@@ -1,29 +1,6 @@
 # Zone Configuration
 # Zone definitions and zone parameters
 
-# Zone parameter definitions (shared by all zones)
-zone_parameters:
-  ZONE_COLOR:
-    type: COLOR
-    color_modes: [HUE, PRESET]
-    default: 0
-    description: "Zone color"
-
-  ZONE_BRIGHTNESS:
-    type: PERCENTAGE
-    default: 100
-    min: 0
-    max: 100
-    step: 5
-    wraps: false
-    unit: "%"
-    description: "Zone brightness (0-100%)"
-
-  ZONE_REVERSED:
-    type: BOOLEAN
-    default: false
-    description: "Reverse pixel order (for future)"
-
 # Zone definitions (each zone only defines unique values)
 zones:
   - name: Strip
