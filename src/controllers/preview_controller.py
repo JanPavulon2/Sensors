@@ -1,25 +1,53 @@
 """
 Preview Controller
 
-Orchestrates preview panel display modes and animation playback.
+Orchestrates preview preview_panel display modes and animation playback.
 Uses adapter pattern to run real animation classes with virtual zones.
 """
 
 import asyncio
+from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any, List, TYPE_CHECKING
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
+from models import Color, ParamID
+from models.enums import ZoneID
+from models.domain.parameter import ParameterCombined, ParameterConfig, ParameterState
 
 if TYPE_CHECKING:
-    from models.zone import Zone
     from animations.base import BaseAnimation
+
+
+@dataclass
+class VirtualZoneConfig:
+    """Minimal zone config for preview panel virtual zones"""
+    tag: str  # "p0", "p1", etc.
+    start_index: int
+    end_index: int
+
+
+@dataclass
+class VirtualZone:
+    """
+    Lightweight zone wrapper for preview animations
+
+    Mimics ZoneCombined structure but uses simple VirtualZoneConfig
+    that allows custom tags ("p0", "p1", etc.)
+    """
+    config: VirtualZoneConfig
+    state: Any = None  # Not used
+    parameters: Dict = None  # Not used
+
+    def __post_init__(self):
+        if self.parameters is None:
+            self.parameters = {}
 
 log = get_logger()
 
 
 class PreviewController:
     """
-    Preview panel orchestration controller
+    Preview preview_panel orchestration controller
 
     Manages preview display modes and delegates to PreviewPanel for rendering.
     Uses real Animation classes with virtual zones for animation previews.
@@ -37,7 +65,7 @@ class PreviewController:
         - Parameter updates (speed, color changes)
 
     Args:
-        panel: PreviewPanel instance for hardware control
+        preview_panel: PreviewPanel instance for hardware control
 
     Example:
         >>> controller = PreviewController(preview_panel)
@@ -47,14 +75,23 @@ class PreviewController:
         >>> controller.stop_animation_preview()
     """
 
-    def __init__(self, panel: PreviewPanel):
-        self.panel = panel
+    def __init__(self, preview_panel: PreviewPanel):
+        self.preview_panel = preview_panel
         self._animation_task: Optional[asyncio.Task] = None
         self._current_animation: Optional['BaseAnimation'] = None
-        self._running = False
+        self._animation_running = False
+        self._current_animation_id: Optional[str] = None  # Track which animation is running
 
     # ===== STATIC DISPLAY METHODS =====
 
+    
+    def fill_with_color(self, color: Color) -> None:
+        if self._animation_running:
+            self.stop_animation_preview()
+        
+        r, g, b = color.to_rgb()
+        self.preview_panel.fill_with_color((r, g, b))
+        
     def show_color(self, rgb: Tuple[int, int, int], brightness: int = 100) -> None:
         """
         Show static color on all 8 LEDs with brightness scaling
@@ -69,9 +106,10 @@ class PreviewController:
             >>> controller.show_color((255, 100, 50), 75)  # Orange at 75%
         """
         self.stop_animation_preview()
+        
         # Apply brightness scaling
         r, g, b = [int(c * brightness / 100) for c in rgb]
-        self.panel.show_color((r, g, b))
+        self.preview_panel.fill_with_color((r, g, b))
 
     def show_bar(self, value: int, max_value: int = 100,
                  color: Tuple[int, int, int] = (255, 255, 255)) -> None:
@@ -89,11 +127,11 @@ class PreviewController:
             >>> controller.show_bar(60, 100, (0, 255, 0))  # 5 LEDs green (60%)
         """
         self.stop_animation_preview()
-        self.panel.show_bar(value, max_value, color)
+        self.preview_panel.show_bar(value, max_value, color)
 
     # ===== ANIMATION PREVIEW METHODS =====
 
-    def _create_virtual_zones(self) -> List['Zone']:
+    def _create_virtual_zones(self) -> List[VirtualZone]:
         """
         Create 8 virtual zones for preview panel (1 LED per zone)
 
@@ -102,23 +140,22 @@ class PreviewController:
         but we're actually controlling individual LEDs.
 
         Returns:
-            List of 8 Zone objects (p0-p7)
+            List of 8 VirtualZone objects with tags "p0"-"p7"
         """
-        from models.zone import Zone
-
         zones = []
-        for i in range(self.panel.count):
-            zone = Zone(
-                name=f"Preview {i}",
-                tag=f"p{i}",
-                pixel_count=1,
-                enabled=True,
-                order=i
+        for i in range(self.preview_panel.count):
+            # Create lightweight virtual zone config
+            # Each virtual zone is 1 pixel with tag "p0", "p1", etc.
+            virtual_config = VirtualZoneConfig(
+                tag=f"p{i}",  # Virtual zone tag for animation frame lookup
+                start_index=i,
+                end_index=i  # start == end for 1-pixel zones
             )
-            # Set indices manually (start == end for 1 LED zones)
-            zone.start_index = i
-            zone.end_index = i
-            zones.append(zone)
+
+            # Create VirtualZone wrapper (animations only need config.tag and indices)
+            virtual_zone = VirtualZone(config=virtual_config)
+            zones.append(virtual_zone)
+
         return zones
 
     def start_animation_preview(self, animation_id: str, speed: int = 50, **params) -> None:
@@ -138,7 +175,17 @@ class PreviewController:
             >>> controller.start_animation_preview('snake', speed=70, color=(255, 0, 0))
             >>> controller.start_animation_preview('breathe', speed=50, intensity=80)
         """
+        # If same animation is already running, don't restart (prevents flicker)
+        if self._animation_running and self._current_animation_id == animation_id:
+            # Just update parameters if needed
+            if self._current_animation:
+                self._current_animation.speed = speed
+                for key, value in params.items():
+                    self._current_animation.update_param(key, value)
+            return
+
         self.stop_animation_preview()
+        self._current_animation_id = animation_id
 
         # Create virtual zones (8 LEDs as individual zones)
         virtual_zones = self._create_virtual_zones()
@@ -184,7 +231,7 @@ class PreviewController:
                 return
 
             # Start animation task
-            self._running = True
+            self._animation_running = True
             self._animation_task = asyncio.create_task(self._run_animation_loop())
 
             log.log(LogCategory.SYSTEM, "Preview animation started",
@@ -193,16 +240,16 @@ class PreviewController:
         except Exception as e:
             log.log(LogCategory.SYSTEM, "Failed to start preview animation",
                    level=LogLevel.ERROR, error=str(e), animation_id=animation_id)
-            self.panel.clear()
+            self.preview_panel.clear()
 
     def stop_animation_preview(self) -> None:
         """
         Stop currently running animation preview
 
-        Cancels async task, stops animation, and clears preview panel.
+        Cancels async task, stops animation, and clears preview preview_panel.
         Safe to call even if no animation is running.
         """
-        self._running = False
+        self._animation_running = False
 
         if self._current_animation:
             self._current_animation.stop()
@@ -212,7 +259,7 @@ class PreviewController:
             self._animation_task.cancel()
             self._animation_task = None
 
-        self.panel.clear()
+        self.preview_panel.clear()
 
     def update_param(self, param: str, value: Any) -> None:
         """
@@ -252,29 +299,29 @@ class PreviewController:
             self._current_animation.running = True
 
             async for frame_data in self._current_animation.run():
-                if not self._running:
+                if not self._animation_running:
                     break
 
                 # Initialize frame (all LEDs off)
-                frame = [(0, 0, 0)] * self.panel.count
+                frame = [(0, 0, 0)] * self.preview_panel.count
 
                 # Parse frame data
                 if len(frame_data) == 5:  # Pixel-level (zone_tag, pixel_idx, r, g, b)
                     zone_tag, pixel_idx, r, g, b = frame_data
                     if zone_tag.startswith("p"):
                         led_index = int(zone_tag[1:])  # "p0" → 0, "p7" → 7
-                        if 0 <= led_index < self.panel.count:
+                        if 0 <= led_index < self.preview_panel.count:
                             frame[led_index] = (r, g, b)
 
                 elif len(frame_data) == 4:  # Zone-level (zone_tag, r, g, b)
                     zone_tag, r, g, b = frame_data
                     if zone_tag.startswith("p"):
                         led_index = int(zone_tag[1:])
-                        if 0 <= led_index < self.panel.count:
+                        if 0 <= led_index < self.preview_panel.count:
                             frame[led_index] = (r, g, b)
 
                 # Display frame
-                self.panel.show_frame(frame)
+                self.preview_panel.show_frame(frame)
 
         except asyncio.CancelledError:
             # Animation stopped gracefully
@@ -284,5 +331,5 @@ class PreviewController:
                    level=LogLevel.ERROR, error=str(e))
         finally:
             self._current_animation = None
-            if self._running:  # Only clear if not already cleared by stop()
-                self.panel.clear()
+            if self._animation_running:  # Only clear if not already cleared by stop()
+                self.preview_panel.clear()

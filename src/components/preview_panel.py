@@ -108,7 +108,7 @@ class PreviewPanel:
             self._strip.setPixelColor(physical_index, Color(r, g, b))
         self._strip.show()
 
-    def show_color(self, rgb: Tuple[int, int, int]) -> None:
+    def fill_with_color(self, rgb: Tuple[int, int, int]) -> None:
         """
         Fill all LEDs with single color and display immediately
 
@@ -116,7 +116,7 @@ class PreviewPanel:
             rgb: RGB tuple (r, g, b) where each value is 0-255
 
         Example:
-            >>> preview.show_color((255, 100, 0))  # Orange on all LEDs
+            >>> preview.fill_with_color((255, 100, 0))  # Orange on all LEDs
         """
         r, g, b = rgb
         for i in range(self.count):

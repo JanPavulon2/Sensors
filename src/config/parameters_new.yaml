@@ -1,13 +1,9 @@
 # Parameter Definitions
 # Central configuration for all adjustable parameters in the system
 # Used by ParameterManager to provide validation, constraints, and metadata
-
-# ===== ZONE PARAMETERS (STATIC mode) =====
-# Parameters for zone editing
 zone_parameters:
   ZONE_COLOR_HUE:
     type: COLOR
-    color_modes: [HUE]
     default: 0
     min: 0
     max: 360
@@ -15,12 +11,6 @@ zone_parameters:
     wraps: true
     unit: "°"
     description: "Zone color adjustment via HUE (0-360°)"
-
-  ZONE_COLOR_PRESET:
-    type: COLOR
-    color_modes: [PRESET]
-    default: 0
-    description: "Zone color selection via named presets"
 
   ZONE_BRIGHTNESS:
     type: PERCENTAGE
@@ -31,11 +21,6 @@ zone_parameters:
     wraps: false
     unit: "%"
     description: "Zone brightness (0-100%)"
-
-  ZONE_REVERSED:
-    type: BOOLEAN
-    default: false
-    description: "Reverse pixel order in zone (for future use)"
 
 # ===== ANIMATION BASE PARAMETERS =====
 # Parameters shared by all animations
@@ -52,7 +37,6 @@ animation_base_parameters:
 
   ANIM_PRIMARY_COLOR_HUE:
     type: COLOR
-    color_modes: [HUE]
     default: 0
     min: 0
     max: 360
@@ -76,7 +60,6 @@ animation_additional_parameters:
 
   ANIM_SECONDARY_COLOR_HUE:
     type: COLOR
-    color_modes: [HUE]
     default: 120
     min: 0
     max: 360
@@ -84,17 +67,6 @@ animation_additional_parameters:
     wraps: true
     unit: "°"
     description: "Secondary animation color (hue 0-360°, for multi-color animations)"
-
-  ANIM_TERTIARY_COLOR_HUE:
-    type: COLOR
-    color_modes: [HUE]
-    default: 240
-    min: 0
-    max: 360
-    step: 10
-    wraps: true
-    unit: "°"
-    description: "Tertiary animation color (hue 0-360°, for multi-color animations)"
 
   ANIM_LENGTH:
     type: RANGE_CUSTOM

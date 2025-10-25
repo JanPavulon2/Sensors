@@ -8,19 +8,9 @@ Parameters are loaded from config.yaml (zone_parameters, animation_base_paramete
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Optional, List, Any, Dict
-from models.enums import ParamID
+from models.enums import ParamID, ParameterType
 import yaml
 from pathlib import Path
-
-
-class ParameterType(Enum):
-    """Parameter value types with validation rules"""
-    COLOR = auto()           # Color parameter (HUE or PRESET mode)
-    PERCENTAGE = auto()      # 0-100% (displayed with %, stored as 0-100)
-    RANGE_0_255 = auto()     # 0-255 integer range (legacy brightness)
-    RANGE_CUSTOM = auto()    # Custom min/max range
-    BOOLEAN = auto()         # True/False toggle
-
 
 @dataclass
 class Parameter:

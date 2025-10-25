@@ -7,7 +7,7 @@ Returns simple dicts compatible with existing component constructors.
 
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 class HardwareManager:
@@ -127,7 +127,7 @@ class HardwareManager:
 
     # ===== LED Strip Access =====
 
-    def get_led_strip(self, name: str) -> Optional[Dict[str, any]]:
+    def get_led_strip(self, name: str) -> Optional[Dict[str, Any]]:
         """
         Get LED strip configuration by name
 
@@ -146,7 +146,7 @@ class HardwareManager:
         return leds.get(name)
 
     @property
-    def led_strips(self) -> Dict[str, Dict[str, any]]:
+    def led_strips(self) -> Dict[str, Dict[str, Any]]:
         """
         Get all LED strip configurations
 
@@ -229,7 +229,7 @@ class HardwareManager:
         print("\nLED Strips:")
         for name, cfg in self.led_strips.items():
             print(f"  {name:10} GPIO {cfg['gpio']}: {cfg['count']} px, "
-                  f"{cfg['color_order']}, brightness={cfg['brightness']}")
+                  f"{cfg['color_order']}")
 
         # Validation warnings
         warnings = self.validate_gpio_pins()

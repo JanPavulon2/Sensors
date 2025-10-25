@@ -3,37 +3,43 @@
 
 # Zone definitions (each zone only defines unique values)
 zones:
-  - name: Strip
+  - id: STRIP
+    name: Strip
     tag: strip
     pixel_count: 12      # 45 physical LEDs (15 * 3)
     enabled: true
     order: 1
 
-  - name: Lamp
+  - id: LAMP
+    name: Lamp
     tag: lamp
     pixel_count: 19      # 57 physical LEDs (19 * 3)
     enabled: true
     order: 2
 
-  - name: Left
+  - id: LEFT
+    name: Left
     tag: left
     pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 3
 
-  - name: Top
+  - id: TOP
+    name: Top
     tag: top
     pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true
     order: 4
 
-  - name: Right
+  - id: RIGHT
+    name: Right
     tag: right
     pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 5
 
-  - name: Bottom
+  - id: BOTTOM
+    name: Bottom
     tag: bottom
     pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true

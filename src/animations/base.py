@@ -6,7 +6,7 @@ All animations inherit from BaseAnimation and implement the run() method.
 
 import asyncio
 from typing import Dict, Tuple, AsyncIterator, Optional, List
-from models.zone import Zone
+from models.domain.zone import ZoneCombined
 
 
 class BaseAnimation:
@@ -26,7 +26,7 @@ class BaseAnimation:
             strip.set_zone_color(zone_name, r, g, b)
     """
 
-    def __init__(self, zones: List[Zone], speed: int = 50, excluded_zones=None, **kwargs):
+    def __init__(self, zones: List[ZoneCombined], speed: int = 50, excluded_zones=None, **kwargs):
         self.zones = zones
         self.excluded_zones = excluded_zones or []
         self.speed = max(1, min(100, speed))  # Clamp 1-100
@@ -36,9 +36,9 @@ class BaseAnimation:
 
         # Filter out excluded zones and build dict for compatibility
         self.active_zones = {
-            zone.tag: [zone.start_index, zone.end_index]
+            zone.config.tag: [zone.config.start_index, zone.config.end_index]
             for zone in zones
-            if zone.tag not in self.excluded_zones
+            if zone.config.tag not in self.excluded_zones
         }
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int]]:

@@ -1,0 +1,76 @@
+{
+  "animations": {
+    "snake": {
+      "enabled": false,
+      "parameters": {
+        "ANIM_SPEED": 80,
+        "ANIM_PRIMARY_COLOR_HUE": 0,
+        "ANIM_LENGTH": 5
+      }
+    },
+    "breathe": {
+      "enabled": false,
+      "parameters": {
+        "ANIM_SPEED": 50,
+        "ANIM_INTENSITY": 100
+      }
+    }
+  },
+  "zones": {
+    "strip": {
+      "color": {
+        "mode": "HUE",
+        "hue": 0
+      },
+      "brightness": 100
+    },
+    "lamp": {
+      "color": {
+        "mode": "HUE",
+        "hue": 58
+      },
+      "brightness": 50
+    },
+    "left": {
+      "color": {
+        "mode": "HUE",
+        "hue": 40
+      },
+      "brightness": 80
+    },
+    "top": {
+      "color": {
+        "mode": "HUE",
+        "hue": 247
+      },
+      "brightness": 60
+    },
+    "right": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "red"
+      },
+      "brightness": 70
+    },
+    "bottom": {
+      "color": {
+        "mode": "HUE",
+        "hue": 349
+      },
+      "brightness": 100
+    }
+  },
+  "current_animation": {
+    "id": "snake",
+    "parameters": {
+      "ANIM_SPEED": 21,
+      "ANIM_PRIMARY_COLOR_HUE": 138,
+      "ANIM_LENGTH": 20
+    }
+  },
+  "selected_zone_index": 5,
+  "edit_mode_on": true,
+  "main_mode": "ANIMATION",
+  "active_parameter": "ANIM_PRIMARY_COLOR_HUE",
+  "lamp_white_mode_on": false
+}

@@ -7,7 +7,7 @@ Manages collection of zones and calculates indices automatically.
 from typing import List, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from models.zone import Zone
+    from models.domain.zone import ZoneConfig
 
 
 class ZoneManager:
@@ -39,7 +39,7 @@ class ZoneManager:
         Args:
             zones_config: List of zone dicts from config.yaml
         """
-        self.zones: List['Zone'] = []
+        self.zones: List['ZoneConfig'] = []
         self._load_zones(zones_config)
         self._calculate_all_indices()
 
@@ -50,16 +50,26 @@ class ZoneManager:
         Args:
             config: List of zone configuration dicts
         """
-        from models.zone import Zone
+        from models.domain.zone import ZoneConfig
 
+
+        previous_end_index = -1
         for zone_cfg in config:
-            zone = Zone(
-                name=zone_cfg["name"],
-                tag=zone_cfg["tag"],
+            
+            self.start_index = previous_end_index + 1 if previous_end_index >= 0 else 0
+            self.end_index = self.start_index + zone_cfg["pixel_count"] - 1
+
+            zone = ZoneConfig(
+                id=zone_cfg["id"],
+                display_name=zone_cfg["name"],
                 pixel_count=zone_cfg["pixel_count"],
                 enabled=zone_cfg.get("enabled", True),
-                order=zone_cfg["order"]
-            )
+                reversed=zone_cfg.get("reversed", False),
+                order=zone_cfg.get("order", 5),
+                start_index=self.start_index,
+                end_index=self.end_index)
+            
+            
             self.zones.append(zone)
 
         # Sort by order
@@ -80,7 +90,7 @@ class ZoneManager:
                 zone.start_index = -1
                 zone.end_index = -1
 
-    def get_zone(self, tag: str) -> Optional['Zone']:
+    def get_zone(self, tag: str) -> Optional['ZoneConfig']:
         """
         Get zone by tag
 
@@ -92,7 +102,7 @@ class ZoneManager:
         """
         return next((z for z in self.zones if z.tag == tag), None)
 
-    def get_enabled_zones(self) -> List['Zone']:
+    def get_enabled_zones(self) -> List['ZoneConfig']:
         """
         Get only enabled zones
 

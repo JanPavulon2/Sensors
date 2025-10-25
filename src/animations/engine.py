@@ -11,8 +11,7 @@ from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
-from models.zone import Zone
-
+from models.domain.zone import ZoneCombined
 
 class AnimationEngine:
     """
@@ -39,7 +38,7 @@ class AnimationEngine:
         'color_snake': ColorSnakeAnimation,
     }
 
-    def __init__(self, strip, zones: List[Zone]):
+    def __init__(self, strip, zones: List[ZoneCombined]):
         """
         Initialize animation engine
 
@@ -79,9 +78,9 @@ class AnimationEngine:
         # Cache current zone colors for animations that need them
         # Note: Brightness is cached by LEDController (has actual 0-100% values)
         for zone in self.zones:
-            color = self.strip.get_zone_color(zone.tag)
-            if color:
-                self.current_animation.set_zone_color_cache(zone.tag, *color)
+            color = self.strip.get_zone_color(zone.config.tag)
+            if color and self.current_animation is not None:
+                self.current_animation.set_zone_color_cache(zone.config.tag, *color)
 
         # Start animation loop
         self.animation_task = asyncio.create_task(self._run_loop())
@@ -129,6 +128,7 @@ class AnimationEngine:
         Supports both zone-level and pixel-level updates.
         """
         try:
+            assert self.current_animation is not None
             async for frame_data in self.current_animation.run():
                 # Check frame type by tuple length
                 # 4-tuple: (zone_name, r, g, b) -> zone-level

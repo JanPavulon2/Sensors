@@ -225,7 +225,18 @@ class Logger:
             kwargs["error"] = str(exception)
             kwargs["type"] = type(exception).__name__
         self.log(category, message, LogLevel.ERROR, **kwargs)
+    
+    def warning(self, category: LogCategory, message: str, **kwargs):
+        """Log warning """
+        self.log(category, message, LogLevel.WARN, **kwargs)
 
+    def info(self, log_category: LogCategory, message: str, **kwargs):
+        """Log info """
+        self.log(log_category, message, LogLevel.INFO, **kwargs)
+
+    def debug(self, log_category: LogCategory, message: str, **kwargs):
+        """Log debug """
+        self.log(log_category, message, LogLevel.DEBUG, **kwargs)
 
 # Global logger instance (can be reconfigured)
 _logger = Logger()

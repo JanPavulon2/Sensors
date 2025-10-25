@@ -1,0 +1,19 @@
+# Animation Configuration
+# Animation metadata and parameter assignments
+# (Parameter definitions are in parameters.yaml)
+
+# Animation definitions
+animations:
+  SNAKE:
+    id: "snake"
+    display_name: "Snake"
+    tag: snake
+    description: "Sequential zone chase"
+    parameters: [ANIM_SPEED, ANIM_PRIMARY_COLOR_HUE, ANIM_LENGTH]  # Uses only base params (SPEED, COLOR_1)
+
+  BREATHE:
+    id: "breathe"
+    display_name: "Breathe"
+    tag: breathe
+    description: "Smooth breathing effect"
+    parameters: [ANIM_SPEED, ANIM_INTENSITY]  # Base (SPEED, COLOR_1) + INTENSITY

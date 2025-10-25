@@ -7,9 +7,9 @@ Multi-pixel colorful snake travels through all zones sequentially.
 import asyncio
 from typing import Tuple, List
 from animations.base import BaseAnimation
-from models.zone import Zone
 from utils.colors import hue_to_rgb
-
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class ColorSnakeAnimation(BaseAnimation):
     """
@@ -33,16 +33,17 @@ class ColorSnakeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: List[Zone],
+        zones: List[ZoneCombined],
         speed: int = 50,
         length: int = 5,
         hue_offset: int = 30,
+        hue: int = 0,  # Starting hue (ANIM_PRIMARY_COLOR_HUE)
         **kwargs
     ):
         super().__init__(zones, speed, **kwargs)
         self.length = max(2, min(20, length))  # Clamp 2-20
         self.hue_offset = hue_offset
-        self.base_hue = 0  # Starting hue that will rotate
+        self.base_hue = hue  # Starting hue from parameter
 
         # Build zone pixel map for navigation
         # Sort active zones by physical position (start index) not alphabetically
@@ -105,7 +106,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
         return snake_pixels
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run rainbow snake animation
 

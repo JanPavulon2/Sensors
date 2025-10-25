@@ -6,7 +6,8 @@ Single responsibility: Parse and provide access to parameter definitions with va
 """
 
 from typing import Dict, Optional
-from models.parameter import Parameter, ParameterType
+from models.parameter import ParameterType
+from models.domain.parameter import ParameterConfig
 from models.enums import ParamID
 from utils.logger import get_category_logger, LogLevel, LogCategory
 
@@ -46,7 +47,7 @@ class ParameterManager:
                 - 'animation_base_parameters'
                 - 'animation_additional_parameters'
         """
-        self.parameters: Dict[ParamID, Parameter] = {}
+        self.parameters: Dict[ParamID, ParameterConfig] = {}
         self._process_data(config_data)
 
     def _process_data(self, data: dict):
@@ -95,16 +96,15 @@ class ParameterManager:
                     continue
 
                 # Build Parameter object
-                self.parameters[param_id] = Parameter(
+                self.parameters[param_id] = ParameterConfig(
                     id=param_id,
                     type=param_type,
                     default=param_data.get('default'),
-                    min_val=param_data.get('min'),
-                    max_val=param_data.get('max'),
+                    min=param_data.get('min'),
+                    max=param_data.get('max'),
                     step=param_data.get('step'),
                     wraps=param_data.get('wraps', False),
                     unit=param_data.get('unit'),
-                    color_modes=param_data.get('color_modes'),
                     description=param_data.get('description', '')
                 )
                 param_count += 1
@@ -117,7 +117,7 @@ class ParameterManager:
             anim_additional=len(data.get('animation_additional_parameters', {}))
         )
 
-    def get_parameter(self, param_id: ParamID) -> Optional[Parameter]:
+    def get_parameter(self, param_id: ParamID) -> Optional[ParameterConfig]:
         """
         Get parameter definition by ID
 
@@ -129,16 +129,16 @@ class ParameterManager:
         """
         return self.parameters.get(param_id)
 
-    def get_all_parameters(self) -> Dict[ParamID, Parameter]:
+    def get_all_parameters(self) -> Dict[ParamID, ParameterConfig]:
         """
         Get all parameter definitions
 
         Returns:
-            Dict mapping ParamID to Parameter objects
+            Dict mapping ParamID to ParameterConfig objects
         """
         return self.parameters.copy()
 
-    def get_zone_parameters(self) -> Dict[ParamID, Parameter]:
+    def get_zone_parameters(self) -> Dict[ParamID, ParameterConfig]:
         """
         Get only zone parameters (ZONE_*)
 
@@ -150,7 +150,7 @@ class ParameterManager:
             if pid.name.startswith('ZONE_')
         }
 
-    def get_animation_parameters(self) -> Dict[ParamID, Parameter]:
+    def get_animation_parameters(self) -> Dict[ParamID, ParameterConfig]:
         """
         Get only animation parameters (ANIM_*)
 

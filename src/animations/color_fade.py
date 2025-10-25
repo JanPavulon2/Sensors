@@ -8,8 +8,8 @@ import asyncio
 from typing import List
 from animations.base import BaseAnimation
 from utils import hue_to_rgb
-from models.zone import Zone
-
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class ColorFadeAnimation(BaseAnimation):
     """
@@ -31,7 +31,7 @@ class ColorFadeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: List[Zone],
+        zones: List[ZoneCombined],
         speed: int = 50,
         start_hue: int = 0,
         **kwargs
@@ -39,7 +39,7 @@ class ColorFadeAnimation(BaseAnimation):
         super().__init__(zones, speed, **kwargs)
         self.current_hue = float(start_hue % 360)
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run color fade animation
 
@@ -65,7 +65,7 @@ class ColorFadeAnimation(BaseAnimation):
                     brightness = 255
 
                 # Convert hue to RGB (full saturation)
-                r, g, b = hue_to_rgb(self.current_hue)
+                r, g, b = hue_to_rgb(int(self.current_hue))
 
                 # Apply brightness scaling
                 scale = brightness / 255.0

@@ -7,8 +7,8 @@ Single pixel travels through all zones sequentially.
 import asyncio
 from typing import Tuple, List
 from animations.base import BaseAnimation
-from models.zone import Zone
-
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class SnakeAnimation(BaseAnimation):
     """
@@ -31,7 +31,7 @@ class SnakeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: List[Zone],
+        zones: List[ZoneCombined],
         speed: int = 50,
         color: Tuple[int, int, int] = (255, 255, 255),
         **kwargs
@@ -76,7 +76,7 @@ class SnakeAnimation(BaseAnimation):
         # Shouldn't reach here, but fallback to first zone
         return self.zone_order[0], 0
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run snake animation
 

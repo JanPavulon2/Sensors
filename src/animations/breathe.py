@@ -9,8 +9,8 @@ import math
 import time
 from typing import Optional, Tuple, List
 from animations.base import BaseAnimation
-from models.zone import Zone
-
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class BreatheAnimation(BaseAnimation):
     """
@@ -32,7 +32,7 @@ class BreatheAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: List[Zone],
+        zones: List[ZoneCombined],
         speed: int = 50,
         color: Optional[Tuple[int, int, int]] = None,
         intensity: int = 100,
@@ -42,7 +42,7 @@ class BreatheAnimation(BaseAnimation):
         self.color = color
         self.intensity = max(1, min(100, intensity))
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run breathe animation
 
