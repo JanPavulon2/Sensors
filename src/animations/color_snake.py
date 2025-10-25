@@ -140,3 +140,41 @@ class ColorSnakeAnimation(BaseAnimation):
             self.base_hue = (self.base_hue + 1) % 360
 
             await asyncio.sleep(move_delay)
+
+    async def run_preview(self, pixel_count: int = 8):
+        """
+        Simplified preview for 8-pixel preview panel
+
+        Shows a rainbow snake moving across 8 pixels.
+        """
+        self.running = True
+        position = 0
+
+        while self.running:
+            # Recalculate delay each iteration for live speed updates
+            min_delay = 0.01   # 10ms (fast)
+            max_delay = 0.1    # 100ms (slow)
+            move_delay = max_delay - (self.speed / 100) * (max_delay - min_delay)
+
+            # Build frame: all pixels off
+            frame = [(0, 0, 0)] * pixel_count
+
+            # Light up snake pixels with rainbow colors
+            for i in range(self.length):
+                pixel_pos = (position - i) % pixel_count
+
+                # Calculate hue with offset
+                hue = (self.base_hue + (i * self.hue_offset)) % 360
+                r, g, b = hue_to_rgb(hue)
+
+                frame[pixel_pos] = (r, g, b)
+
+            yield frame
+
+            # Move to next position
+            position = (position + 1) % pixel_count
+
+            # Slowly rotate base hue for changing colors
+            self.base_hue = (self.base_hue + 1) % 360
+
+            await asyncio.sleep(move_delay)

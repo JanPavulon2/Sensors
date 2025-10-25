@@ -9,6 +9,7 @@ zones:
     pixel_count: 12      # 45 physical LEDs (15 * 3)
     enabled: true
     order: 1
+    reversed: true
 
   - id: LAMP
     name: Lamp

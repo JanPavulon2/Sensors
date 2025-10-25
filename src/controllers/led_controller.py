@@ -267,13 +267,33 @@ class LEDController:
             self._sync_preview_bar()
 
         elif self.preview_mode == PreviewMode.ANIMATION_PREVIEW:
-            # Start animation preview based on selected animation
+            # Start animation preview based on selected animation with all parameters
             current_anim = self.animation_service.get_current()
             if current_anim:
-                speed = current_anim.get_param_value(ParamID.ANIM_SPEED)
+                # Build parameter dict with all animation parameters
+                params = {}
+                for param_id in current_anim.parameters.keys():
+                    value = current_anim.get_param_value(param_id)
+
+                    # Map ParamID to preview parameter names
+                    if param_id == ParamID.ANIM_SPEED:
+                        params['speed'] = value
+                    elif param_id == ParamID.ANIM_INTENSITY:
+                        params['intensity'] = value
+                    elif param_id == ParamID.ANIM_PRIMARY_COLOR_HUE:
+                        params['hue'] = value
+                    elif param_id == ParamID.ANIM_LENGTH:
+                        params['length'] = value
+                    elif param_id == ParamID.ANIM_HUE_OFFSET:
+                        params['hue_offset'] = value
+
+                # Extract speed separately (required positional arg)
+                speed = params.pop('speed', 50)
+
                 self.preview_controller.start_animation_preview(
                     current_anim.config.tag,
-                    speed=speed
+                    speed=speed,
+                    **params
                 )
 
     def _sync_preview_bar(self):
@@ -630,9 +650,16 @@ class LEDController:
             params["start_hue"] = current_zone.state.color.to_hue()
 
         elif self.current_animation_id == AnimationID.SNAKE:
-            # Use zone color with brightness already applied
-            zone_red, zone_green, zone_blue = self.zone_service.get_rgb(current_zone_id)
-            params["color"] = (zone_red, zone_green, zone_blue)
+            # Snake uses hue-based color with configurable length
+            if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
+                params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+            else:
+                # Fallback: use zone color with brightness already applied
+                zone_red, zone_green, zone_blue = self.zone_service.get_rgb(current_zone_id)
+                params["color"] = (zone_red, zone_green, zone_blue)
+
+            if ParamID.ANIM_LENGTH in current_animation.parameters:
+                params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
 
         elif self.current_animation_id == AnimationID.COLOR_SNAKE:
             # Color snake uses hue-based colors with additional params from state

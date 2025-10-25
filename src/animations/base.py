@@ -5,7 +5,7 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional, List
+from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
 from models.domain.zone import ZoneCombined
 
 
@@ -94,3 +94,29 @@ class BaseAnimation:
         min_delay = 0.02  # 50 FPS max
         max_delay = 0.1   # 10 FPS min
         return max_delay - (self.speed / 100) * (max_delay - min_delay)
+
+    async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Tuple[int, int, int]]]:
+        """
+        Generate simplified preview frames for preview panel (8 pixels)
+
+        Override this in subclasses to provide custom preview visualization.
+        Default implementation shows static color.
+
+        Args:
+            pixel_count: Number of preview pixels (default: 8)
+
+        Yields:
+            List of (r, g, b) tuples, one per pixel
+
+        Example:
+            async for frame in animation.run_preview(8):
+                preview_panel.show_frame(frame)
+        """
+        self.running = True
+        # Default: show static color
+        static_color = (100, 100, 100)
+        frame = [static_color] * pixel_count
+
+        while self.running:
+            yield frame
+            await asyncio.sleep(self._calculate_frame_delay())

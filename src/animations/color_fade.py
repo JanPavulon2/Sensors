@@ -79,3 +79,33 @@ class ColorFadeAnimation(BaseAnimation):
             self.current_hue = (self.current_hue + hue_increment) % 360
 
             await asyncio.sleep(frame_delay)
+
+    async def run_preview(self, pixel_count: int = 8):
+        """
+        Simplified preview for 8-pixel preview panel
+
+        Shows all 8 pixels cycling through rainbow hues in sync.
+        """
+        self.running = True
+
+        while self.running:
+            # Recalculate frame delay and hue increment each iteration for live updates
+            frame_delay = self._calculate_frame_delay()
+
+            # Calculate hue increment per frame based on speed
+            min_increment = 360 / 1000  # Slow (speed=1)
+            max_increment = 360 / 100   # Fast (speed=100)
+            hue_increment = min_increment + (self.speed / 100) * (max_increment - min_increment)
+
+            # Convert hue to RGB (full saturation, full brightness)
+            r, g, b = hue_to_rgb(int(self.current_hue))
+
+            # All pixels same color (cycling in sync)
+            frame = [(r, g, b)] * pixel_count
+
+            yield frame
+
+            # Increment hue
+            self.current_hue = (self.current_hue + hue_increment) % 360
+
+            await asyncio.sleep(frame_delay)

@@ -158,13 +158,78 @@ class PreviewController:
 
         return zones
 
+    def _create_animation_instance(
+        self,
+        animation_id: str,
+        speed: int,
+        **params
+    ) -> Optional['BaseAnimation']:
+        """
+        Factory method to create animation instances for preview
+
+        Creates animation without zones - preview uses run_preview() method.
+
+        Args:
+            animation_id: Animation identifier ('snake', 'breathe', etc.)
+            speed: Animation speed (1-100)
+            **params: Additional animation-specific parameters
+
+        Returns:
+            Animation instance or None if animation_id is unknown
+        """
+        # Import animation classes
+        from animations.snake import SnakeAnimation
+        from animations.breathe import BreatheAnimation
+        from animations.color_fade import ColorFadeAnimation
+        from animations.color_snake import ColorSnakeAnimation
+
+        # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
+        empty_zones = []
+
+        # Animation factory mapping
+        if animation_id == "snake":
+            return SnakeAnimation(
+                zones=empty_zones,
+                speed=speed,
+                hue=params.get('hue', 0),
+                length=params.get('length', 1),
+                color=params.get('color')  # Backwards compat
+            )
+
+        elif animation_id == "breathe":
+            return BreatheAnimation(
+                zones=empty_zones,
+                speed=speed,
+                color=params.get('color', (255, 0, 0)),
+                intensity=params.get('intensity', 100)
+            )
+
+        elif animation_id == "color_fade":
+            return ColorFadeAnimation(
+                zones=empty_zones,
+                speed=speed,
+                start_hue=params.get('start_hue', 0)
+            )
+
+        elif animation_id == "color_snake":
+            return ColorSnakeAnimation(
+                zones=empty_zones,
+                speed=speed,
+                hue=params.get('hue', 0),
+                length=params.get('length', 5),
+                hue_offset=params.get('hue_offset', 30)
+            )
+
+        else:
+            # Unknown animation
+            return None
+
     def start_animation_preview(self, animation_id: str, speed: int = 50, **params) -> None:
         """
-        Start animation preview using real Animation class with virtual zones
+        Start animation preview using animation's run_preview() method
 
-        Creates virtual zones (8 LEDs as zones), instantiates the actual animation
-        class, and runs it in an async task. Frames are translated from zone updates
-        to LED indices.
+        Instantiates the animation class and runs its simplified preview visualization
+        designed for 8 pixels.
 
         Args:
             animation_id: Animation name ('snake', 'breathe', 'color_fade', 'color_snake')
@@ -172,7 +237,7 @@ class PreviewController:
             **params: Additional animation parameters (color, intensity, start_hue, etc.)
 
         Example:
-            >>> controller.start_animation_preview('snake', speed=70, color=(255, 0, 0))
+            >>> controller.start_animation_preview('snake', speed=70, hue=120, length=3)
             >>> controller.start_animation_preview('breathe', speed=50, intensity=80)
         """
         # If same animation is already running, don't restart (prevents flicker)
@@ -187,43 +252,13 @@ class PreviewController:
         self.stop_animation_preview()
         self._current_animation_id = animation_id
 
-        # Create virtual zones (8 LEDs as individual zones)
-        virtual_zones = self._create_virtual_zones()
-
-        # Import animation classes
-        from animations.snake import SnakeAnimation
-        from animations.breathe import BreatheAnimation
-        from animations.color_fade import ColorFadeAnimation
-        from animations.color_snake import ColorSnakeAnimation
-
-        # Instantiate real animation with virtual zones
+        # Instantiate animation (no zones needed - preview mode uses simplified logic)
         try:
-            if animation_id == "snake":
-                self._current_animation = SnakeAnimation(
-                    zones=virtual_zones,
-                    speed=speed,
-                    color=params.get('color', (255, 255, 255)),
-                    excluded_zones=[]
-                )
-            elif animation_id == "breathe":
-                self._current_animation = BreatheAnimation(
-                    zones=virtual_zones,
-                    speed=speed,
-                    color=params.get('color', (255, 0, 0)),
-                    intensity=params.get('intensity', 100)
-                )
-            elif animation_id == "color_fade":
-                self._current_animation = ColorFadeAnimation(
-                    zones=virtual_zones,
-                    speed=speed,
-                    start_hue=params.get('start_hue', 0)
-                )
-            elif animation_id == "color_snake":
-                self._current_animation = ColorSnakeAnimation(
-                    zones=virtual_zones,
-                    speed=speed
-                )
-            else:
+            self._current_animation = self._create_animation_instance(
+                animation_id, speed, **params
+            )
+
+            if not self._current_animation:
                 log.log(LogCategory.SYSTEM, "Unknown animation for preview",
                        level=LogLevel.WARN, animation_id=animation_id)
                 # Fallback: show static color
@@ -232,7 +267,7 @@ class PreviewController:
 
             # Start animation task
             self._animation_running = True
-            self._animation_task = asyncio.create_task(self._run_animation_loop())
+            self._animation_task = asyncio.create_task(self._run_preview_loop())
 
             log.log(LogCategory.SYSTEM, "Preview animation started",
                    animation_id=animation_id, speed=speed)
@@ -281,16 +316,12 @@ class PreviewController:
             log.log(LogCategory.SYSTEM, "Preview animation parameter updated",
                    param=param, value=value)
 
-    async def _run_animation_loop(self) -> None:
+    async def _run_preview_loop(self) -> None:
         """
-        Run animation loop - processes frames from animation generator
+        Run animation preview loop - uses animation's run_preview() method
 
-        The animation yields tuples:
-        - 4-tuple (zone_tag, r, g, b) for zone-level updates
-        - 5-tuple (zone_tag, pixel_idx, r, g, b) for pixel-level updates
-
-        We extract LED index from zone_tag ("p0" → 0) and build frames for
-        PreviewPanel.show_frame().
+        Each animation provides its own simplified preview visualization for 8 pixels.
+        Frames are directly displayed on the preview panel.
         """
         if not self._current_animation:
             return
@@ -298,29 +329,11 @@ class PreviewController:
         try:
             self._current_animation.running = True
 
-            async for frame_data in self._current_animation.run():
+            async for frame in self._current_animation.run_preview(pixel_count=self.preview_panel.count):
                 if not self._animation_running:
                     break
 
-                # Initialize frame (all LEDs off)
-                frame = [(0, 0, 0)] * self.preview_panel.count
-
-                # Parse frame data
-                if len(frame_data) == 5:  # Pixel-level (zone_tag, pixel_idx, r, g, b)
-                    zone_tag, pixel_idx, r, g, b = frame_data
-                    if zone_tag.startswith("p"):
-                        led_index = int(zone_tag[1:])  # "p0" → 0, "p7" → 7
-                        if 0 <= led_index < self.preview_panel.count:
-                            frame[led_index] = (r, g, b)
-
-                elif len(frame_data) == 4:  # Zone-level (zone_tag, r, g, b)
-                    zone_tag, r, g, b = frame_data
-                    if zone_tag.startswith("p"):
-                        led_index = int(zone_tag[1:])
-                        if 0 <= led_index < self.preview_panel.count:
-                            frame[led_index] = (r, g, b)
-
-                # Display frame
+                # Display frame directly (already in correct format)
                 self.preview_panel.show_frame(frame)
 
         except asyncio.CancelledError:

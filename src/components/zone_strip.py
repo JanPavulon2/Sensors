@@ -82,6 +82,13 @@ class ZoneStrip:
             if zone.enabled
         }
 
+        # Store reversed flag for each zone (from config)
+        self.zone_reversed: Dict[str, bool] = {
+            zone.tag: zone.reversed
+            for zone in zones
+            if zone.enabled
+        }
+
         # Cache current color for each zone
         self.zone_colors: Dict[str, Tuple[int, int, int]] = {
             zone.tag: (0, 0, 0)
@@ -121,6 +128,26 @@ class ZoneStrip:
             True if zone exists, False otherwise
         """
         return zone_id in self.zones
+
+    def _get_physical_pixel_index(self, zone_id: str, logical_index: int) -> int:
+        """
+        Convert logical pixel index to physical pixel index, accounting for reversed zones.
+
+        Args:
+            zone_id: Zone identifier string
+            logical_index: Logical pixel index within zone (0 = first pixel)
+
+        Returns:
+            Physical pixel index on the strip
+        """
+        start, end = self.zones[zone_id]
+
+        if self.zone_reversed.get(zone_id, False):
+            # Reversed: logical 0 maps to physical end, logical max maps to physical start
+            return end - logical_index
+        else:
+            # Normal: logical 0 maps to physical start
+            return start + logical_index
 
     def set_zone_color(self, zone_id: str, r: int, g: int, b: int) -> None:
         """
@@ -170,10 +197,14 @@ class ZoneStrip:
 
         Args:
             zone_id: Zone identifier string
-            pixel_index: Pixel index within zone (0-based)
+            pixel_index: Logical pixel index within zone (0-based, 0 = first pixel regardless of reversal)
             r: Red value (0-255)
             g: Green value (0-255)
             b: Blue value (0-255)
+
+        Note:
+            Respects the zone's reversed flag. If reversed=True, logical index 0
+            maps to the last physical pixel in the zone.
         """
         if not self._validate_zone(zone_id):
             return
@@ -185,13 +216,13 @@ class ZoneStrip:
         if pixel_index < 0 or pixel_index >= zone_length:
             return
 
-        # Calculate absolute pixel position on strip
-        absolute_position = start + pixel_index
-        if absolute_position >= self.pixel_count:
+        # Calculate physical pixel position, accounting for reversal
+        physical_position = self._get_physical_pixel_index(zone_id, pixel_index)
+        if physical_position >= self.pixel_count:
             return
 
         color = Color(r, g, b)
-        self.strip.setPixelColor(absolute_position, color)
+        self.strip.setPixelColor(physical_position, color)
         self.strip.show()
 
     def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:

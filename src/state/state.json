@@ -26,24 +26,24 @@
     },
     "lamp": {
       "color": {
-        "mode": "HUE",
-        "hue": 58
+        "mode": "PRESET",
+        "preset_name": "indigo"
       },
-      "brightness": 50
+      "brightness": 40
     },
     "left": {
       "color": {
         "mode": "HUE",
         "hue": 40
       },
-      "brightness": 80
+      "brightness": 40
     },
     "top": {
       "color": {
         "mode": "HUE",
         "hue": 247
       },
-      "brightness": 60
+      "brightness": 30
     },
     "right": {
       "color": {
@@ -61,14 +61,14 @@
     }
   },
   "current_animation": {
-    "id": "snake",
+    "id": "color_fade",
     "parameters": {
-      "ANIM_SPEED": 21,
-      "ANIM_PRIMARY_COLOR_HUE": 138,
-      "ANIM_LENGTH": 20
+      "ANIM_SPEED": 70,
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_INTENSITY": 100
     }
   },
-  "selected_zone_index": 5,
+  "selected_zone_index": 3,
   "edit_mode_on": true,
   "main_mode": "ANIMATION",
   "active_parameter": "ANIM_PRIMARY_COLOR_HUE",
