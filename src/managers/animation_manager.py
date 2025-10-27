@@ -17,7 +17,7 @@ class AnimationInfo:
     Animation metadata from config
 
     Attributes:
-        tag: Technical identifier (e.g., "breathe", "color_snake")
+        id: Technical identifier (e.g., "breathe", "color_snake")
         display_name: Human-readable name (e.g., "Breathe", "Color Snake")
         description: Brief description of animation
         parameters: List of ParamID this animation uses (in addition to base params)
@@ -25,14 +25,14 @@ class AnimationInfo:
 
     Example:
         AnimationInfo(
-            tag="color_snake",
+            id="color_snake",
             display_name="Color Snake",
             description="Multi-pixel rainbow snake",
             parameters=[ParamID.LENGTH, ParamID.HUE_OFFSET],
             base_parameters=[ParamID.ANIM_SPEED, ParamID.ANIM_COLOR_1]
         )
     """
-    tag: str
+    id: str
     display_name: str
     description: str
     parameters: List[ParamID]  # Additional params beyond base
@@ -50,7 +50,7 @@ class AnimationInfo:
     def __str__(self):
         """String representation for debugging"""
         param_names = [p.name for p in self.get_all_parameters()]
-        return f"[{self.tag:12}] {self.display_name:15} | params: {', '.join(param_names)}"
+        return f"[{self.id:12}] {self.display_name:15} | params: {', '.join(param_names)}"
 
 
 class AnimationManager:
@@ -114,35 +114,35 @@ class AnimationManager:
 
         # Parse animation definitions
         animations_section = data.get('animations', {})
-        for anim_tag, anim_data in animations_section.items():
+        for anim_id, anim_data in animations_section.items():
             # Parse additional parameters
             additional_params = []
             for param_name in anim_data.get('parameters', []):
                 try:
                     additional_params.append(ParamID[param_name])
                 except KeyError:
-                    raise ValueError(f"Unknown ParamID in animation '{anim_tag}': {param_name}")
+                    raise ValueError(f"Unknown ParamID in animation '{anim_id}': {param_name}")
 
             # Create AnimationInfo
-            self.animations[anim_tag] = AnimationInfo(
-                tag=anim_tag,
-                display_name=anim_data.get('display_name', anim_tag.title()),
+            self.animations[anim_id] = AnimationInfo(
+                id=anim_id,
+                display_name=anim_data.get('display_name', anim_id.title()),
                 description=anim_data.get('description', ''),
                 parameters=additional_params,
                 base_parameters=self.base_parameters.copy()
             )
 
-    def get_animation(self, tag: str) -> Optional[AnimationInfo]:
+    def get_animation(self, id: str) -> Optional[AnimationInfo]:
         """
-        Get animation info by tag
+        Get animation info by id
 
         Args:
-            tag: Animation tag (e.g., "breathe", "color_snake")
+            id: Animation id (e.g., "breathe", "color_snake")
 
         Returns:
             AnimationInfo or None if not found
         """
-        return self.animations.get(tag)
+        return self.animations.get(id)
 
     def get_all_animations(self) -> List[AnimationInfo]:
         """
@@ -153,12 +153,12 @@ class AnimationManager:
         """
         return list(self.animations.values())
 
-    def get_animation_tags(self) -> List[str]:
+    def get_animation_ids(self) -> List[str]:
         """
-        Get list of animation tags
+        Get list of animation IDs
 
         Returns:
-            List of animation tags: ["breathe", "color_fade", "snake", "color_snake"]
+            List of animation IDs: ["breathe", "color_fade", "snake", "color_snake"]
         """
         return list(self.animations.keys())
 
@@ -171,18 +171,18 @@ class AnimationManager:
         """
         return [info.display_name for info in self.animations.values()]
 
-    def animation_has_parameter(self, tag: str, param_id: ParamID) -> bool:
+    def animation_has_parameter(self, id: str, param_id: ParamID) -> bool:
         """
         Check if animation uses specific parameter
 
         Args:
-            tag: Animation tag
+            id: Animation ID
             param_id: ParamID to check
 
         Returns:
             True if animation uses this parameter
         """
-        anim = self.get_animation(tag)
+        anim = self.get_animation(id)
         if not anim:
             return False
         return param_id in anim.get_all_parameters()

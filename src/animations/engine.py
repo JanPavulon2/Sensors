@@ -5,13 +5,14 @@ Manages animation lifecycle, switching between animations, and updating strip.
 """
 
 import asyncio
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
-
+from animations.matrix import MatrixAnimation
+from models.domain.zone import ZoneCombined
 
 class AnimationEngine:
     """
@@ -36,15 +37,16 @@ class AnimationEngine:
         'color_fade': ColorFadeAnimation,
         'snake': SnakeAnimation,
         'color_snake': ColorSnakeAnimation,
+        'matrix': MatrixAnimation,
     }
 
-    def __init__(self, strip, zones: Dict[str, list]):
+    def __init__(self, strip, zones: List[ZoneCombined]):
         """
         Initialize animation engine
 
         Args:
             strip: ZoneStrip instance
-            zones: Dict of zone definitions {name: [start, end]}
+            zones: List of Zone objects
         """
         self.strip = strip
         self.zones = zones
@@ -75,16 +77,12 @@ class AnimationEngine:
         self.current_animation = animation_class(self.zones, excluded_zones=excluded_zones or [], **params)
         self.current_name = name
 
-        # Cache current zone colors/brightness for animations that need them
-        # We need to get brightness from LEDController, not from strip
-        # For now, cache the RGB values and extract brightness
-        for zone_name in self.zones:
-            color = self.strip.get_zone_color(zone_name)
-            if color:
-                self.current_animation.set_zone_color_cache(zone_name, *color)
-                # Calculate brightness from RGB (approximate as max channel)
-                brightness = max(color)
-                self.current_animation.set_zone_brightness_cache(zone_name, brightness)
+        # Cache current zone colors for animations that need them
+        # Note: Brightness is cached by LEDController (has actual 0-100% values)
+        for zone in self.zones:
+            color = self.strip.get_zone_color(zone.config.tag)
+            if color and self.current_animation is not None:
+                self.current_animation.set_zone_color_cache(zone.config.tag, *color)
 
         # Start animation loop
         self.animation_task = asyncio.create_task(self._run_loop())
@@ -132,6 +130,7 @@ class AnimationEngine:
         Supports both zone-level and pixel-level updates.
         """
         try:
+            assert self.current_animation is not None
             async for frame_data in self.current_animation.run():
                 # Check frame type by tuple length
                 # 4-tuple: (zone_name, r, g, b) -> zone-level

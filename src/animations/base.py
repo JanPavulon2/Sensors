@@ -5,7 +5,8 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional
+from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
+from models.domain.zone import ZoneCombined
 
 
 class BaseAnimation:
@@ -16,7 +17,7 @@ class BaseAnimation:
     to update LED colors frame by frame.
 
     Args:
-        zones: Dict of zone definitions {name: [start, end]}
+        zones: List of Zone objects
         speed: Animation speed (1-100, where 100 is fastest)
         **kwargs: Animation-specific parameters
 
@@ -25,7 +26,7 @@ class BaseAnimation:
             strip.set_zone_color(zone_name, r, g, b)
     """
 
-    def __init__(self, zones: Dict[str, list], speed: int = 50, excluded_zones=None, **kwargs):
+    def __init__(self, zones: List[ZoneCombined], speed: int = 50, excluded_zones=None, **kwargs):
         self.zones = zones
         self.excluded_zones = excluded_zones or []
         self.speed = max(1, min(100, speed))  # Clamp 1-100
@@ -33,8 +34,12 @@ class BaseAnimation:
         self.zone_colors = {}  # Cache current zone colors
         self.zone_brightness = {}  # Cache current zone brightness
 
-        # Filter out excluded zones
-        self.active_zones = {k: v for k, v in zones.items() if k not in self.excluded_zones}
+        # Filter out excluded zones and build dict for compatibility
+        self.active_zones = {
+            zone.config.tag: [zone.config.start_index, zone.config.end_index]
+            for zone in zones
+            if zone.config.tag not in self.excluded_zones
+        }
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int]]:
         """
@@ -89,3 +94,29 @@ class BaseAnimation:
         min_delay = 0.02  # 50 FPS max
         max_delay = 0.1   # 10 FPS min
         return max_delay - (self.speed / 100) * (max_delay - min_delay)
+
+    async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Tuple[int, int, int]]]:
+        """
+        Generate simplified preview frames for preview panel (8 pixels)
+
+        Override this in subclasses to provide custom preview visualization.
+        Default implementation shows static color.
+
+        Args:
+            pixel_count: Number of preview pixels (default: 8)
+
+        Yields:
+            List of (r, g, b) tuples, one per pixel
+
+        Example:
+            async for frame in animation.run_preview(8):
+                preview_panel.show_frame(frame)
+        """
+        self.running = True
+        # Default: show static color
+        static_color = (100, 100, 100)
+        frame = [static_color] * pixel_count
+
+        while self.running:
+            yield frame
+            await asyncio.sleep(self._calculate_frame_delay())

@@ -19,10 +19,7 @@ leds:
     gpio: 19
     count: 8
     color_order: GRB
-    brightness: 100
 
   strip:
     gpio: 18
-    count: 45
     color_order: BRG
-    brightness: 255

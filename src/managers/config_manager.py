@@ -6,12 +6,16 @@ Loads modular YAML files and initializes sub-managers.
 """
 
 import yaml
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict, TYPE_CHECKING
-from utils.logger import get_logger, LogLevel, LogCategory
+from typing import List, Optional, Dict
+from utils.logger import get_logger, get_category_logger, LogLevel, LogCategory
+from models.enums import ZoneID
+from models.domain.zone import ZoneConfig
+from utils.enum_helper import EnumHelper
 
-if TYPE_CHECKING:
-    from models.zone import Zone
+log = get_category_logger(LogCategory.CONFIG)
+
 
 
 class ConfigManager:
@@ -19,19 +23,19 @@ class ConfigManager:
     Main configuration manager with include system support
 
     Loads config.yaml and processes include: directive to load modular YAML files.
-    Initializes sub-managers (HardwareManager, ZoneManager, AnimationManager, ColorManager).
+    Initializes sub-managers (HardwareManager, AnimationManager, ColorManager, ParameterManager).
+    Provides zone configuration via get_enabled_zones() method.
 
     Example:
         config = ConfigManager()
         config.load()
 
-        # Access via properties (backward compatibility)
+        # Access via properties
         hw_dict = config.hardware  # Returns dict
-        zones_dict = config.zones  # Returns zone index dict
+        zones = config.get_enabled_zones()  # Returns List[ZoneConfig] with calculated indices
 
-        # Access via sub-managers (new API)
+        # Access via sub-managers
         enc_cfg = config.hardware_manager.get_encoder("zone_selector")
-        zone = config.zone_manager.get_zone("lamp")
         anim = config.animation_manager.get_animation("breathe")
     """
 
@@ -46,13 +50,12 @@ class ConfigManager:
         self.config_path = Path(config_path)
         self.factory_defaults_path = Path(defaults_path)
         self.data = {}
-        self.logger = get_logger()
 
         # Sub-managers (initialized in load())
         self.hardware_manager = None
-        self.zone_manager = None
         self.animation_manager = None
         self.color_manager = None
+        self.parameter_manager = None
 
     def load(self):
         """
@@ -68,8 +71,6 @@ class ConfigManager:
         Returns:
             Merged config data dict
         """
-        log = self.logger  # Shorthand
-
         try:
             # Resolve path relative to src/ directory
             src_dir = Path(__file__).parent.parent
@@ -80,16 +81,16 @@ class ConfigManager:
 
             # Check for include system
             if 'include' in main_config:
-                log.log(LogCategory.CONFIG, "Using include-based configuration")
+                log("Using include-based configuration")
                 self.data = self._load_with_includes(main_config['include'], src_dir / self.config_path.parent)
             else:
                 # Monolithic config (backward compatibility)
-                log.log(LogCategory.CONFIG, "Using monolithic configuration")
+                log("Using monolithic configuration")
                 self.data = main_config
 
         except Exception as ex:
-            log.error(LogCategory.CONFIG, "Failed to load config.yaml", exception=ex)
-            log.log(LogCategory.CONFIG, "Falling back to factory defaults", level=LogLevel.WARN)
+            log("Failed to load config.yaml", LogLevel.ERROR, error=str(ex), error_type=type(ex).__name__)
+            log("Falling back to factory defaults", LogLevel.WARN)
 
             # Load factory defaults
             src_dir = Path(__file__).parent.parent
@@ -122,14 +123,15 @@ class ConfigManager:
                     file_data = yaml.safe_load(f)
                     if file_data:
                         merged.update(file_data)
-                        print(f"  ✓ Loaded {filename}")
+                        log(f"Loaded {filename}", keys=str(list(file_data.keys())))
             except FileNotFoundError:
-                print(f"  ✗ File not found: {filename}")
+                log(f"File not found: {filename}", LogLevel.ERROR)
                 raise
             except Exception as ex:
-                print(f"  ✗ Error loading {filename}: {ex}")
+                log(f"Error loading {filename}", LogLevel.ERROR, error=str(ex))
                 raise
 
+        log("Config merge complete", total_keys=len(merged), keys=str(list(merged.keys())[:10]))
         return merged
 
     def _initialize_managers(self):
@@ -138,14 +140,16 @@ class ConfigManager:
 
         Creates:
         - HardwareManager: GPIO pins, encoders, buttons, LED strips
-        - ZoneManager: Zone collection with auto-calculated indices
         - AnimationManager: Animation metadata and parameters
         - ColorManager: Color preset definitions
+        - ParameterManager: Parameter definitions and validation
+
+        Note: Zone config is accessed directly via get_zones_config()
         """
         from managers.hardware_manager import HardwareManager
-        from managers.zone_manager import ZoneManager
         from managers.animation_manager import AnimationManager
         from managers.color_manager import ColorManager
+        from managers.parameter_manager import ParameterManager
 
         # HardwareManager - inject merged config data
         try:
@@ -153,25 +157,21 @@ class ConfigManager:
             self.hardware_manager.data = self.data
             self.hardware_manager.print_summary()
         except Exception as ex:
-            print(f"[WARN] Failed to initialize HardwareManager: {ex}")
+            log("Failed to initialize HardwareManager", LogLevel.WARN, error=str(ex))
 
-        # ZoneManager - inject zones list from merged config
+        # Verify zones exist in config
         zones_config = self.data.get("zones", [])
-        if zones_config:
-            try:
-                self.zone_manager = ZoneManager(zones_config)
-                self.zone_manager.print_summary()
-            except Exception as ex:
-                print(f"[WARN] Failed to initialize ZoneManager: {ex}")
+        if not zones_config:
+            log("No zones defined in config!", LogLevel.WARN)
         else:
-            print("[WARN] No zones defined in config!")
+            log(f"Loaded {len(zones_config)} zone definitions from config")
 
         # AnimationManager - inject merged config data (no file loading)
         try:
             self.animation_manager = AnimationManager(self.data)
             self.animation_manager.print_summary()
         except Exception as ex:
-            print(f"[WARN] Failed to initialize AnimationManager: {ex}")
+            log("Failed to initialize AnimationManager", LogLevel.WARN, error=str(ex))
 
         # ColorManager - inject merged config data (no file loading)
         try:
@@ -181,68 +181,65 @@ class ConfigManager:
             }
             self.color_manager = ColorManager(color_data)
         except Exception as ex:
-            print(f"[WARN] Failed to initialize ColorManager: {ex}")
+            log("Failed to initialize ColorManager", LogLevel.WARN, error=str(ex))
 
-    # ===== Convenience Properties =====
+        # ParameterManager - inject merged config data (no file loading)
+        try:
+            self.parameter_manager = ParameterManager(self.data)
+            self.parameter_manager.print_summary()
+        except Exception as ex:
+            log("Failed to initialize ParameterManager", LogLevel.WARN, error=str(ex))
 
-    @property
-    def zones(self) -> Dict[str, list]:
+    # ===== Zone Access API =====
+
+    def get_enabled_zones(self) -> List[ZoneConfig]:
         """
-        Get zones in old dict format for ZoneStrip compatibility
+        Get enabled zones with calculated indices
 
         Returns:
-            Dict with zone tag as key and [start, end] as value
-            Example: {"lamp": [0, 18], "top": [19, 22], ...}
+            List of ZoneConfig objects (immutable, with indices calculated)
         """
-        if self.zone_manager:
-            return self.zone_manager.get_zone_dict()
-        return {}
+        zones_raw = self.data.get("zones", [])
+        if not zones_raw:
+            log("No zones found in config!", LogLevel.WARN)
+            return []
 
-    # ===== Zone Access API (delegation to ZoneManager) =====
+        # Filter enabled and sort by order
+        enabled_dicts = [z for z in zones_raw if z.get("enabled", True)]
+        enabled_dicts.sort(key=lambda z: z.get("order", 0))
 
-    def get_zone(self, tag: str) -> Optional['Zone']:
-        """
-        Get zone object by tag
+        # Calculate indices
+        prev_end = -1
+        zone_configs = []
 
-        Args:
-            tag: Zone tag (e.g., "lamp", "top")
+        for zone_dict in enabled_dicts:
+            pixel_count = zone_dict.get("pixel_count", 0)
+            start_index = prev_end + 1
+            end_index = start_index + pixel_count - 1
+            prev_end = end_index
 
-        Returns:
-            Zone object or None if not found
-        """
-        if self.zone_manager:
-            return self.zone_manager.get_zone(tag)
-        return None
+            # Build ZoneConfig object
+            zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
+            zone_config = ZoneConfig(
+                id=zone_id,
+                display_name=zone_dict.get("name", "Unknown"),
+                pixel_count=pixel_count,
+                enabled=True,  # Only enabled zones reach here
+                reversed=zone_dict.get("reversed", False),
+                order=zone_dict.get("order", 0),
+                start_index=start_index,
+                end_index=end_index
+            )
+            zone_configs.append(zone_config)
 
-    def get_all_zones(self) -> List['Zone']:
-        """
-        Get all zone objects
-
-        Returns:
-            List of all Zone objects
-        """
-        if self.zone_manager:
-            return self.zone_manager.zones
-        return []
-
-    def get_enabled_zones(self) -> List['Zone']:
-        """
-        Get only enabled zone objects
-
-        Returns:
-            List of enabled Zone objects
-        """
-        if self.zone_manager:
-            return self.zone_manager.get_enabled_zones()
-        return []
+        log(f"Built {len(zone_configs)} ZoneConfig objects with calculated indices")
+        return zone_configs
 
     def get_zone_tags(self) -> List[str]:
         """
         Get list of enabled zone tags in order
 
         Returns:
-            List of zone tags: ["strip", "lamp", "left", "top", "right", "bottom"]
+            List of zone tags: ["STRIP", "LAMP", "LEFT", "TOP", "RIGHT", "BOTTOM"]
         """
-        if self.zone_manager:
-            return self.zone_manager.get_zone_tags()
-        return []
+        return [z.id.name for z in self.get_enabled_zones()]

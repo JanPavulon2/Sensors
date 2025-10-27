@@ -7,9 +7,10 @@ Smooth fade in/out effect (breathing) for all zones synchronously.
 import asyncio
 import math
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from animations.base import BaseAnimation
-
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class BreatheAnimation(BaseAnimation):
     """
@@ -31,7 +32,7 @@ class BreatheAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[ZoneCombined],
         speed: int = 50,
         color: Optional[Tuple[int, int, int]] = None,
         intensity: int = 100,
@@ -41,7 +42,7 @@ class BreatheAnimation(BaseAnimation):
         self.color = color
         self.intensity = max(1, min(100, intensity))
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run breathe animation
 
@@ -90,4 +91,48 @@ class BreatheAnimation(BaseAnimation):
 
                 yield zone_name, r_out, g_out, b_out
 
+            await asyncio.sleep(frame_delay)
+
+    async def run_preview(self, pixel_count: int = 8):
+        """
+        Simplified preview for 8-pixel preview panel
+
+        Shows all 8 pixels breathing in sync.
+        """
+        self.running = True
+        start_time = time.time()
+
+        while self.running:
+            # Recalculate parameters each iteration for live speed updates
+            frame_delay = self._calculate_frame_delay()
+
+            # Calculate cycle duration based on speed
+            min_cycle = 1.0
+            max_cycle = 5.0
+            cycle_duration = max_cycle - (self.speed / 100) * (max_cycle - min_cycle)
+
+            elapsed = time.time() - start_time
+
+            # Sine wave: 0 -> 1 -> 0
+            phase = (elapsed / cycle_duration) * 2 * math.pi
+            brightness_factor = (math.sin(phase) + 1) / 2
+
+            # Apply intensity scaling
+            brightness_factor *= (self.intensity / 100)
+
+            # Use specified color or default
+            if self.color:
+                r, g, b = self.color
+            else:
+                r, g, b = 255, 0, 0  # Default red for preview
+
+            # Apply brightness modulation
+            r_out = int(r * brightness_factor)
+            g_out = int(g * brightness_factor)
+            b_out = int(b * brightness_factor)
+
+            # All pixels same color (breathing in sync)
+            frame = [(r_out, g_out, b_out)] * pixel_count
+
+            yield frame
             await asyncio.sleep(frame_delay)

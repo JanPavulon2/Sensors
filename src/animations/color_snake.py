@@ -7,7 +7,9 @@ Multi-pixel colorful snake travels through all zones sequentially.
 import asyncio
 from typing import Tuple, List
 from animations.base import BaseAnimation
-
+from utils.colors import hue_to_rgb
+from models.domain.zone import ZoneCombined
+from typing import AsyncIterator, Tuple
 
 class ColorSnakeAnimation(BaseAnimation):
     """
@@ -31,16 +33,17 @@ class ColorSnakeAnimation(BaseAnimation):
 
     def __init__(
         self,
-        zones: dict,
+        zones: List[ZoneCombined],
         speed: int = 50,
         length: int = 5,
         hue_offset: int = 30,
+        hue: int = 0,  # Starting hue (ANIM_PRIMARY_COLOR_HUE)
         **kwargs
     ):
         super().__init__(zones, speed, **kwargs)
         self.length = max(2, min(20, length))  # Clamp 2-20
         self.hue_offset = hue_offset
-        self.base_hue = 0  # Starting hue that will rotate
+        self.base_hue = hue  # Starting hue from parameter
 
         # Build zone pixel map for navigation
         # Sort active zones by physical position (start index) not alphabetically
@@ -57,34 +60,6 @@ class ColorSnakeAnimation(BaseAnimation):
             self.total_pixels += pixel_count
 
         self.current_position = 0
-
-    def _hue_to_rgb(self, hue: int) -> Tuple[int, int, int]:
-        """
-        Convert hue (0-360) to RGB
-
-        Args:
-            hue: Hue value (0-360 degrees)
-
-        Returns:
-            RGB tuple (0-255 each)
-        """
-        hue = hue % 360
-        h = hue / 60.0
-        c = 255
-        x = int(c * (1 - abs(h % 2 - 1)))
-
-        if h < 1:
-            return (c, x, 0)
-        elif h < 2:
-            return (x, c, 0)
-        elif h < 3:
-            return (0, c, x)
-        elif h < 4:
-            return (0, x, c)
-        elif h < 5:
-            return (x, 0, c)
-        else:
-            return (c, 0, x)
 
     def _get_pixel_location(self, absolute_position: int) -> Tuple[str, int]:
         """
@@ -122,7 +97,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
             # Calculate color with rainbow gradient
             hue = (self.base_hue + (i * self.hue_offset)) % 360
-            r, g, b = self._hue_to_rgb(hue)
+            r, g, b = hue_to_rgb(hue)
 
             # Get zone and pixel location
             zone_name, pixel_in_zone = self._get_pixel_location(pos)
@@ -131,7 +106,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
         return snake_pixels
 
-    async def run(self):
+    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run rainbow snake animation
 
@@ -160,6 +135,44 @@ class ColorSnakeAnimation(BaseAnimation):
 
             # Move to next position
             self.current_position = (self.current_position + 1) % self.total_pixels
+
+            # Slowly rotate base hue for changing colors
+            self.base_hue = (self.base_hue + 1) % 360
+
+            await asyncio.sleep(move_delay)
+
+    async def run_preview(self, pixel_count: int = 8):
+        """
+        Simplified preview for 8-pixel preview panel
+
+        Shows a rainbow snake moving across 8 pixels.
+        """
+        self.running = True
+        position = 0
+
+        while self.running:
+            # Recalculate delay each iteration for live speed updates
+            min_delay = 0.01   # 10ms (fast)
+            max_delay = 0.1    # 100ms (slow)
+            move_delay = max_delay - (self.speed / 100) * (max_delay - min_delay)
+
+            # Build frame: all pixels off
+            frame = [(0, 0, 0)] * pixel_count
+
+            # Light up snake pixels with rainbow colors
+            for i in range(self.length):
+                pixel_pos = (position - i) % pixel_count
+
+                # Calculate hue with offset
+                hue = (self.base_hue + (i * self.hue_offset)) % 360
+                r, g, b = hue_to_rgb(hue)
+
+                frame[pixel_pos] = (r, g, b)
+
+            yield frame
+
+            # Move to next position
+            position = (position + 1) % pixel_count
 
             # Slowly rotate base hue for changing colors
             self.base_hue = (self.base_hue + 1) % 360

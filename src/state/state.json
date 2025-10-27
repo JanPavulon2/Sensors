@@ -1,0 +1,83 @@
+{
+  "animations": {
+    "snake": {
+      "enabled": false,
+      "parameters": {
+        "ANIM_SPEED": 80,
+        "ANIM_PRIMARY_COLOR_HUE": 0,
+        "ANIM_LENGTH": 5
+      }
+    },
+    "breathe": {
+      "enabled": false,
+      "parameters": {
+        "ANIM_SPEED": 50,
+        "ANIM_INTENSITY": 100
+      }
+    }
+  },
+  "zones": {
+    "floor": {
+      "color": {
+        "mode": "HUE",
+        "hue": 200
+      },
+      "brightness": 80
+    },
+    "left": {
+      "color": {
+        "mode": "HUE",
+        "hue": 40
+      },
+      "brightness": 50
+    },
+    "top": {
+      "color": {
+        "mode": "HUE",
+        "hue": 40
+      },
+      "brightness": 100
+    },
+    "right": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "red"
+      },
+      "brightness": 90
+    },
+    "bottom": {
+      "color": {
+        "mode": "HUE",
+        "hue": 29
+      },
+      "brightness": 80
+    },
+    "lamp": {
+      "color": {
+        "mode": "HUE",
+        "hue": 160
+      },
+      "brightness": 80
+    },
+    "back": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "indigo"
+      },
+      "brightness": 80
+    }
+  },
+  "current_animation": {
+    "id": "color_fade",
+    "parameters": {
+      "ANIM_SPEED": 50,
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_INTENSITY": 100
+    }
+  },
+  "selected_zone_index": 0,
+  "edit_mode_on": true,
+  "main_mode": "ANIMATION",
+  "active_parameter": "ANIM_SPEED",
+  "lamp_white_mode_on": false
+}

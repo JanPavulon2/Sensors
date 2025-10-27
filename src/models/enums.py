@@ -36,6 +36,32 @@ class ColorMode(Enum):
     PRESET = auto()    # Named preset from colors.yaml
     RGB = auto()       # Direct RGB (for future custom colors)
 
+class ZoneID(Enum):
+    """Zone identifiers"""
+    FLOOR = auto()
+    LEFT = auto()
+    TOP = auto()
+    RIGHT = auto()
+    BOTTOM = auto()
+    LAMP = auto()
+    BACK = auto()
+
+class AnimationID(Enum):
+    """Animation identifiers"""
+    BREATHE = auto()
+    COLOR_FADE = auto()
+    SNAKE = auto()
+    COLOR_SNAKE = auto()
+    MATRIX = auto()
+
+class ParameterType(Enum):
+    """Parameter value types with validation rules"""
+    COLOR = auto()
+    PERCENTAGE = auto()
+    RANGE_0_255 = auto()
+    RANGE_CUSTOM = auto()
+    BOOLEAN = auto()
+
 class ParamID(Enum):
     """
     Parameter identifiers (unique across system)
@@ -53,15 +79,33 @@ class ParamID(Enum):
     ZONE_REVERSED = auto()     # Reverse pixel order (bool) - for future
 
     # === ANIMATION PARAMETERS (ANIMATION mode) ===
-    ANIM_SPEED = auto()        # Animation speed (1-100%)
-    ANIM_INTENSITY = auto()    # Animation intensity (1-100%)
+    # Base parameters (shared by all animations)
+    ANIM_SPEED = auto()                 # Animation speed (1-100%)
+    ANIM_PRIMARY_COLOR_HUE = auto()     # Primary animation color hue (0-360°)
 
-    # Animation colors (for future - not all animations use these)
-    ANIM_COLOR_1 = auto()      # Primary animation color
-    ANIM_COLOR_2 = auto()      # Secondary animation color
-    ANIM_COLOR_3 = auto()      # Tertiary animation color
+    # Additional parameters (optional, used by specific animations)
+    ANIM_SECONDARY_COLOR_HUE = auto()   # Secondary animation color hue (0-360°)
+    ANIM_TERTIARY_COLOR_HUE = auto()    # Tertiary animation color hue (0-360°)
+    ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
+    ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
+    ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
 
-    # === GENERIC REUSABLE PARAMETERS ===
-    # These can be used by multiple animations
-    LENGTH = auto()            # Length in pixels (e.g., snake length)
-    HUE_OFFSET = auto()        # Hue offset in degrees (e.g., rainbow spacing)
+
+
+class LogLevel(Enum):
+    """Log severity levels"""
+    DEBUG = auto()
+    INFO = auto()
+    WARN = auto()
+    ERROR = auto()
+
+
+class LogCategory(Enum):
+    """Log categories for grouping related events"""
+    CONFIG = auto()      # Configuration loading, validation
+    HARDWARE = auto()    # GPIO, encoders, buttons, LEDs
+    STATE = auto()       # State changes, mode switches
+    COLOR = auto()       # Color adjustments, mode changes
+    ANIMATION = auto()   # Animation start/stop/params
+    ZONE = auto()        # Zone selection, zone operations
+    SYSTEM = auto()      # Startup, shutdown, errors
