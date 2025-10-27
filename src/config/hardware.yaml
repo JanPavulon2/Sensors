@@ -22,5 +22,4 @@ leds:
 
   strip:
     gpio: 18
-    count: 45
     color_order: BRG

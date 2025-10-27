@@ -11,6 +11,7 @@ from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
+from animations.matrix import MatrixAnimation
 from models.domain.zone import ZoneCombined
 
 class AnimationEngine:
@@ -36,6 +37,7 @@ class AnimationEngine:
         'color_fade': ColorFadeAnimation,
         'snake': SnakeAnimation,
         'color_snake': ColorSnakeAnimation,
+        'matrix': MatrixAnimation,
     }
 
     def __init__(self, strip, zones: List[ZoneCombined]):

@@ -128,7 +128,7 @@ class LEDController:
         assert strip_config is not None
         self.strip = ZoneStrip(
             gpio=strip_config["gpio"],  # Separate GPIO for strip
-            pixel_count=strip_config["count"],  # Total: 99 physical LEDs / 3 = 33 pixels
+            pixel_count=self.zone_service.get_total_pixel_count(),  # Auto-calculated from zones.yaml
             zones=zone_configs,  # Use ZoneConfig objects from domain layer
             color_order=ws.WS2811_STRIP_BRG,  # Strip uses BRG
             brightness=255  # Max hardware brightness (software handles brightness via RGB scaling)
@@ -672,6 +672,15 @@ class LEDController:
                 params["hue_offset"] = current_animation.get_param_value(ParamID.ANIM_HUE_OFFSET)
             if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
                 params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+
+        elif self.current_animation_id == AnimationID.MATRIX:
+            # Matrix uses hue, length, and intensity
+            if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
+                params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+            if ParamID.ANIM_LENGTH in current_animation.parameters:
+                params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
+            if ParamID.ANIM_INTENSITY in current_animation.parameters:
+                params["intensity"] = current_animation.get_param_value(ParamID.ANIM_INTENSITY)
 
         return params
 

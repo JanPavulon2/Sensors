@@ -32,6 +32,10 @@ class ZoneService:
         """Get only enabled zones"""
         return [zone for zone in self.zones if zone.config.enabled]
 
+    def get_total_pixel_count(self) -> int:
+        """Get total pixel count from all enabled zones"""
+        return sum(zone.config.pixel_count for zone in self.get_enabled())
+
     def set_color(self, zone_id: ZoneID, color: Color) -> None:
         """Set zone color"""
         zone = self.get_zone(zone_id)

@@ -1,67 +1,33 @@
 """
 Preview Controller
 
-Orchestrates preview preview_panel display modes and animation playback.
-Uses adapter pattern to run real animation classes with virtual zones.
+Orchestrates preview panel display modes and animation playback.
+Each animation provides its own simplified preview visualization via run_preview().
 """
 
 import asyncio
-from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
-from models import Color, ParamID
-from models.enums import ZoneID
-from models.domain.parameter import ParameterCombined, ParameterConfig, ParameterState
+from models import Color
 
 if TYPE_CHECKING:
     from animations.base import BaseAnimation
-
-
-@dataclass
-class VirtualZoneConfig:
-    """Minimal zone config for preview panel virtual zones"""
-    tag: str  # "p0", "p1", etc.
-    start_index: int
-    end_index: int
-
-
-@dataclass
-class VirtualZone:
-    """
-    Lightweight zone wrapper for preview animations
-
-    Mimics ZoneCombined structure but uses simple VirtualZoneConfig
-    that allows custom tags ("p0", "p1", etc.)
-    """
-    config: VirtualZoneConfig
-    state: Any = None  # Not used
-    parameters: Dict = None  # Not used
-
-    def __post_init__(self):
-        if self.parameters is None:
-            self.parameters = {}
 
 log = get_logger()
 
 
 class PreviewController:
     """
-    Preview preview_panel orchestration controller
+    Preview panel orchestration controller
 
     Manages preview display modes and delegates to PreviewPanel for rendering.
-    Uses real Animation classes with virtual zones for animation previews.
-
-    Architecture:
-        - Converts 8 LEDs into 8 virtual "zones" (1 LED each)
-        - Instantiates real animation classes (SnakeAnimation, BreatheAnimation, etc.)
-        - Translates animation frames (zone_tag → LED index)
-        - Displays frames using PreviewPanel.show_frame()
+    Animations provide simplified 8-pixel preview via their run_preview() method.
 
     Responsibilities:
         - Display mode management (color, bar, animation)
         - Animation lifecycle (start/stop async tasks)
-        - Frame translation (animation zones → preview LEDs)
+        - Direct frame rendering (no translation needed)
         - Parameter updates (speed, color changes)
 
     Args:
@@ -70,7 +36,7 @@ class PreviewController:
     Example:
         >>> controller = PreviewController(preview_panel)
         >>> controller.show_color((255, 0, 0), 50)  # Red at 50% brightness
-        >>> controller.start_animation_preview('snake', speed=60, color=(0, 255, 0))
+        >>> controller.start_animation_preview('snake', speed=60, hue=120, length=3)
         >>> controller.update_param('speed', 80)  # Live speed change
         >>> controller.stop_animation_preview()
     """
@@ -131,33 +97,6 @@ class PreviewController:
 
     # ===== ANIMATION PREVIEW METHODS =====
 
-    def _create_virtual_zones(self) -> List[VirtualZone]:
-        """
-        Create 8 virtual zones for preview panel (1 LED per zone)
-
-        This allows reusing real Animation classes by treating each preview LED
-        as a separate "zone". Animations think they're controlling zones,
-        but we're actually controlling individual LEDs.
-
-        Returns:
-            List of 8 VirtualZone objects with tags "p0"-"p7"
-        """
-        zones = []
-        for i in range(self.preview_panel.count):
-            # Create lightweight virtual zone config
-            # Each virtual zone is 1 pixel with tag "p0", "p1", etc.
-            virtual_config = VirtualZoneConfig(
-                tag=f"p{i}",  # Virtual zone tag for animation frame lookup
-                start_index=i,
-                end_index=i  # start == end for 1-pixel zones
-            )
-
-            # Create VirtualZone wrapper (animations only need config.tag and indices)
-            virtual_zone = VirtualZone(config=virtual_config)
-            zones.append(virtual_zone)
-
-        return zones
-
     def _create_animation_instance(
         self,
         animation_id: str,
@@ -182,6 +121,7 @@ class PreviewController:
         from animations.breathe import BreatheAnimation
         from animations.color_fade import ColorFadeAnimation
         from animations.color_snake import ColorSnakeAnimation
+        from animations.matrix import MatrixAnimation
 
         # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
         empty_zones = []
@@ -218,6 +158,15 @@ class PreviewController:
                 hue=params.get('hue', 0),
                 length=params.get('length', 5),
                 hue_offset=params.get('hue_offset', 30)
+            )
+
+        elif animation_id == "matrix":
+            return MatrixAnimation(
+                zones=empty_zones,
+                speed=speed,
+                hue=params.get('hue', 120),  # Default green
+                length=params.get('length', 5),
+                intensity=params.get('intensity', 100)
             )
 
         else:

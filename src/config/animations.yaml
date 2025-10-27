@@ -9,25 +9,32 @@ animations:
     display_name: "Breathe"
     tag: breathe
     description: "Smooth breathing effect"
-    parameters: [ANIM_SPEED, ANIM_INTENSITY]  # Base (SPEED, COLOR_1) + INTENSITY
+    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
   color_fade:
     id: "color_fade"
     display_name: "Color Fade"
     tag: color_fade
     description: "Rainbow hue cycling"
-    parameters: [ANIM_SPEED, ANIM_INTENSITY]  # Uses only base params (SPEED, COLOR_1 as start hue)
+    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
   snake:
     id: "snake"
     display_name: "Snake"
     tag: snake
     description: "Sequential zone chase"
-    parameters: [ANIM_SPEED, ANIM_PRIMARY_COLOR_HUE, ANIM_LENGTH]  # Uses only base params (SPEED, COLOR_1)
+    parameters: [ANIM_LENGTH]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
   color_snake:
     id: "color_snake"
     display_name: "Color Snake"
     tag: color_snake
     description: "Multi-pixel rainbow snake"
-    parameters: [ANIM_SPEED, ANIM_PRIMARY_COLOR_HUE, ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base (ANIM_SPEED, ANIM_INTENSITY) + LENGTH + HUE_OFFSET
+    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+
+  matrix:
+    id: "matrix"
+    display_name: "Matrix"
+    tag: matrix
+    description: "Digital rain effect (Matrix)"
+    parameters: [ANIM_LENGTH, ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically

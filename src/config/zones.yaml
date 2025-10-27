@@ -3,45 +3,53 @@
 
 # Zone definitions (each zone only defines unique values)
 zones:
-  - id: STRIP
-    name: Strip
-    tag: strip
-    pixel_count: 12      # 45 physical LEDs (15 * 3)
+  - id: FLOOR
+    name: Floor
+    tag: floor
+    pixel_count: 18      # 45 physical LEDs (15 * 3)
     enabled: true
-    order: 1
-    reversed: true
-
-  - id: LAMP
-    name: Lamp
-    tag: lamp
-    pixel_count: 19      # 57 physical LEDs (19 * 3)
-    enabled: true
-    order: 2
+    order: 1 
+    reversed: false
 
   - id: LEFT
     name: Left
     tag: left
     pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
-    order: 3
+    order: 2
 
   - id: TOP
     name: Top
     tag: top
     pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true
-    order: 4
+    order: 3
 
   - id: RIGHT
     name: Right
     tag: right
     pixel_count: 4       # 9 physical LEDs (3 * 3)
     enabled: true
-    order: 5
+    order: 4
 
   - id: BOTTOM
     name: Bottom
     tag: bottom
     pixel_count: 3       # 12 physical LEDs (4 * 3)
     enabled: true
+    order: 5
+
+  - id: LAMP
+    name: Lamp
+    tag: lamp
+    pixel_count: 19      # 57 physical LEDs (19 * 3)
+    enabled: true
     order: 6
+
+  - id: BACK
+    name: Back
+    tag: back
+    pixel_count: 18      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+    enabled: true
+    order: 7
+    reversed: true

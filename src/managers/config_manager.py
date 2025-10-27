@@ -23,19 +23,19 @@ class ConfigManager:
     Main configuration manager with include system support
 
     Loads config.yaml and processes include: directive to load modular YAML files.
-    Initializes sub-managers (HardwareManager, ZoneManager, AnimationManager, ColorManager).
+    Initializes sub-managers (HardwareManager, AnimationManager, ColorManager, ParameterManager).
+    Provides zone configuration via get_enabled_zones() method.
 
     Example:
         config = ConfigManager()
         config.load()
 
-        # Access via properties (backward compatibility)
+        # Access via properties
         hw_dict = config.hardware  # Returns dict
-        zones_dict = config.zones  # Returns zone index dict
+        zones = config.get_enabled_zones()  # Returns List[ZoneConfig] with calculated indices
 
-        # Access via sub-managers (new API)
+        # Access via sub-managers
         enc_cfg = config.hardware_manager.get_encoder("zone_selector")
-        zone = config.zone_manager.get_zone("lamp")
         anim = config.animation_manager.get_animation("breathe")
     """
 

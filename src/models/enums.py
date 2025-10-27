@@ -38,12 +38,13 @@ class ColorMode(Enum):
 
 class ZoneID(Enum):
     """Zone identifiers"""
-    STRIP = auto()
-    LAMP = auto()
+    FLOOR = auto()
+    LEFT = auto()
     TOP = auto()
     RIGHT = auto()
     BOTTOM = auto()
-    LEFT = auto()
+    LAMP = auto()
+    BACK = auto()
 
 class AnimationID(Enum):
     """Animation identifiers"""
@@ -51,6 +52,7 @@ class AnimationID(Enum):
     COLOR_FADE = auto()
     SNAKE = auto()
     COLOR_SNAKE = auto()
+    MATRIX = auto()
 
 class ParameterType(Enum):
     """Parameter value types with validation rules"""

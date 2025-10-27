@@ -191,7 +191,7 @@ class ZoneStrip:
         """
         return self.zone_colors.get(zone_id)
 
-    def set_pixel_color(self, zone_id: str, pixel_index: int, r: int, g: int, b: int) -> None:
+    def set_pixel_color(self, zone_id: str, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
         """
         Set color for a specific pixel within a zone.
 
@@ -201,10 +201,12 @@ class ZoneStrip:
             r: Red value (0-255)
             g: Green value (0-255)
             b: Blue value (0-255)
+            show: If True, immediately update strip (default). If False, wait for manual show() call.
 
         Note:
             Respects the zone's reversed flag. If reversed=True, logical index 0
             maps to the last physical pixel in the zone.
+            Set show=False when updating many pixels, then call show() once after all updates.
         """
         if not self._validate_zone(zone_id):
             return
@@ -223,6 +225,14 @@ class ZoneStrip:
 
         color = Color(r, g, b)
         self.strip.setPixelColor(physical_position, color)
+
+        if show:
+            self.strip.show()
+
+    def show(self) -> None:
+        """
+        Update strip hardware - call after batch of set_pixel_color(show=False) calls
+        """
         self.strip.show()
 
     def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:

@@ -41,6 +41,7 @@ class ZoneManager:
         """
         self.zones: List['ZoneConfig'] = []
         self._load_zones(zones_config)
+
         self._calculate_all_indices()
 
     def _load_zones(self, config: List[dict]):
