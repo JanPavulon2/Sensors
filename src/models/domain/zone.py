@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from models.color import Color
 from models.enums import ParamID, ZoneID
 from models.domain.parameter import ParameterCombined
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 @dataclass(frozen=True)
