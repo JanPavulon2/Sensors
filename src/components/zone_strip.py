@@ -8,6 +8,7 @@ Uses zone identifiers (uppercase enum names like "LAMP", "TOP") for addressing.
 from typing import Dict, List, Tuple, Optional
 from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
+from services.transition_service import TransitionService
 
 
 class ZoneStrip:
@@ -116,6 +117,9 @@ class ZoneStrip:
             color_order     # strip_type: ws.WS2811_STRIP_BRG
         )
         self.strip.begin()
+
+        # Initialize transition service for smooth state changes
+        self.transition_service = TransitionService(self)
 
     def _validate_zone(self, zone_id: str) -> bool:
         """
@@ -285,4 +289,75 @@ class ZoneStrip:
 
         # Reset color cache
         self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
+
+    # ===== TransitionService Support Methods =====
+
+    def get_frame(self) -> List[Tuple[int, int, int]]:
+        """
+        Capture current LED state as list of RGB tuples.
+
+        Used by TransitionService for smooth transitions.
+
+        Returns:
+            List of (r, g, b) tuples for each pixel (index 0 to pixel_count-1)
+        """
+        frame = []
+        for i in range(self.pixel_count):
+            color = self.strip.getPixelColor(i)
+            # Extract RGB from 32-bit color value (format: 0x00RRGGBB for RGB order)
+            r = (color >> 16) & 0xFF
+            g = (color >> 8) & 0xFF
+            b = color & 0xFF
+            frame.append((r, g, b))
+        return frame
+
+    def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
+        """
+        Set color for a pixel by absolute strip index (used by TransitionService).
+
+        Args:
+            pixel_index: Absolute pixel index (0 to pixel_count-1)
+            r: Red value (0-255)
+            g: Green value (0-255)
+            b: Blue value (0-255)
+            show: If True, immediately update strip
+
+        Note:
+            This is a low-level method for TransitionService.
+            For zone-based control, use set_zone_color() or set_pixel_color().
+        """
+        if 0 <= pixel_index < self.pixel_count:
+            color = Color(r, g, b)
+            self.strip.setPixelColor(pixel_index, color)
+            if show:
+                self.strip.show()
+
+    def build_frame_from_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+        """
+        Build pixel-level frame from zone colors (for transitions)
+
+        Converts zone-based colors to pixel-level frame for TransitionService.
+
+        Args:
+            zone_colors: Dict mapping zone tag (lowercase, e.g., "lamp", "top") to (r, g, b) tuple
+
+        Returns:
+            List of (r, g, b) tuples for each pixel (index 0 to pixel_count-1)
+
+        Example:
+            >>> zone_colors = {"lamp": (255, 0, 0), "top": (0, 255, 0)}
+            >>> frame = strip.build_frame_from_zones(zone_colors)
+            >>> await transition_service.fade_in(frame, config)
+        """
+        frame = [(0, 0, 0)] * self.pixel_count
+
+        # Fill frame with zone colors
+        for zone_tag, (r, g, b) in zone_colors.items():
+            if zone_tag in self.zones:
+                start, end = self.zones[zone_tag]
+                for i in range(start, end + 1):
+                    if i < self.pixel_count:
+                        frame[i] = (r, g, b)
+
+        return frame
 

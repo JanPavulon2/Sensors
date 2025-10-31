@@ -22,71 +22,73 @@
         "mode": "HUE",
         "hue": 300
       },
-      "brightness": 30
+      "brightness": 50
     },
     "left": {
       "color": {
         "mode": "HUE",
-        "hue": 40
+        "hue": 330
       },
-      "brightness": 30
+      "brightness": 50
     },
     "top": {
       "color": {
         "mode": "HUE",
-        "hue": 40
+        "hue": 130
       },
-      "brightness": 30
+      "brightness": 50
     },
     "right": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 60
       },
-      "brightness": 30
+      "brightness": 50
     },
     "bottom": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "violet"
+        "mode": "HUE",
+        "hue": 172
       },
-      "brightness": 90
+      "brightness": 50
     },
     "lamp": {
       "color": {
         "mode": "HUE",
         "hue": 180
       },
-      "brightness": 30
+      "brightness": 50
     },
     "back": {
       "color": {
         "mode": "HUE",
         "hue": 264
       },
-      "brightness": 30
+      "brightness": 50
     },
     "desk": {
       "color": {
         "mode": "HUE",
         "hue": 30
       },
-      "brightness": 100
+      "brightness": 50
     }
   },
   "current_animation": {
-    "id": "color_cycle",
+    "id": "color_snake",
     "parameters": {
       "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_LENGTH": 5,
+      "ANIM_HUE_OFFSET": 30
     }
   },
   "ui_session": {
-    "main_mode": "ANIMATION",
+    "main_mode": "STATIC",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 0
+    "active_parameter": "ZONE_COLOR_HUE",
+    "selected_zone_index": 2
   }
 }

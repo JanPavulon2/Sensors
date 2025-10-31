@@ -64,7 +64,9 @@ class TransitionService:
     )
 
     POWER_TOGGLE = TransitionConfig(
-        type=TransitionType.NONE
+        type=TransitionType.FADE,
+        duration_ms=400,
+        steps=12
     )
 
     def __init__(self, strip):
@@ -120,11 +122,12 @@ class TransitionService:
             factor = config.ease_function(progress)
 
             for i, (r, g, b) in enumerate(current_frame):
-                self.strip.set_pixel_color(
+                self.strip.set_pixel_color_absolute(
                     i,
                     int(r * factor),
                     int(g * factor),
-                    int(b * factor)
+                    int(b * factor),
+                    show=False
                 )
             self.strip.show()
             await asyncio.sleep(step_delay)
@@ -154,7 +157,7 @@ class TransitionService:
         if config.type == TransitionType.NONE:
             # Instant set
             for i, (r, g, b) in enumerate(target_frame):
-                self.strip.set_pixel_color(i, r, g, b)
+                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
             self.strip.show()
             return
 
@@ -167,11 +170,12 @@ class TransitionService:
             factor = config.ease_function(progress)
 
             for i, (r, g, b) in enumerate(target_frame):
-                self.strip.set_pixel_color(
+                self.strip.set_pixel_color_absolute(
                     i,
                     int(r * factor),
                     int(g * factor),
-                    int(b * factor)
+                    int(b * factor),
+                    show=False
                 )
             self.strip.show()
             await asyncio.sleep(step_delay)
