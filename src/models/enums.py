@@ -126,3 +126,4 @@ class LogCategory(Enum):
     ANIMATION = auto()   # Animation start/stop/params
     ZONE = auto()        # Zone selection, zone operations
     SYSTEM = auto()      # Startup, shutdown, errors
+    TRANSITION = auto()  # LED state transitions

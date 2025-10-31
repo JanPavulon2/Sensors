@@ -17,7 +17,9 @@ class AnimationService:
         self.animations = assembler.build_animations()
         self._by_id = {anim.config.id: anim for anim in self.animations}
 
-        log(f"AnimationService initialized with {len(self.animations)} animations")
+        self.available_ids: list[AnimationID] = list(self._by_id.keys())
+
+        log(f"AnimationService initialized with {len(self.animations)} animations: {[a.name for a in self.available_ids]}")
 
     def get_animation(self, animation_id: AnimationID) -> AnimationCombined:
         """Get animation by ID"""

@@ -73,7 +73,17 @@ class ParameterCombined:
             range_size = (self.config.max - self.config.min) + 1
             new_value = self.config.min + ((new_value - self.config.min) % range_size)
         else:
+            # Check if already at min/max boundary before adjusting
+            if delta < 0 and self.config.min is not None and old_value <= self.config.min:
+                return  # Already at minimum, skip adjustment
+            if delta > 0 and self.config.max is not None and old_value >= self.config.max:
+                return  # Already at maximum, skip adjustment
+
             new_value = self.config.clamp(new_value)
+
+        # Skip if value didn't actually change
+        if new_value == old_value:
+            return
 
         self.state.value = new_value
         log.debug(LogCategory.STATE, f"Adjusted {self.config.id.name}: {old_value} → {new_value}")

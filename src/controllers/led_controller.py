@@ -237,39 +237,6 @@ class LEDController:
         self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.power_toggle(), filter_fn=lambda e: e.source == ButtonID.BTN3)
         self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.toggle_main_mode(), filter_fn=lambda e: e.source == ButtonID.BTN4)
 
-    # def _save_ui_state(self):
-    #     """
-    #     Save UI state to state.json
-
-    #     UI state includes: current zone selection, edit mode, main mode, current parameter, lamp white mode
-    #     Domain state (zone colors/brightness, animations) is saved by services automatically.
-    #     """
-    #     import json
-    #     state_path = Path(__file__).parent.parent / "state" / "state.json"
-
-    #     try:
-    #         # Load existing state (contains zones + animations from services)
-    #         with open(state_path, "r") as f:
-    #             state = json.load(f)
-
-    #         # Update UI state fields with readable keys
-    #         state["selected_zone_index"] = self.current_zone_index
-    #         state["edit_mode_on"] = self.edit_mode
-    #         state["main_mode"] = self.main_mode.name  # "STATIC" or "ANIMATION"
-    #         state["active_parameter"] = self.current_param.name  # e.g., "ZONE_COLOR_HUE"
-    #         state["lamp_white_mode_on"] = self.lamp_white_mode
-
-    #         if self.lamp_white_saved_state:
-    #             state["lamp_white_saved_state"] = self.lamp_white_saved_state
-    #         elif "lamp_white_saved_state" in state:
-    #             del state["lamp_white_saved_state"]  # Remove if None
-
-    #         # Save back
-    #         with open(state_path, "w") as f:
-    #             json.dump(state, f, indent=2)
-
-    #     except Exception as e:
-    #         log.error(LogCategory.STATE, f"Failed to save UI state: {e}")
 
     def _sync_preview(self):
         """
@@ -1143,30 +1110,28 @@ class LEDController:
         self._sync_preview()
 
         # Log parameter switch with current value
-        log_data = {"parameter": self.current_param.name}
-
         if self.main_mode == MainMode.STATIC:
             zone_id = self._get_current_zone_id()
             zone = self.zone_service.get_zone(zone_id)
-            log_data["zone"] = zone.config.display_name
-
+            value_str = ""
             if self.current_param == ParamID.ZONE_COLOR_HUE:
-                log_data["hue"] = f"{zone.state.color.to_hue()}°"
+                value_str = f"{zone.state.color.to_hue()}°"
             elif self.current_param == ParamID.ZONE_COLOR_PRESET:
-                log_data["preset"] = str(zone.state.color)
+                value_str = str(zone.state.color)
             elif self.current_param == ParamID.ZONE_BRIGHTNESS:
-                log_data["brightness"] = f"{zone.brightness}%"
+                value_str = f"{zone.brightness}%"
+            log.info(LogCategory.SYSTEM, f"Param cycled: {self.current_param.name} | {zone.config.display_name}: {value_str}")
         else:  # ANIMATION mode
             current_anim = self.animation_service.get_current()
+            value_str = ""
             if current_anim:
                 if self.current_param == ParamID.ANIM_SPEED:
-                    log_data["speed"] = f"{current_anim.get_param_value(ParamID.ANIM_SPEED)}/100"
+                    value_str = f"{current_anim.get_param_value(ParamID.ANIM_SPEED)}/100"
                 elif self.current_param == ParamID.ANIM_INTENSITY:
                     # Check if animation has ANIM_INTENSITY (not all do!)
                     if ParamID.ANIM_INTENSITY in current_anim.parameters:
-                        log_data["intensity"] = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
-
-        log.info(LogCategory.SYSTEM, "Parameter cycled", **log_data)
+                        value_str = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
+            log.info(LogCategory.SYSTEM, f"Param cycled: {self.current_param.name} = {value_str}")
         
         self.ui_session_service.save(current_param=self.current_param)
         

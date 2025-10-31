@@ -122,6 +122,7 @@ class PreviewController:
         from animations.color_fade import ColorFadeAnimation
         from animations.color_snake import ColorSnakeAnimation
         from animations.matrix import MatrixAnimation
+        from animations.color_cycle import ColorCycleAnimation
 
         # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
         empty_zones = []
@@ -168,6 +169,13 @@ class PreviewController:
                 length=params.get('length', 5),
                 intensity=params.get('intensity', 100)
             )
+        
+        elif animation_id == "color_cycle":
+            return ColorCycleAnimation(
+                zones=empty_zones,
+                speed=speed,
+                hue=params.get('hue', 120),  # Default green
+            )
 
         else:
             # Unknown animation
@@ -208,7 +216,7 @@ class PreviewController:
             )
 
             if not self._current_animation:
-                log.log(LogCategory.SYSTEM, "Unknown animation for preview",
+                log.log(LogCategory.ANIMATION, "Unknown animation for preview",
                        level=LogLevel.WARN, animation_id=animation_id)
                 # Fallback: show static color
                 self.show_color((50, 50, 50))
@@ -218,7 +226,7 @@ class PreviewController:
             self._animation_running = True
             self._animation_task = asyncio.create_task(self._run_preview_loop())
 
-            log.log(LogCategory.SYSTEM, "Preview animation started",
+            log.log(LogCategory.ANIMATION, "Preview animation started",
                    animation_id=animation_id, speed=speed)
 
         except Exception as e:

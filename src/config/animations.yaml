@@ -11,19 +11,20 @@ animations:
     description: "Smooth breathing effect"
     parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
-  color_fade:
-    id: "color_fade"
-    display_name: "Color Fade"
-    tag: color_fade
-    description: "Rainbow hue cycling"
-    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
-
   snake:
     id: "snake"
     display_name: "Snake"
     tag: snake
     description: "Sequential zone chase"
     parameters: [ANIM_LENGTH]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+
+  color_cycle:
+    id: "color_cycle"
+    display_name: "Color Cycle"
+    tag: color_cycle
+    description: "All zones cycle through presets"
+    parameters: []  # Only SPEED (PRIMARY_COLOR_HUE unused)
+
 
   color_snake:
     id: "color_snake"
@@ -32,12 +33,12 @@ animations:
     description: "Multi-pixel rainbow snake"
     parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
-  color_cycle:
-    id: "color_cycle"
-    display_name: "Color Cycle"
-    tag: color_cycle
-    description: "All zones cycle through presets"
-    parameters: []  # Only SPEED (PRIMARY_COLOR_HUE unused)
+  color_fade:
+    id: "color_fade"
+    display_name: "Color Fade"
+    tag: color_fade
+    description: "Rainbow hue cycling"
+    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
   # TEMPORARY: Matrix disabled for testing
   # matrix:
