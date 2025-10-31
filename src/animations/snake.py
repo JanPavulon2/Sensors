@@ -5,11 +5,13 @@ Single or multi-pixel snake travels through all zones sequentially.
 """
 
 import asyncio
-from typing import Tuple, List
+from typing import Tuple, List, AsyncIterator
 from animations.base import BaseAnimation
 from utils.colors import hue_to_rgb
 from models.domain.zone import ZoneCombined
-from typing import AsyncIterator, Tuple
+from utils.logger import get_category_logger, LogCategory
+
+log = get_category_logger(LogCategory.ANIMATION)
 
 class SnakeAnimation(BaseAnimation):
     """
@@ -44,29 +46,28 @@ class SnakeAnimation(BaseAnimation):
         super().__init__(zones, speed, **kwargs)
 
         # Support both hue (new) and color (backwards compat)
-        if color is not None:
-            self.color = color
-        else:
-            self.color = hue_to_rgb(hue)
+        self.color = hue_to_rgb(hue) if color is None else color
 
         self.length = max(1, min(4, length))  # Clamp 1-20 pixels
 
         # Build zone pixel map for navigation
         # Sort active zones by physical position (start index) not alphabetically
         zone_items = [(name, start, end) for name, (start, end) in self.active_zones.items()]
-        zone_items.sort(key=lambda x: x[1])  # Sort by start index
-
+        zone_items.sort(key=lambda x: x[1])
+        
         self.zone_order = [name for name, _, _ in zone_items]
-        self.zone_pixel_counts = {}
-        self.total_pixels = 0
-
-        for name, start, end in zone_items:
-            pixel_count = end - start + 1
-            self.zone_pixel_counts[name] = pixel_count
-            self.total_pixels += pixel_count
-
+        self.zone_pixel_counts = {name: (end - start + 1) for name, start, end in zone_items}
+        self.total_pixels = sum(self.zone_pixel_counts.values())
         self.current_position = 0
 
+        # Track currently lit pixels to know which to turn off next frame
+        self.previous_pixels: List[Tuple[str, int]] = []
+
+        log.info(f"SnakeAnimation initialized",
+            length=self.length,
+            total_pixels=self.total_pixels,
+            zones=len(self.zone_order))
+        
     def _get_pixel_location(self, absolute_position: int) -> Tuple[str, int]:
         """
         Convert absolute pixel position to (zone_name, pixel_index_in_zone)
@@ -81,11 +82,8 @@ class SnakeAnimation(BaseAnimation):
         for zone_name in self.zone_order:
             zone_size = self.zone_pixel_counts[zone_name]
             if absolute_position < accumulated + zone_size:
-                pixel_in_zone = absolute_position - accumulated
-                return zone_name, pixel_in_zone
+                return zone_name, absolute_position - accumulated
             accumulated += zone_size
-
-        # Shouldn't reach here, but fallback to first zone
         return self.zone_order[0], 0
 
     def update_param(self, param: str, value):
@@ -104,10 +102,13 @@ class SnakeAnimation(BaseAnimation):
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
-        Run snake animation
+        Run snake animation with smooth continuous motion
 
-        Note: This animation requires special handling - it needs to
-        turn off ALL pixels first, then light up snake pixels.
+        Uses pixel-level control to create a snake that travels through all zones.
+        Only turns off tail pixels (not all pixels) to eliminate flickering during wrap-around.
+
+        Yields:
+            Tuple[str, int, int, int, int]: (zone_name, pixel_index, r, g, b) for pixel-level updates
         """
         self.running = True
 
@@ -118,35 +119,34 @@ class SnakeAnimation(BaseAnimation):
             max_delay = 0.1    # 100ms (slow)
             move_delay = max_delay - (self.speed / 100) * (max_delay - min_delay)
 
-            # First, yield "turn off" for all active zones
-            for zone_name in self.active_zones:
-                yield zone_name, 0, 0, 0
+            # Determine which pixels should be on this frame
+            snake_pixels: List[Tuple[str, int, int, int, int]] = []
 
-            # Then yield "turn on" for all snake pixels with brightness fade
             for i in range(self.length):
-                # Calculate position (head is at current_position, tail extends backward)
                 pos = (self.current_position - i) % self.total_pixels
-                zone_name, pixel_in_zone = self._get_pixel_location(pos)
-
-                # Apply brightness fade: each pixel after first has 20% lower brightness
-                # i=0 (head): 100% brightness
-                # i=1: 80% brightness
-                # i=2: 60% brightness, etc.
-                brightness_factor = 1.0 - (i * 0.2)
-                brightness_factor = max(0.0, brightness_factor)  # Clamp to 0
-
-                # Apply brightness to color
+                zone_name, pixel_index = self._get_pixel_location(pos)
+                brightness_factor = max(0.0, 1.0 - i * 0.2)
                 r = int(self.color[0] * brightness_factor)
                 g = int(self.color[1] * brightness_factor)
                 b = int(self.color[2] * brightness_factor)
+                snake_pixels.append((zone_name, pixel_index, r, g, b))
+             
+            
+            # Determine which pixels to turn off (tail only)
+            new_pixel_set = {(z, p) for z, p, _, _, _ in snake_pixels}
+            for (z, p) in self.previous_pixels:
+                if (z, p) not in new_pixel_set:
+                    yield (z, p, 0, 0, 0)
 
-                # Special yield format: (zone_name, pixel_index, r, g, b)
-                # This tells the engine to use set_pixel_color() instead of set_zone_color()
-                yield (zone_name, pixel_in_zone, r, g, b)
+            # Light up snake pixels
+            for z, p, r, g, b in snake_pixels:
+                yield (z, p, r, g, b)
 
-            # Move to next position
+            # Update previous state
+            self.previous_pixels = [(z, p) for z, p, _, _, _ in snake_pixels]
+
+            # Move forward
             self.current_position = (self.current_position + 1) % self.total_pixels
-
             await asyncio.sleep(move_delay)
 
     async def run_preview(self, pixel_count: int = 8):

@@ -228,8 +228,8 @@ class HardwareManager:
 
         print("\nLED Strips:")
         for name, cfg in self.led_strips.items():
-            print(f"  {name:10} GPIO {cfg['gpio']}: {cfg['count']} px, "
-                  f"{cfg['color_order']}")
+            count_str = f"{cfg['count']} px" if 'count' in cfg else "auto-calc"
+            print(f"  {name:10} GPIO {cfg['gpio']}: {count_str}, {cfg['color_order']}")
 
         # Validation warnings
         warnings = self.validate_gpio_pins()

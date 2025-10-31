@@ -92,7 +92,20 @@ class LEDController:
         self.zone_service = ZoneService(assembler)
         self.animation_service = AnimationService(assembler)
         
+         # Load persisted state (zones, animations, UI session)
         state = assembler.load_state()
+
+        # Initialize UI/session service early (so we have current_mode etc.)
+        self.ui_session_service = UISessionService(assembler)
+        ui_state = self.ui_session_service.get_state()
+
+        # Core UI state
+        self.main_mode: MainMode = ui_state.main_mode
+        self.edit_mode: bool = ui_state.edit_mode
+        self.lamp_white_mode: bool = ui_state.lamp_white_mode
+        self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
+        self.current_param: ParamID = ui_state.current_param
+        self.current_zone_index: int = ui_state.current_zone_index
         
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
@@ -570,7 +583,10 @@ class LEDController:
             # Save animation state and stop it
             self.power_saved_animation_enabled = self.animation_engine.is_running()
             if self.animation_engine.is_running():
-                asyncio.create_task(self.stop_animation())
+                from models.transition import TransitionConfig, TransitionType
+                # Use instant cut for power off (no fade needed)
+                transition = TransitionConfig(type=TransitionType.CUT)
+                asyncio.create_task(self.animation_engine.stop(transition))
 
             # Turn off all zones
             for zone_id in self.zone_ids:
@@ -722,6 +738,13 @@ class LEDController:
             return
 
         animation_tag = anim_id.name.lower()
+        
+        # Stop current animation with fade transition if running
+        if self.animation_engine.is_running():
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.ANIMATION_SWITCH
+            await self.animation_engine.stop(transition)
+        
         await self.animation_engine.start(animation_tag, excluded_zones=excluded_zone_tags, **animation_params)
 
         # Cache zone colors for breathe animation (per-zone colors)
@@ -735,18 +758,19 @@ class LEDController:
                    id=current_animation.config.display_name,
                    speed=f"{animation_speed}/100")
 
-    async def stop_animation(self):
+    async def stop(self, clear_on_stop: bool = True):
         """Stop current animation and restore static colors"""
         if not self.animation_engine.is_running():
             return
 
         await self.animation_engine.stop()
 
-        # Restore all zones to their static colors from service
-        for zone_id in self.zone_ids:
-            zone_red, zone_green, zone_blue = self.zone_service.get_rgb(zone_id)
-            zone_id_str = zone_id.name.lower()
-            self.strip.set_zone_color(zone_id_str, zone_red, zone_green, zone_blue)
+        if clear_on_stop:
+            # Restore all zones to their static colors from service
+            for zone_id in self.zone_ids:
+                zone_red, zone_green, zone_blue = self.zone_service.get_rgb(zone_id)
+                zone_id_str = zone_id.name.lower()
+                self.strip.set_zone_color(zone_id_str, zone_red, zone_green, zone_blue)
 
         # Restart pulsing if edit mode is on
         if self.edit_mode:
@@ -756,7 +780,11 @@ class LEDController:
 
     async def _restart_animation(self):
         """Restart animation (stop then start with new animation_id)"""
-        await self.stop_animation()
+        log.debug(LogCategory.ANIMATION, "RESTARTING ANIMATION")
+        from models.transition import TransitionConfig
+        # Use a longer fade for restart (900ms)
+        transition = TransitionConfig(duration_ms=900, steps=20)
+        await self.animation_engine.stop(transition)
         await self.start_animation()
 
     def select_animation(self, delta):
@@ -770,6 +798,8 @@ class LEDController:
         """
         was_running = self.animation_engine.is_running()
 
+        log.debug(LogCategory.ANIMATION, f"Cycle index={self.selected_animation_index}, list={self.available_animation_ids}")
+        
         # Cycle through available animation IDs
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animation_ids)
         new_animation_id = self.available_animation_ids[self.selected_animation_index]
@@ -839,7 +869,12 @@ class LEDController:
 
         # Stop animation if running
         if self.animation_engine.is_running():
-            asyncio.create_task(self.stop_animation())
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.MODE_SWITCH
+            asyncio.create_task(self.animation_engine.stop(transition))
+
+        # Restore static zone colors to hardware
+        self._initialize_zones()
 
         # Restart pulsing if edit_mode=ON
         if self.edit_mode:
@@ -920,7 +955,9 @@ class LEDController:
 
         # ANIMATION mode: Toggle animation ON/OFF
         if self.animation_engine.is_running():
-            asyncio.create_task(self.stop_animation())
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.ANIMATION_SWITCH
+            asyncio.create_task(self.animation_engine.stop(transition))
         else:
             asyncio.create_task(self.start_animation())
 

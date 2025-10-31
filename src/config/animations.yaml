@@ -32,9 +32,17 @@ animations:
     description: "Multi-pixel rainbow snake"
     parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
 
-  matrix:
-    id: "matrix"
-    display_name: "Matrix"
-    tag: matrix
-    description: "Digital rain effect (Matrix)"
-    parameters: [ANIM_LENGTH, ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+  color_cycle:
+    id: "color_cycle"
+    display_name: "Color Cycle"
+    tag: color_cycle
+    description: "All zones cycle through presets"
+    parameters: []  # Only SPEED (PRIMARY_COLOR_HUE unused)
+
+  # TEMPORARY: Matrix disabled for testing
+  # matrix:
+  #   id: "matrix"
+  #   display_name: "Matrix"
+  #   tag: matrix
+  #   description: "Digital rain effect (Matrix)"
+  #   parameters: [ANIM_LENGTH, ANIM_INTENSITY]

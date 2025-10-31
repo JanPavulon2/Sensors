@@ -126,7 +126,7 @@ async def main():
         log.system("Shutting down...")
 
         log.system("Stopping animations...")
-        await led.stop_animation()
+        await led.animation_engine.stop()
 
         log.system("Stopping pulsing...")
         led._stop_pulse()
