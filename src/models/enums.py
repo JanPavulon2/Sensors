@@ -45,6 +45,7 @@ class ZoneID(Enum):
     BOTTOM = auto()
     LAMP = auto()
     BACK = auto()
+    DESK = auto()
 
 class AnimationID(Enum):
     """Animation identifiers"""
@@ -52,6 +53,7 @@ class AnimationID(Enum):
     COLOR_FADE = auto()
     SNAKE = auto()
     COLOR_SNAKE = auto()
+    COLOR_CYCLE = auto()
     MATRIX = auto()
 
 class ParameterType(Enum):

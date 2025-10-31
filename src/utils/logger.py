@@ -258,7 +258,31 @@ def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = Tru
     global _logger
     _logger = Logger(min_level=min_level, use_colors=use_colors)
 
+class CategoryLogger:
+    """Logger bound to a specific category with level methods"""
+    def __init__(self, category: LogCategory):
+        self.category = category
+        self._base = get_logger()
+
+    def __call__(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
+        """Allow using as function: log("msg", level=LogLevel.INFO)"""
+        self._base.log(self.category, message, level, **kwargs)
+
+    def log(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
+        self._base.log(self.category, message, level, **kwargs)
+
+    def info(self, message: str, **kwargs):
+        self._base.log(self.category, message, LogLevel.INFO, **kwargs)
+
+    def warn(self, message: str, **kwargs):
+        self._base.log(self.category, message, LogLevel.WARN, **kwargs)
+
+    def error(self, message: str, **kwargs):
+        self._base.log(self.category, message, LogLevel.ERROR, **kwargs)
+
+    def debug(self, message: str, **kwargs):
+        self._base.log(self.category, message, LogLevel.DEBUG, **kwargs)
+
 def get_category_logger(category: LogCategory):
-    """Return a simple function bound to a specific category"""
-    base = get_logger()
-    return partial(base.log, category)
+    """Return a CategoryLogger bound to a specific category"""
+    return CategoryLogger(category)

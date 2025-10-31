@@ -53,3 +53,11 @@ zones:
     enabled: true
     order: 7
     reversed: true
+
+  - id: DESK
+    name: Desk
+    tag: desk
+    pixel_count: 2      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+    enabled: true
+    order: 8
+    reversed: false

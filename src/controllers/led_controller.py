@@ -32,7 +32,7 @@ from animations import AnimationEngine
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
 from models.enums import ZoneID, AnimationID
 from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
-from services import DataAssembler, AnimationService, ZoneService
+from services import DataAssembler, AnimationService, ZoneService, UISessionService
 
 log = get_logger()
 
@@ -92,7 +92,20 @@ class LEDController:
         self.zone_service = ZoneService(assembler)
         self.animation_service = AnimationService(assembler)
         
+         # Load persisted state (zones, animations, UI session)
         state = assembler.load_state()
+
+        # Initialize UI/session service early (so we have current_mode etc.)
+        self.ui_session_service = UISessionService(assembler)
+        ui_state = self.ui_session_service.get_state()
+
+        # Core UI state
+        self.main_mode: MainMode = ui_state.main_mode
+        self.edit_mode: bool = ui_state.edit_mode
+        self.lamp_white_mode: bool = ui_state.lamp_white_mode
+        self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
+        self.current_param: ParamID = ui_state.current_param
+        self.current_zone_index: int = ui_state.current_zone_index
         
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
@@ -135,22 +148,6 @@ class LEDController:
         )
 
         # UI state (not managed by services - local to controller)
-        self.edit_mode: bool = state.get("edit_mode_on", True)
-        self.lamp_white_mode: bool = state.get("lamp_white_mode_on", False)
-        self.lamp_white_saved_state: Optional[Dict] = state.get("lamp_white_saved_state", None)
-
-        # Two-mode system (STATIC vs ANIMATION)
-        try:
-            self.main_mode: MainMode = MainMode[state.get("main_mode", "STATIC")]
-        except KeyError:
-            self.main_mode = MainMode.STATIC
-
-        # Current parameter (using ParamID)
-        try:
-            self.current_param: ParamID = ParamID[state.get("active_parameter", "ZONE_COLOR_HUE")]
-        except KeyError:
-            self.current_param = ParamID.ZONE_COLOR_HUE
-
         # Set preview_mode based on current mode and parameter
         self.preview_mode: PreviewMode
         if self.main_mode == MainMode.STATIC:
@@ -162,30 +159,19 @@ class LEDController:
             self.preview_mode = PreviewMode.ANIMATION_PREVIEW
 
         # Zone selection (index into self.zone_ids) - validate bounds
-        selected_index = state.get("selected_zone_index", 0)
-        if selected_index >= len(self.zone_ids):
-            selected_index = 0
-        self.current_zone_index: int = selected_index
-
-        # NOTE: Zone colors/brightness now managed by ZoneService - no duplicate storage!
-        # Access via: self.zone_service.get_zone(zone_id).state.color
-        #             self.zone_service.get_zone(zone_id).brightness
-        #             self.zone_service.get_rgb(zone_id)
-
+        
         # Animation system
         self.animation_engine: AnimationEngine = AnimationEngine(self.strip, zones)
-
-        # Animation state from AnimationService (source of truth)
-        current_animation = self.animation_service.get_current()
-        self._animation_should_run: bool = current_animation is not None and current_animation.state.enabled
-        self.current_animation_id: AnimationID = current_animation.config.id if current_animation else AnimationID.BREATHE
 
         # Animation list for selection (AnimationID enums)
         all_animations = self.animation_service.get_all()
         self.available_animation_ids: List[AnimationID] = [animation.config.id for animation in all_animations]
+
+        # Initialize selected_animation_index from service
         self.selected_animation_index = 0
-        if self.current_animation_id in self.available_animation_ids:
-            self.selected_animation_index = self.available_animation_ids.index(self.current_animation_id)
+        current_animation = self.animation_service.get_current()
+        if current_animation and current_animation.config.id in self.available_animation_ids:
+            self.selected_animation_index = self.available_animation_ids.index(current_animation.config.id)
 
         # Pulsing task for edit mode indicator
         self.pulse_task = None  # asyncio.Task for pulsing animation
@@ -195,12 +181,24 @@ class LEDController:
         # Initialize with default colors
         self._initialize_zones()
 
+        # Initialize UI/session service (new architecture)
+        self.ui_session_service = UISessionService(assembler)
+        ui_state = self.ui_session_service.get_state()
+
+        self.main_mode: MainMode = ui_state.main_mode
+        self.edit_mode: bool = ui_state.edit_mode
+        self.lamp_white_mode: bool = ui_state.lamp_white_mode
+        self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
+        self.current_param: ParamID = ui_state.current_param
+        self.current_zone_index: int = ui_state.current_zone_index
+        
+        
         # Start pulsing ONLY if edit_mode is ON and in STATIC mode
         if self.edit_mode and self.main_mode == MainMode.STATIC:
             self._start_pulse()
 
-        # Auto-start animation if we're in ANIMATION mode and animation should run
-        if self.main_mode == MainMode.ANIMATION and self._animation_should_run:
+        # Auto-start animation if we're in ANIMATION mode and animation is enabled
+        if self.main_mode == MainMode.ANIMATION and current_animation and current_animation.state.enabled:
             asyncio.create_task(self.start_animation())
 
 
@@ -215,39 +213,39 @@ class LEDController:
         # Sync preview with current zone
         self._sync_preview()
 
-    def _save_ui_state(self):
-        """
-        Save UI state to state.json
+    # def _save_ui_state(self):
+    #     """
+    #     Save UI state to state.json
 
-        UI state includes: current zone selection, edit mode, main mode, current parameter, lamp white mode
-        Domain state (zone colors/brightness, animations) is saved by services automatically.
-        """
-        import json
-        state_path = Path(__file__).parent.parent / "state" / "state.json"
+    #     UI state includes: current zone selection, edit mode, main mode, current parameter, lamp white mode
+    #     Domain state (zone colors/brightness, animations) is saved by services automatically.
+    #     """
+    #     import json
+    #     state_path = Path(__file__).parent.parent / "state" / "state.json"
 
-        try:
-            # Load existing state (contains zones + animations from services)
-            with open(state_path, "r") as f:
-                state = json.load(f)
+    #     try:
+    #         # Load existing state (contains zones + animations from services)
+    #         with open(state_path, "r") as f:
+    #             state = json.load(f)
 
-            # Update UI state fields with readable keys
-            state["selected_zone_index"] = self.current_zone_index
-            state["edit_mode_on"] = self.edit_mode
-            state["main_mode"] = self.main_mode.name  # "STATIC" or "ANIMATION"
-            state["active_parameter"] = self.current_param.name  # e.g., "ZONE_COLOR_HUE"
-            state["lamp_white_mode_on"] = self.lamp_white_mode
+    #         # Update UI state fields with readable keys
+    #         state["selected_zone_index"] = self.current_zone_index
+    #         state["edit_mode_on"] = self.edit_mode
+    #         state["main_mode"] = self.main_mode.name  # "STATIC" or "ANIMATION"
+    #         state["active_parameter"] = self.current_param.name  # e.g., "ZONE_COLOR_HUE"
+    #         state["lamp_white_mode_on"] = self.lamp_white_mode
 
-            if self.lamp_white_saved_state:
-                state["lamp_white_saved_state"] = self.lamp_white_saved_state
-            elif "lamp_white_saved_state" in state:
-                del state["lamp_white_saved_state"]  # Remove if None
+    #         if self.lamp_white_saved_state:
+    #             state["lamp_white_saved_state"] = self.lamp_white_saved_state
+    #         elif "lamp_white_saved_state" in state:
+    #             del state["lamp_white_saved_state"]  # Remove if None
 
-            # Save back
-            with open(state_path, "w") as f:
-                json.dump(state, f, indent=2)
+    #         # Save back
+    #         with open(state_path, "w") as f:
+    #             json.dump(state, f, indent=2)
 
-        except Exception as e:
-            log.error(f"Failed to save UI state: {e}")
+    #     except Exception as e:
+    #         log.error(LogCategory.STATE, f"Failed to save UI state: {e}")
 
     def _sync_preview(self):
         """
@@ -329,6 +327,17 @@ class LEDController:
     def _get_current_zone_id(self) -> ZoneID:
         """Get currently selected zone ID (ZoneID enum)"""
         return self.zone_ids[self.current_zone_index]
+
+    @property
+    def current_animation_id(self) -> Optional[AnimationID]:
+        """
+        Get current animation ID from service (no caching)
+
+        Returns:
+            Current animation ID or None if no animation selected
+        """
+        current_anim = self.animation_service.get_current()
+        return current_anim.config.id if current_anim else None
 
     def get_excluded_zone_ids(self) -> list[ZoneID]:
         """
@@ -451,7 +460,8 @@ class LEDController:
                 color=str(zone.state.color),
                 brightness=f"{zone.brightness}%")
 
-        self._save_ui_state()
+        self.ui_session_service.save(current_zone_index=self.current_zone_index)
+
 
     def toggle_edit_mode(self):
         """Toggle edit mode ON/OFF"""
@@ -476,7 +486,7 @@ class LEDController:
             log.log(LogCategory.SYSTEM, "Edit mode disabled")
             self._stop_pulse()
 
-        self._save_ui_state()
+        self.ui_session_service.save(edit_mode=self.edit_mode)
 
     def quick_lamp_white(self):
         """
@@ -550,7 +560,10 @@ class LEDController:
             if self.animation_engine.is_running():
                 asyncio.create_task(self._restart_animation())
 
-        self._save_ui_state()
+        self.ui_session_service.save(
+            lamp_white_mode=self.lamp_white_mode,
+            lamp_white_saved_state=self.lamp_white_saved_state
+        )
 
     def power_toggle(self):
         """Toggle power for all zones (ON/OFF) - saves and restores brightness and animation state"""
@@ -570,7 +583,10 @@ class LEDController:
             # Save animation state and stop it
             self.power_saved_animation_enabled = self.animation_engine.is_running()
             if self.animation_engine.is_running():
-                asyncio.create_task(self.stop_animation())
+                from models.transition import TransitionConfig, TransitionType
+                # Use instant cut for power off (no fade needed)
+                transition = TransitionConfig(type=TransitionType.CUT)
+                asyncio.create_task(self.animation_engine.stop(transition))
 
             # Turn off all zones
             for zone_id in self.zone_ids:
@@ -638,18 +654,23 @@ class LEDController:
         current_zone_id = self._get_current_zone_id()
         current_zone = self.zone_service.get_zone(current_zone_id)
 
-        if self.current_animation_id == AnimationID.BREATHE:
+        # Get animation ID (with None check)
+        anim_id = self.current_animation_id
+        if not anim_id:
+            return params
+
+        if anim_id == AnimationID.BREATHE:
             # Breathe: don't pass color parameter so animation uses per-zone cached colors
             # Colors will be cached in start_animation() via _cache_zone_colors()
             if ParamID.ANIM_INTENSITY in current_animation.parameters:
                 animation_intensity = current_animation.get_param_value(ParamID.ANIM_INTENSITY)
                 params["intensity"] = animation_intensity
 
-        elif self.current_animation_id == AnimationID.COLOR_FADE:
+        elif anim_id == AnimationID.COLOR_FADE:
             # Use current zone's hue as starting point
             params["start_hue"] = current_zone.state.color.to_hue()
 
-        elif self.current_animation_id == AnimationID.SNAKE:
+        elif anim_id == AnimationID.SNAKE:
             # Snake uses hue-based color with configurable length
             if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
                 params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
@@ -661,7 +682,7 @@ class LEDController:
             if ParamID.ANIM_LENGTH in current_animation.parameters:
                 params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
 
-        elif self.current_animation_id == AnimationID.COLOR_SNAKE:
+        elif anim_id == AnimationID.COLOR_SNAKE:
             # Color snake uses hue-based colors with additional params from state
             params["start_hue"] = current_zone.state.color.to_hue()
 
@@ -673,7 +694,7 @@ class LEDController:
             if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
                 params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
 
-        elif self.current_animation_id == AnimationID.MATRIX:
+        elif anim_id == AnimationID.MATRIX:
             # Matrix uses hue, length, and intensity
             if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
                 params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
@@ -711,11 +732,23 @@ class LEDController:
         excluded_zone_tags = [zone_id.name.lower() for zone_id in excluded_zone_ids]
 
         # Convert AnimationID enum to tag string for animation engine
-        animation_tag = self.current_animation_id.name.lower()
+        anim_id = self.current_animation_id
+        if not anim_id:
+            log.log(LogCategory.ANIMATION, "No animation selected", level=LogLevel.ERROR)
+            return
+
+        animation_tag = anim_id.name.lower()
+        
+        # Stop current animation with fade transition if running
+        if self.animation_engine.is_running():
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.ANIMATION_SWITCH
+            await self.animation_engine.stop(transition)
+        
         await self.animation_engine.start(animation_tag, excluded_zones=excluded_zone_tags, **animation_params)
 
         # Cache zone colors for breathe animation (per-zone colors)
-        if self.current_animation_id == AnimationID.BREATHE:
+        if anim_id == AnimationID.BREATHE:
             self._cache_zone_colors()
 
         current_animation = self.animation_service.get_current()
@@ -725,18 +758,19 @@ class LEDController:
                    id=current_animation.config.display_name,
                    speed=f"{animation_speed}/100")
 
-    async def stop_animation(self):
+    async def stop(self, clear_on_stop: bool = True):
         """Stop current animation and restore static colors"""
         if not self.animation_engine.is_running():
             return
 
         await self.animation_engine.stop()
 
-        # Restore all zones to their static colors from service
-        for zone_id in self.zone_ids:
-            zone_red, zone_green, zone_blue = self.zone_service.get_rgb(zone_id)
-            zone_id_str = zone_id.name.lower()
-            self.strip.set_zone_color(zone_id_str, zone_red, zone_green, zone_blue)
+        if clear_on_stop:
+            # Restore all zones to their static colors from service
+            for zone_id in self.zone_ids:
+                zone_red, zone_green, zone_blue = self.zone_service.get_rgb(zone_id)
+                zone_id_str = zone_id.name.lower()
+                self.strip.set_zone_color(zone_id_str, zone_red, zone_green, zone_blue)
 
         # Restart pulsing if edit mode is on
         if self.edit_mode:
@@ -746,7 +780,11 @@ class LEDController:
 
     async def _restart_animation(self):
         """Restart animation (stop then start with new animation_id)"""
-        await self.stop_animation()
+        log.debug(LogCategory.ANIMATION, "RESTARTING ANIMATION")
+        from models.transition import TransitionConfig
+        # Use a longer fade for restart (900ms)
+        transition = TransitionConfig(duration_ms=900, steps=20)
+        await self.animation_engine.stop(transition)
         await self.start_animation()
 
     def select_animation(self, delta):
@@ -760,14 +798,16 @@ class LEDController:
         """
         was_running = self.animation_engine.is_running()
 
+        log.debug(LogCategory.ANIMATION, f"Cycle index={self.selected_animation_index}, list={self.available_animation_ids}")
+        
         # Cycle through available animation IDs
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animation_ids)
-        self.current_animation_id = self.available_animation_ids[self.selected_animation_index]
+        new_animation_id = self.available_animation_ids[self.selected_animation_index]
 
         # Update service to reflect new selection
-        self.animation_service.set_current(self.current_animation_id)
+        self.animation_service.set_current(new_animation_id)
 
-        selected_animation = self.animation_service.get_animation(self.current_animation_id)
+        selected_animation = self.animation_service.get_animation(new_animation_id)
         log.animation(
             "Animation selected",
             id=selected_animation.config.display_name,
@@ -829,7 +869,12 @@ class LEDController:
 
         # Stop animation if running
         if self.animation_engine.is_running():
-            asyncio.create_task(self.stop_animation())
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.MODE_SWITCH
+            asyncio.create_task(self.animation_engine.stop(transition))
+
+        # Restore static zone colors to hardware
+        self._initialize_zones()
 
         # Restart pulsing if edit_mode=ON
         if self.edit_mode:
@@ -872,7 +917,10 @@ class LEDController:
         else:
             self._switch_to_static_mode()
 
-        self._save_ui_state()
+        self.ui_session_service.save(
+            main_mode=self.main_mode,
+            current_param=self.current_param
+        )
 
     def handle_selector_rotation(self, delta: int):
         """
@@ -907,7 +955,9 @@ class LEDController:
 
         # ANIMATION mode: Toggle animation ON/OFF
         if self.animation_engine.is_running():
-            asyncio.create_task(self.stop_animation())
+            from models.transition import TransitionConfig
+            transition = self.animation_engine.transition_service.ANIMATION_SWITCH
+            asyncio.create_task(self.animation_engine.stop(transition))
         else:
             asyncio.create_task(self.start_animation())
 
@@ -1128,9 +1178,10 @@ class LEDController:
                     if ParamID.ANIM_INTENSITY in current_anim.parameters:
                         log_data["intensity"] = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
 
-        log.log(LogCategory.SYSTEM, "Parameter cycled", **log_data)
-        self._save_ui_state()
-
+        log.info(LogCategory.SYSTEM, "Parameter cycled", **log_data)
+        
+        self.ui_session_service.save(current_param=self.current_param)
+        
     def get_status(self):
         """
         Get current UI state (NOT zone/animation data - services handle that)

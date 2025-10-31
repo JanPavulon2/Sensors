@@ -5,11 +5,13 @@ Multi-pixel colorful snake travels through all zones sequentially.
 """
 
 import asyncio
-from typing import Tuple, List
+from typing import Tuple, List, AsyncIterator
 from animations.base import BaseAnimation
 from utils.colors import hue_to_rgb
 from models.domain.zone import ZoneCombined
-from typing import AsyncIterator, Tuple
+from utils.logger import get_category_logger, LogCategory
+
+log = get_category_logger(LogCategory.ANIMATION)
 
 class ColorSnakeAnimation(BaseAnimation):
     """
@@ -41,7 +43,7 @@ class ColorSnakeAnimation(BaseAnimation):
         **kwargs
     ):
         super().__init__(zones, speed, **kwargs)
-        self.length = max(2, min(20, length))  # Clamp 2-20
+        self.length = max(2, min(5, length))  # Clamp 2-5
         self.hue_offset = hue_offset
         self.base_hue = hue  # Starting hue from parameter
 
@@ -51,16 +53,18 @@ class ColorSnakeAnimation(BaseAnimation):
         zone_items.sort(key=lambda x: x[1])  # Sort by start index
 
         self.zone_order = [name for name, _, _ in zone_items]
-        self.zone_pixel_counts = {}
-        self.total_pixels = 0
+        self.zone_pixel_counts = {name: (end - start + 1) for name, start, end in zone_items}
+        self.total_pixels = sum(self.zone_pixel_counts.values())
+        self.current_position = 0
 
         for name, start, end in zone_items:
             pixel_count = end - start + 1
             self.zone_pixel_counts[name] = pixel_count
             self.total_pixels += pixel_count
 
-        self.current_position = 0
-
+        # Track previous lit pixels
+        self.previous_pixels: List[Tuple[str, int]] = []
+        
     def _get_pixel_location(self, absolute_position: int) -> Tuple[str, int]:
         """
         Convert absolute pixel position to (zone_name, pixel_index_in_zone)
@@ -75,11 +79,10 @@ class ColorSnakeAnimation(BaseAnimation):
         for zone_name in self.zone_order:
             zone_size = self.zone_pixel_counts[zone_name]
             if absolute_position < accumulated + zone_size:
-                pixel_in_zone = absolute_position - accumulated
-                return zone_name, pixel_in_zone
+                return zone_name, absolute_position - accumulated
             accumulated += zone_size
 
-        # Shouldn't reach here, but fallback to first zone
+        # Fallback to first zone if position out of range
         return self.zone_order[0], 0
 
     def _get_snake_pixels(self) -> List[Tuple[str, int, int, int, int]]:
@@ -108,39 +111,53 @@ class ColorSnakeAnimation(BaseAnimation):
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
         """
-        Run rainbow snake animation
+        Run rainbow snake animation with continuous wrap-around
 
-        Note: This animation requires special handling - it needs to
-        turn off ALL pixels first, then light up snake pixels.
+        Creates a multi-color snake with rainbow gradient that travels smoothly through all zones.
+        Uses pixel-level control and only turns off tail pixels to eliminate flickering.
+        Base hue rotates continuously for dynamic color shifting effect.
+
+        Yields:
+            Tuple[str, int, int, int, int]: (zone_name, pixel_index, r, g, b) for pixel-level updates
         """
         self.running = True
+        self.previous_pixels: List[Tuple[str, int]] = []
 
         while self.running:
-            # Recalculate delay each iteration for live speed updates
-            # Speed 100 = 10ms per pixel, Speed 1 = 100ms per pixel
-            min_delay = 0.01   # 10ms (fast)
-            max_delay = 0.1    # 100ms (slow)
+            # Dynamic delay for real-time speed adjustment
+            min_delay = 0.01
+            max_delay = 0.1
             move_delay = max_delay - (self.speed / 100) * (max_delay - min_delay)
 
-            # First, yield "turn off" for all active zones
-            for zone_name in self.active_zones:
-                yield zone_name, 0, 0, 0
+            # Build list of current snake pixels
+            snake_pixels: List[Tuple[str, int, int, int, int]] = []
+            for i in range(self.length):
+                # Head at current_position, tail behind (wraps automatically)
+                pos = (self.current_position - i) % self.total_pixels
+                hue = (self.base_hue + (i * self.hue_offset)) % 360
+                r, g, b = hue_to_rgb(hue)
+                zone_name, pixel_index = self._get_pixel_location(pos)
+                snake_pixels.append((zone_name, pixel_index, r, g, b))
 
-            # Then yield "turn on" for all snake pixels
-            snake_pixels = self._get_snake_pixels()
-            for zone_name, pixel_in_zone, r, g, b in snake_pixels:
-                # Special yield format: (zone_name, pixel_index, r, g, b)
-                # This tells the engine to use set_pixel_color() instead of set_zone_color()
-                yield (zone_name, pixel_in_zone, r, g, b)
+            # --- Only turn off pixels that are no longer in the snake ---
+            new_pixel_set = {(z, p) for z, p, _, _, _ in snake_pixels}
+            for (z, p) in self.previous_pixels:
+                if (z, p) not in new_pixel_set:
+                    yield (z, p, 0, 0, 0)
 
-            # Move to next position
+            # --- Light up current snake pixels ---
+            for z, p, r, g, b in snake_pixels:
+                yield (z, p, r, g, b)
+
+            # Remember current pixels for next frame
+            self.previous_pixels = [(z, p) for z, p, _, _, _ in snake_pixels]
+
+            # Move snake forward smoothly and continuously
             self.current_position = (self.current_position + 1) % self.total_pixels
-
-            # Slowly rotate base hue for changing colors
             self.base_hue = (self.base_hue + 1) % 360
 
             await asyncio.sleep(move_delay)
-
+            
     async def run_preview(self, pixel_count: int = 8):
         """
         Simplified preview for 8-pixel preview panel

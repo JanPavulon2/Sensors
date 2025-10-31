@@ -286,5 +286,3 @@ class ZoneStrip:
         # Reset color cache
         self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
 
-
-

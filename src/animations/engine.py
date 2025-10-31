@@ -2,6 +2,7 @@
 Animation Engine
 
 Manages animation lifecycle, switching between animations, and updating strip.
+Uses TransitionService for smooth transitions between animation states.
 """
 
 import asyncio
@@ -11,8 +12,15 @@ from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
+from animations.color_cycle import ColorCycleAnimation
 from animations.matrix import MatrixAnimation
 from models.domain.zone import ZoneCombined
+from services.transition_service import TransitionService
+from models.transition import TransitionConfig, TransitionType
+from utils.logger import get_category_logger
+from models.enums import LogCategory
+
+log = get_category_logger(LogCategory.ANIMATION)
 
 class AnimationEngine:
     """
@@ -33,11 +41,12 @@ class AnimationEngine:
 
     # Registry of available animations
     ANIMATIONS = {
+        'color_cycle': ColorCycleAnimation,
         'breathe': BreatheAnimation,
         'color_fade': ColorFadeAnimation,
         'snake': SnakeAnimation,
-        'color_snake': ColorSnakeAnimation,
-        'matrix': MatrixAnimation,
+        'color_snake': ColorSnakeAnimation
+        # 'matrix': MatrixAnimation,  # TEMPORARY: Disabled for testing
     }
 
     def __init__(self, strip, zones: List[ZoneCombined]):
@@ -54,20 +63,44 @@ class AnimationEngine:
         self.animation_task: Optional[asyncio.Task] = None
         self.current_name: Optional[str] = None
 
-    async def start(self, name: str, excluded_zones=None, **params):
+        # Transition service for smooth animation switches
+        self.transition_service = TransitionService(strip)
+
+        log.info("AnimationEngine initialized", animations=list(self.ANIMATIONS.keys()))
+
+    async def start(
+        self,
+        name: str,
+        excluded_zones=None,
+        transition: Optional[TransitionConfig] = None,
+        **params
+    ):
         """
-        Start an animation by name
+        Start an animation by name with optional transition
 
         Args:
             name: Animation name ('breathe', 'color_fade', 'snake')
             excluded_zones: List of zone names to exclude from animation (e.g., ["lamp"])
+            transition: Transition configuration for switching (defaults to ANIMATION_SWITCH)
             **params: Animation-specific parameters (speed, color, etc.)
 
         Raises:
             ValueError: If animation name is not recognized
+
+        Example:
+            >>> # Start with default fade transition
+            >>> await engine.start('breathe', speed=50)
+            >>>
+            >>> # Start with instant switch
+            >>> await engine.start('snake', transition=TransitionConfig(TransitionType.NONE))
         """
-        # Stop current animation if running
-        await self.stop()
+        # If animation is running, apply transition and stop
+        if self.is_running():
+            transition = transition or self.transition_service.ANIMATION_SWITCH
+            await self.stop(transition)
+        else:
+            # No animation running, just stop (no transition needed)
+            await self.stop(TransitionConfig(type=TransitionType.NONE) if transition is None else transition)
 
         # Create new animation instance
         if name not in self.ANIMATIONS:
@@ -76,7 +109,7 @@ class AnimationEngine:
         animation_class = self.ANIMATIONS[name]
         self.current_animation = animation_class(self.zones, excluded_zones=excluded_zones or [], **params)
         self.current_name = name
-
+        
         # Cache current zone colors for animations that need them
         # Note: Brightness is cached by LEDController (has actual 0-100% values)
         for zone in self.zones:
@@ -87,8 +120,31 @@ class AnimationEngine:
         # Start animation loop
         self.animation_task = asyncio.create_task(self._run_loop())
 
-    async def stop(self):
-        """Stop current animation and restore static colors"""
+        log.info(f"Animation started: {name}", params=params)
+        
+    async def stop(self, transition: Optional[TransitionConfig] = None):
+        """
+        Stop current animation with optional transition
+
+        Args:
+            transition: Transition configuration (defaults to ANIMATION_SWITCH preset)
+
+        Example:
+            >>> # Stop with fade
+            >>> await engine.stop(TransitionService.ANIMATION_SWITCH)
+            >>>
+            >>> # Stop instantly
+            >>> await engine.stop(TransitionConfig(TransitionType.NONE))
+        """
+        if not self.is_running():
+            return
+
+        transition = transition or self.transition_service.ANIMATION_SWITCH
+
+        # Apply transition (fade out)
+        await self.transition_service.fade_out(transition)
+
+        # Stop animation task
         if self.current_animation:
             self.current_animation.stop()
 
@@ -102,6 +158,9 @@ class AnimationEngine:
 
         self.current_animation = None
         self.current_name = None
+
+        log.info("Animation stopped")
+
 
     def update_param(self, param: str, value):
         """
@@ -143,8 +202,8 @@ class AnimationEngine:
                     self.strip.set_zone_color(zone_name, r, g, b)
 
         except asyncio.CancelledError:
-            # Animation was stopped
-            pass
+            # Animation was stopped gracefully
+            log.debug("Animation loop cancelled")
         except Exception as e:
-            print(f"[!] Animation error: {e}")
+            log.error(f"Animation error: {e}", animation=self.current_name)
             raise

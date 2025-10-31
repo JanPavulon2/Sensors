@@ -227,3 +227,26 @@ class DataAssembler:
         except Exception as e:
             log(f"Failed to save zone state: {e}")
             raise
+
+    def save_partial_state(self, updates: dict) -> None:
+        """ 
+        Aktualizuje wybrane pola sekcji 'ui_session' w state.json
+        bez nadpisywania pozostałych danych (zones, animations...).
+        """
+        try:
+            state_json = self.load_state()
+
+            # Upewnij się, że node istnieje
+            if "ui_session" not in state_json:
+                state_json["ui_session"] = {}
+
+            # Nadpisz tylko wskazane pola
+            for key, value in updates.items():
+                state_json["ui_session"][key] = value
+
+            self.save_state(state_json)
+            log(f"Updated ui_session fields: {list(updates.keys())}")
+
+        except Exception as e:
+            log(f"Failed to save ui_session state: {e}", LogLevel.ERROR)
+            raise
