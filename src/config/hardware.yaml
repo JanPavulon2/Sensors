@@ -2,11 +2,11 @@
 # GPIO pin assignments for encoders, buttons, and LED strips
 
 encoders:
-  zone_selector:
+  selector:
     clk: 5
     dt: 6
     sw: 13
-    
+
   modulator:
     clk: 16
     dt: 20

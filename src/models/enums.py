@@ -36,6 +36,21 @@ class ColorMode(Enum):
     PRESET = auto()    # Named preset from colors.yaml
     RGB = auto()       # Direct RGB (for future custom colors)
 
+
+class EncoderSource(Enum):
+    """Encoder identifiers for event sources"""
+    SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)
+    MODULATOR = auto()  # Parameter value modulator encoder
+
+
+class ButtonID(Enum):
+    """Button identifiers"""
+    BTN1 = auto()  # Toggle edit mode
+    BTN2 = auto()  # Quick lamp white mode
+    BTN3 = auto()  # Power toggle
+    BTN4 = auto()  # Toggle STATIC/ANIMATION mode
+
+
 class ZoneID(Enum):
     """Zone identifiers"""
     FLOOR = auto()

@@ -9,10 +9,10 @@ import sys
 import os
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
-if sys.stdout.encoding != 'UTF-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding != 'UTF-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
+    sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
+    sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
 import asyncio
 from utils.logger import get_logger, configure_logger
@@ -20,11 +20,8 @@ from models.enums import LogLevel
 from components import ControlModule
 from controllers.led_controller import LEDController
 from managers.config_manager import ConfigManager
-
-# Configure UTF-8 encoding for terminal output (support unicode icons)
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
+from services.event_bus import EventBus
+from services.middleware import log_middleware
 
 configure_logger(LogLevel.INFO)
 log = get_logger()
@@ -41,64 +38,30 @@ async def main():
     config_manager = ConfigManager()
     config_manager.load()
 
-    # Initialize hardware control module
-    log.system("Initializing hardware...")
-    module = ControlModule(config_manager.hardware_manager)
+    # Create event bus
+    log.system("Initializing event bus...")
+    event_bus = EventBus()
 
     # Initialize LED controller (loads state via DataAssembler)
     log.system("Initializing LED controller...")
-    led = LEDController(config_manager)
+    led = LEDController(config_manager, event_bus)
 
-    # Hardware event handlers (callback pattern)
-    # TODO: Migrate to Event Bus architecture (Phase 3)
+    # Register middleware
+    log.system("Registering middleware...")
+    event_bus.add_middleware(log_middleware)
 
-    def handle_zone_change(delta):
-        """Selector encoder rotated - context-sensitive (zone select or animation select)"""
-        led.handle_selector_rotation(delta)
-
-    def handle_zone_selector_click():
-        """Selector encoder clicked - context-sensitive action"""
-        led.handle_selector_click()
-
-    def handle_modulator(delta):
-        """Modulator encoder rotated - adjust parameter value (context-sensitive)"""
-        led.handle_modulator_rotation(delta)
-
-    def handle_modulator_click():
-        """Modulator encoder clicked - cycle parameters"""
-        led.handle_modulator_click()
-
-    def handle_button1():
-        """Button 1: Toggle EDIT MODE"""
-        led.toggle_edit_mode()
-
-    def handle_button2():
-        """Button 2: Quick action - Lamp warm white"""
-        led.quick_lamp_white()
-
-    def handle_button3():
-        """Button 3: Power toggle"""
-        led.power_toggle()
-
-    def handle_button4():
-        """Button 4: Toggle STATIC/ANIMATION mode"""
-        led.toggle_main_mode()
+    # Initialize hardware control module
+    log.system("Initializing hardware...")
+    if config_manager.hardware_manager is None:
+        log.system("ERROR: Hardware manager not initialized!")
+        return
+    module = ControlModule(config_manager.hardware_manager, event_bus)
 
     async def hardware_loop():
         """Poll hardware inputs at 100Hz"""
         while True:
             module.poll()
             await asyncio.sleep(0.01)
-
-    # Wire callbacks to hardware events
-    module.on_selector_rotate = handle_zone_change
-    module.on_selector_click = handle_zone_selector_click
-    module.on_modulator_rotate = handle_modulator
-    module.on_modulator_click = handle_modulator_click
-    module.on_button[0] = handle_button1
-    module.on_button[1] = handle_button2
-    module.on_button[2] = handle_button3
-    module.on_button[3] = handle_button4
 
     # Log initial state
     status = led.get_status()

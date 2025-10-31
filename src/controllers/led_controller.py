@@ -29,10 +29,13 @@ from controllers import PreviewController
 from utils.logger import get_logger, LogLevel, LogCategory
 from utils.enum_helper import EnumHelper
 from animations import AnimationEngine
+from typing import cast
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
-from models.enums import ZoneID, AnimationID
+from models.enums import ZoneID, AnimationID, EncoderSource, ButtonID
+from models.events import EventType, EncoderRotateEvent, EncoderClickEvent
 from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
 from services import DataAssembler, AnimationService, ZoneService, UISessionService
+from services.event_bus import EventBus
 
 log = get_logger()
 
@@ -64,19 +67,24 @@ class LEDController:
     """
 
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, event_bus: EventBus):
         """
         Initialize LED Controller
 
         Args:
             config_manager: ConfigManager instance (provides all config + sub-managers)
+            event_bus: EventBus for subscribing to hardware events
 
         Architecture:
             ConfigManager is the single source of truth for all configuration.
             DataAssembler loads state from state.json and builds domain objects.
             Services (ZoneService, AnimationService) manage runtime state with auto-save.
+            EventBus provides event-driven hardware input handling.
         """
-        
+
+        # Store event bus
+        self.event_bus = event_bus
+
         # Get ConfigManager and submanagers from it (dependency injection)
         self.config_manager: ConfigManager = config_manager
         self.color_manager: ColorManager = config_manager.color_manager # pyright: ignore[reportAttributeAccessIssue]
@@ -190,6 +198,9 @@ class LEDController:
         if self.main_mode == MainMode.ANIMATION and current_animation and current_animation.state.enabled:
             asyncio.create_task(self.start_animation())
 
+        # Register event handlers (event-driven architecture)
+        self._register_event_handlers()
+
 
     def _initialize_zones(self):
         """Initialize zones - apply colors from services to hardware"""
@@ -201,6 +212,30 @@ class LEDController:
 
         # Sync preview with current zone
         self._sync_preview()
+
+    def _register_event_handlers(self):
+        """
+        Register event handlers with EventBus
+
+        Maps hardware events to controller methods:
+        - Encoder rotations → handle_selector_rotation / handle_modulator_rotation
+        - Encoder clicks → handle_selector_click / handle_modulator_click
+        - Button presses → toggle_edit_mode / quick_lamp_white / power_toggle / toggle_main_mode
+        """
+
+        # Selector encoder: rotation and click
+        self.event_bus.subscribe(EventType.ENCODER_ROTATE, lambda e: self.handle_selector_rotation(cast(EncoderRotateEvent, e).delta), filter_fn=lambda e: e.source == EncoderSource.SELECTOR)
+        self.event_bus.subscribe(EventType.ENCODER_CLICK, lambda e: self.handle_selector_click(), filter_fn=lambda e: e.source == EncoderSource.SELECTOR)
+
+        # Modulator encoder: rotation and click
+        self.event_bus.subscribe(EventType.ENCODER_ROTATE, lambda e: self.handle_modulator_rotation(cast(EncoderRotateEvent, e).delta), filter_fn=lambda e: e.source == EncoderSource.MODULATOR)
+        self.event_bus.subscribe(EventType.ENCODER_CLICK, lambda e: self.handle_modulator_click(), filter_fn=lambda e: e.source == EncoderSource.MODULATOR)
+
+        # Buttons
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.toggle_edit_mode(), filter_fn=lambda e: e.source == ButtonID.BTN1)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.quick_lamp_white(), filter_fn=lambda e: e.source == ButtonID.BTN2)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.power_toggle(), filter_fn=lambda e: e.source == ButtonID.BTN3)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.toggle_main_mode(), filter_fn=lambda e: e.source == ButtonID.BTN4)
 
     # def _save_ui_state(self):
     #     """

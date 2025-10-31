@@ -63,9 +63,16 @@ src/
    - `ParameterManager` - Parameter definitions and validation
    - `StateManager` - Async JSON state persistence (legacy, being replaced by services)
 
-### 4. **Event-Driven State Machine**
-   - Asyncio-based with central `LEDController`
-   - Hardware events → `ControlModule` callbacks → `LEDController`
+### 4. **Event-Driven Architecture (NEW - Pub-Sub Pattern)**
+   - **EventBus** - Central event routing with pub-sub pattern
+   - Hardware events → `ControlModule` → `EventBus` (middleware) → `LEDController` (subscriber)
+   - Features:
+     - Priority-based handler execution
+     - Per-handler filtering
+     - Middleware pipeline (logging, rate limiting, guards)
+     - Async/sync handler support
+     - Fault tolerance
+   - Files: `models/events.py`, `services/event_bus.py`, `services/middleware.py`
    - Non-blocking animations and pulsing
    - Two-mode system: STATIC (zone editing) ↔ ANIMATION (animation control)
 
@@ -138,12 +145,22 @@ animation_service.adjust_parameter(AnimationID.SNAKE, ParamID.ANIM_SPEED, delta=
 
 ## Migration Status
 
-**In Progress**: Migrating from dict-based architecture to domain-driven design
-- ✅ Domain models created
-- ✅ Service layer implemented
-- ✅ Services integrated into LEDController
-- 🔄 Gradually refactoring operations to use services
-- ⏳ Remove old dict-based code after migration
+**Completed Migrations**:
+
+1. **Domain-Driven Design** (✅ Complete)
+   - ✅ Domain models created
+   - ✅ Service layer implemented
+   - ✅ Services integrated into LEDController
+   - ✅ Dict-based code replaced with domain objects
+
+2. **Event-Driven Architecture** (✅ Complete - October 2024)
+   - ✅ EventBus infrastructure created (events.py, event_bus.py, middleware.py)
+   - ✅ ControlModule refactored (callbacks → events)
+   - ✅ LEDController integrated with event handlers
+   - ✅ Hardware config updated (zone_selector → selector)
+   - ✅ Comprehensive test suite (test_event_bus.py)
+   - **Benefits**: Decoupled architecture, extensible for Web/MQTT, middleware pipeline, testable
+   - **Note**: All existing methods unchanged - drop-in replacement for callbacks
 
 ## Development Focus
 

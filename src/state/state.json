@@ -20,7 +20,7 @@
     "floor": {
       "color": {
         "mode": "HUE",
-        "hue": 300
+        "hue": 20
       },
       "brightness": 50
     },
@@ -41,7 +41,7 @@
     "right": {
       "color": {
         "mode": "HUE",
-        "hue": 60
+        "hue": 140
       },
       "brightness": 50
     },
@@ -89,6 +89,6 @@
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ZONE_COLOR_HUE",
-    "selected_zone_index": 2
+    "selected_zone_index": 1
   }
 }
