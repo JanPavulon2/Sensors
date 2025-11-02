@@ -20,62 +20,62 @@
     "floor": {
       "color": {
         "mode": "HUE",
-        "hue": 300
+        "hue": 120
       },
-      "brightness": 30
+      "brightness": 100
     },
     "left": {
       "color": {
         "mode": "HUE",
-        "hue": 40
+        "hue": 330
       },
-      "brightness": 30
+      "brightness": 100
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 40
+        "mode": "PRESET",
+        "preset_name": "magenta"
       },
-      "brightness": 30
+      "brightness": 100
     },
     "right": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 140
       },
-      "brightness": 30
+      "brightness": 40
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "violet"
+        "preset_name": "green"
       },
-      "brightness": 90
+      "brightness": 100
     },
     "lamp": {
       "color": {
         "mode": "HUE",
         "hue": 180
       },
-      "brightness": 30
+      "brightness": 100
     },
     "back": {
       "color": {
         "mode": "HUE",
         "hue": 264
       },
-      "brightness": 30
+      "brightness": 100
     },
     "desk": {
       "color": {
-        "mode": "HUE",
-        "hue": 30
+        "mode": "PRESET",
+        "preset_name": "red"
       },
       "brightness": 100
     }
   },
   "current_animation": {
-    "id": "color_cycle",
+    "id": "COLOR_CYCLE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0
@@ -87,6 +87,6 @@
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 0
+    "selected_zone_index": 6
   }
 }

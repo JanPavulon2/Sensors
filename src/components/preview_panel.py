@@ -152,6 +152,33 @@ class PreviewPanel:
                 self._strip.setPixelColor(physical_index, Color(0, 0, 0))
         self._strip.show()
 
+    def get_frame(self) -> List[Tuple[int, int, int]]:
+        """
+        Get current LED state as frame list
+
+        Captures current RGB values for all LEDs in logical order (0-7).
+        Automatically handles reversed panel mapping.
+
+        Returns:
+            List of RGB tuples [(r, g, b), ...] for each LED
+
+        Example:
+            >>> frame = preview.get_frame()
+            >>> # frame = [(255, 0, 0), (0, 255, 0), ...]
+        """
+        frame = []
+        for i in range(self.count):
+            physical_index = self._reverse_index(i)
+            color_int = self._strip.getPixelColor(physical_index)
+            # Extract RGB from 32-bit color value (format: 0x00RRGGBB for RGB or varies by order)
+            # For GRB order, getPixelColor returns packed GRB but we need RGB
+            # rpi_ws281x uses internal 32-bit format, need to unpack correctly
+            r = (color_int >> 16) & 0xFF
+            g = (color_int >> 8) & 0xFF
+            b = color_int & 0xFF
+            frame.append((r, g, b))
+        return frame
+
     def clear(self) -> None:
         """
         Turn off all LEDs immediately

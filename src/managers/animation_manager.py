@@ -8,7 +8,8 @@ Single responsibility: Parse and provide access to animation metadata.
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
-from models.enums import ParamID
+from models.enums import ParamID, AnimationID
+from utils.enum_helper import EnumHelper
 
 
 @dataclass
@@ -17,26 +18,35 @@ class AnimationInfo:
     Animation metadata from config
 
     Attributes:
-        id: Technical identifier (e.g., "breathe", "color_snake")
+        id: AnimationID enum (e.g., AnimationID.BREATHE, AnimationID.COLOR_SNAKE)
+        tag: String tag for file/class lookup (e.g., "breathe", "color_snake")
         display_name: Human-readable name (e.g., "Breathe", "Color Snake")
         description: Brief description of animation
+        enabled: Whether animation is available for selection
+        order: Display order in animation list
         parameters: List of ParamID this animation uses (in addition to base params)
-        base_parameters: List of ParamID from animation_base_parameters (ANIM_SPEED, ANIM_COLOR_1)
+        base_parameters: List of ParamID from animation_base_parameters (ANIM_SPEED, etc.)
 
     Example:
         AnimationInfo(
-            id="color_snake",
+            id=AnimationID.COLOR_SNAKE,
+            tag="color_snake",
             display_name="Color Snake",
             description="Multi-pixel rainbow snake",
-            parameters=[ParamID.LENGTH, ParamID.HUE_OFFSET],
-            base_parameters=[ParamID.ANIM_SPEED, ParamID.ANIM_COLOR_1]
+            enabled=True,
+            order=4,
+            parameters=[ParamID.ANIM_LENGTH, ParamID.ANIM_HUE_OFFSET],
+            base_parameters=[ParamID.ANIM_SPEED, ParamID.ANIM_PRIMARY_COLOR_HUE]
         )
     """
-    id: str
+    id: AnimationID
+    tag: str
     display_name: str
     description: str
+    enabled: bool
+    order: int
     parameters: List[ParamID]  # Additional params beyond base
-    base_parameters: List[ParamID]  # Always: ANIM_SPEED, ANIM_COLOR_1
+    base_parameters: List[ParamID]  # Base params like ANIM_SPEED
 
     def get_all_parameters(self) -> List[ParamID]:
         """
@@ -50,7 +60,7 @@ class AnimationInfo:
     def __str__(self):
         """String representation for debugging"""
         param_names = [p.name for p in self.get_all_parameters()]
-        return f"[{self.id:12}] {self.display_name:15} | params: {', '.join(param_names)}"
+        return f"[{self.id.name:12}] {self.display_name:15} | tag:{self.tag:15} | params: {', '.join(param_names)}"
 
 
 class AnimationManager:
@@ -84,12 +94,12 @@ class AnimationManager:
                       'animation_base_parameters': {
                           'ANIM_SPEED': {'type': 'PERCENTAGE', ...}
                       },
-                      'animations': {
-                          'breathe': {'display_name': 'Breathe', 'parameters': [...]}
-                      }
+                      'animations': [
+                          {'id': 'BREATHE', 'name': 'Breathe', 'tag': 'breathe', ...}
+                      ]
                   }
         """
-        self.animations: Dict[str, AnimationInfo] = {}
+        self.animations: Dict[AnimationID, AnimationInfo] = {}
         self.base_parameters: List[ParamID] = []
         self._process_data(data)
 
@@ -101,7 +111,7 @@ class AnimationManager:
             data: Config dict with 'animation_base_parameters' and 'animations' sections
 
         Raises:
-            ValueError: If unknown ParamID referenced
+            ValueError: If unknown ParamID or AnimationID referenced
         """
         # Parse base parameters (all animations have these)
         base_params_section = data.get('animation_base_parameters', {})
@@ -112,32 +122,43 @@ class AnimationManager:
             except KeyError:
                 raise ValueError(f"Unknown ParamID in animation_base_parameters: {param_name}")
 
-        # Parse animation definitions
-        animations_section = data.get('animations', {})
-        for anim_id, anim_data in animations_section.items():
+        # Parse animation definitions (list format)
+        animations_list = data.get('animations', [])
+        for anim_data in animations_list:
+            # Parse animation ID (enum)
+            anim_id_str = anim_data.get('id', 'UNKNOWN')
+            anim_id = EnumHelper.to_enum(AnimationID, anim_id_str)
+
+            # Skip disabled animations
+            if not anim_data.get('enabled', True):
+                continue
+
             # Parse additional parameters
             additional_params = []
             for param_name in anim_data.get('parameters', []):
                 try:
                     additional_params.append(ParamID[param_name])
                 except KeyError:
-                    raise ValueError(f"Unknown ParamID in animation '{anim_id}': {param_name}")
+                    raise ValueError(f"Unknown ParamID in animation '{anim_id_str}': {param_name}")
 
             # Create AnimationInfo
             self.animations[anim_id] = AnimationInfo(
                 id=anim_id,
-                display_name=anim_data.get('display_name', anim_id.title()),
+                tag=anim_data.get('tag', anim_id_str.lower()),
+                display_name=anim_data.get('name', anim_id_str.title()),
                 description=anim_data.get('description', ''),
+                enabled=True,  # Already filtered above
+                order=anim_data.get('order', 0),
                 parameters=additional_params,
                 base_parameters=self.base_parameters.copy()
             )
 
-    def get_animation(self, id: str) -> Optional[AnimationInfo]:
+    def get_animation(self, id: AnimationID) -> Optional[AnimationInfo]:
         """
-        Get animation info by id
+        Get animation info by AnimationID
 
         Args:
-            id: Animation id (e.g., "breathe", "color_snake")
+            id: AnimationID enum (e.g., AnimationID.BREATHE, AnimationID.COLOR_SNAKE)
 
         Returns:
             AnimationInfo or None if not found
@@ -146,37 +167,37 @@ class AnimationManager:
 
     def get_all_animations(self) -> List[AnimationInfo]:
         """
-        Get all animation infos in definition order
+        Get all animation infos sorted by order
 
         Returns:
-            List of AnimationInfo objects
+            List of AnimationInfo objects sorted by display order
         """
-        return list(self.animations.values())
+        return sorted(self.animations.values(), key=lambda a: a.order)
 
-    def get_animation_ids(self) -> List[str]:
+    def get_animation_ids(self) -> List[AnimationID]:
         """
-        Get list of animation IDs
+        Get list of animation IDs sorted by order
 
         Returns:
-            List of animation IDs: ["breathe", "color_fade", "snake", "color_snake"]
+            List of AnimationID enums: [AnimationID.BREATHE, AnimationID.SNAKE, ...]
         """
-        return list(self.animations.keys())
+        return [info.id for info in self.get_all_animations()]
 
     def get_animation_names(self) -> List[str]:
         """
-        Get list of display names
+        Get list of display names in order
 
         Returns:
-            List of display names: ["Breathe", "Color Fade", "Snake", "Color Snake"]
+            List of display names: ["Breathe", "Snake", "Color Cycle", ...]
         """
-        return [info.display_name for info in self.animations.values()]
+        return [info.display_name for info in self.get_all_animations()]
 
-    def animation_has_parameter(self, id: str, param_id: ParamID) -> bool:
+    def animation_has_parameter(self, id: AnimationID, param_id: ParamID) -> bool:
         """
         Check if animation uses specific parameter
 
         Args:
-            id: Animation ID
+            id: AnimationID enum
             param_id: ParamID to check
 
         Returns:

@@ -29,10 +29,13 @@ from controllers import PreviewController
 from utils.logger import get_logger, LogLevel, LogCategory
 from utils.enum_helper import EnumHelper
 from animations import AnimationEngine
+from typing import cast
 from models import Color, ColorMode, MainMode, PreviewMode, ParamID
-from models.enums import ZoneID, AnimationID
+from models.enums import ZoneID, AnimationID, EncoderSource, ButtonID
+from models.events import EventType, EncoderRotateEvent, EncoderClickEvent
 from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
 from services import DataAssembler, AnimationService, ZoneService, UISessionService
+from services.event_bus import EventBus
 
 log = get_logger()
 
@@ -64,19 +67,24 @@ class LEDController:
     """
 
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, event_bus: EventBus):
         """
         Initialize LED Controller
 
         Args:
             config_manager: ConfigManager instance (provides all config + sub-managers)
+            event_bus: EventBus for subscribing to hardware events
 
         Architecture:
             ConfigManager is the single source of truth for all configuration.
             DataAssembler loads state from state.json and builds domain objects.
             Services (ZoneService, AnimationService) manage runtime state with auto-save.
+            EventBus provides event-driven hardware input handling.
         """
-        
+
+        # Store event bus
+        self.event_bus = event_bus
+
         # Get ConfigManager and submanagers from it (dependency injection)
         self.config_manager: ConfigManager = config_manager
         self.color_manager: ColorManager = config_manager.color_manager # pyright: ignore[reportAttributeAccessIssue]
@@ -106,7 +114,7 @@ class LEDController:
         self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
         self.current_param: ParamID = ui_state.current_param
         self.current_zone_index: int = ui_state.current_zone_index
-        
+
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
         self.static_params = [pid for pid in zone_params.keys() if pid != ParamID.ZONE_REVERSED]  # Exclude REVERSED for now
@@ -115,18 +123,20 @@ class LEDController:
         # Only use base animation params (SPEED, INTENSITY) for cycling
         self.animation_params = [pid for pid in anim_params.keys() if pid in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]]
 
-        # Get zones from ZoneService (domain objects are source of truth)
-        zones = self.zone_service.get_enabled()
-        self.zone_ids = [z.config.id for z in zones]  # List[ZoneID] for indexing
-        zone_configs = [z.config for z in zones]  # List[ZoneConfig] for ZoneStrip constructor
+        # Get ALL zones from ZoneService (domain objects are source of truth)
+        # IMPORTANT: Use get_all() to preserve pixel indices for disabled zones
+        # Disabled zones will be rendered as black via ZoneCombined.get_rgb()
+        all_zones = self.zone_service.get_all()
+        self.zone_ids = [z.config.id for z in all_zones]  # List[ZoneID] - physical mapping
+        zone_configs = [z.config for z in all_zones]  # List[ZoneConfig] for ZoneStrip constructor
 
         # Hardware setup via HardwareManager (dependency injection)
         if self.config_manager.hardware_manager is None:
             return
-        
+
         self.hardware_manager = self.config_manager.hardware_manager
 
-        
+
         preview_config = self.hardware_manager.get_led_strip("preview")
         assert preview_config is not None
         self.preview_panel = PreviewPanel(
@@ -159,9 +169,9 @@ class LEDController:
             self.preview_mode = PreviewMode.ANIMATION_PREVIEW
 
         # Zone selection (index into self.zone_ids) - validate bounds
-        
+
         # Animation system
-        self.animation_engine: AnimationEngine = AnimationEngine(self.strip, zones)
+        self.animation_engine: AnimationEngine = AnimationEngine(self.strip, all_zones)
 
         # Animation list for selection (AnimationID enums)
         all_animations = self.animation_service.get_all()
@@ -180,17 +190,6 @@ class LEDController:
 
         # Initialize with default colors
         self._initialize_zones()
-
-        # Initialize UI/session service (new architecture)
-        self.ui_session_service = UISessionService(assembler)
-        ui_state = self.ui_session_service.get_state()
-
-        self.main_mode: MainMode = ui_state.main_mode
-        self.edit_mode: bool = ui_state.edit_mode
-        self.lamp_white_mode: bool = ui_state.lamp_white_mode
-        self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
-        self.current_param: ParamID = ui_state.current_param
-        self.current_zone_index: int = ui_state.current_zone_index
         
         
         # Start pulsing ONLY if edit_mode is ON and in STATIC mode
@@ -200,6 +199,9 @@ class LEDController:
         # Auto-start animation if we're in ANIMATION mode and animation is enabled
         if self.main_mode == MainMode.ANIMATION and current_animation and current_animation.state.enabled:
             asyncio.create_task(self.start_animation())
+
+        # Register event handlers (event-driven architecture)
+        self._register_event_handlers()
 
 
     def _initialize_zones(self):
@@ -213,39 +215,30 @@ class LEDController:
         # Sync preview with current zone
         self._sync_preview()
 
-    # def _save_ui_state(self):
-    #     """
-    #     Save UI state to state.json
+    def _register_event_handlers(self):
+        """
+        Register event handlers with EventBus
 
-    #     UI state includes: current zone selection, edit mode, main mode, current parameter, lamp white mode
-    #     Domain state (zone colors/brightness, animations) is saved by services automatically.
-    #     """
-    #     import json
-    #     state_path = Path(__file__).parent.parent / "state" / "state.json"
+        Maps hardware events to controller methods:
+        - Encoder rotations → handle_selector_rotation / handle_modulator_rotation
+        - Encoder clicks → handle_selector_click / handle_modulator_click
+        - Button presses → toggle_edit_mode / quick_lamp_white / power_toggle / toggle_main_mode
+        """
 
-    #     try:
-    #         # Load existing state (contains zones + animations from services)
-    #         with open(state_path, "r") as f:
-    #             state = json.load(f)
+        # Selector encoder: rotation and click
+        self.event_bus.subscribe(EventType.ENCODER_ROTATE, lambda e: self.handle_selector_rotation(cast(EncoderRotateEvent, e).delta), filter_fn=lambda e: e.source == EncoderSource.SELECTOR)
+        self.event_bus.subscribe(EventType.ENCODER_CLICK, lambda e: self.handle_selector_click(), filter_fn=lambda e: e.source == EncoderSource.SELECTOR)
 
-    #         # Update UI state fields with readable keys
-    #         state["selected_zone_index"] = self.current_zone_index
-    #         state["edit_mode_on"] = self.edit_mode
-    #         state["main_mode"] = self.main_mode.name  # "STATIC" or "ANIMATION"
-    #         state["active_parameter"] = self.current_param.name  # e.g., "ZONE_COLOR_HUE"
-    #         state["lamp_white_mode_on"] = self.lamp_white_mode
+        # Modulator encoder: rotation and click
+        self.event_bus.subscribe(EventType.ENCODER_ROTATE, lambda e: self.handle_modulator_rotation(cast(EncoderRotateEvent, e).delta), filter_fn=lambda e: e.source == EncoderSource.MODULATOR)
+        self.event_bus.subscribe(EventType.ENCODER_CLICK, lambda e: self.handle_modulator_click(), filter_fn=lambda e: e.source == EncoderSource.MODULATOR)
 
-    #         if self.lamp_white_saved_state:
-    #             state["lamp_white_saved_state"] = self.lamp_white_saved_state
-    #         elif "lamp_white_saved_state" in state:
-    #             del state["lamp_white_saved_state"]  # Remove if None
+        # Buttons
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.toggle_edit_mode(), filter_fn=lambda e: e.source == ButtonID.BTN1)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.quick_lamp_white(), filter_fn=lambda e: e.source == ButtonID.BTN2)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.power_toggle(), filter_fn=lambda e: e.source == ButtonID.BTN3)
+        self.event_bus.subscribe(EventType.BUTTON_PRESS, lambda e: self.toggle_main_mode(), filter_fn=lambda e: e.source == ButtonID.BTN4)
 
-    #         # Save back
-    #         with open(state_path, "w") as f:
-    #             json.dump(state, f, indent=2)
-
-    #     except Exception as e:
-    #         log.error(LogCategory.STATE, f"Failed to save UI state: {e}")
 
     def _sync_preview(self):
         """
@@ -284,6 +277,19 @@ class LEDController:
                         params['length'] = value
                     elif param_id == ParamID.ANIM_HUE_OFFSET:
                         params['hue_offset'] = value
+
+                # For breathe animation, pass zone colors for per-zone preview
+                if current_anim.config.tag == "breathe":
+                    zone_colors = []
+                    for zone in self.zone_service.get_all():
+                        rgb = zone.state.color.to_rgb()
+                        brightness = zone.brightness / 100.0  # Normalize to 0-1
+                        # Apply brightness to RGB
+                        r = int(rgb[0] * brightness)
+                        g = int(rgb[1] * brightness)
+                        b = int(rgb[2] * brightness)
+                        zone_colors.append((r, g, b))
+                    params['zone_colors'] = zone_colors
 
                 # Extract speed separately (required positional arg)
                 speed = params.pop('speed', 50)
@@ -357,13 +363,26 @@ class LEDController:
         """
         Check if zone should be skipped for current operation
 
+        Skips zones that are:
+        - Excluded (e.g., lamp in white mode)
+        - Disabled in configuration
+
         Args:
             zone_id: ZoneID to check
 
         Returns:
             True if zone should be skipped
         """
-        return zone_id in self.get_excluded_zone_ids()
+        # Skip excluded zones (e.g., lamp in white mode)
+        if zone_id in self.get_excluded_zone_ids():
+            return True
+
+        # Skip disabled zones (configured as enabled: false)
+        zone = self.zone_service.get_zone(zone_id)
+        if not zone.config.enabled:
+            return True
+
+        return False
 
     async def _pulse_zone_task(self):
         """Async pulsing animation for current zone - fixed 1s cycle"""
@@ -567,11 +586,16 @@ class LEDController:
 
     def power_toggle(self):
         """Toggle power for all zones (ON/OFF) - saves and restores brightness and animation state"""
+        # Schedule async power toggle task
+        asyncio.create_task(self._power_toggle_async())
+
+    async def _power_toggle_async(self):
+        """Async implementation of power toggle with smooth transitions"""
         # Check if any zone has brightness > 0
         any_on = any(self.zone_service.get_zone(zone_id).brightness > 0 for zone_id in self.zone_ids)
 
         if any_on:
-            # Turning OFF: Save current brightness and animation state, then turn off
+            # Turning OFF: Save current brightness and animation state, then fade out
             if not hasattr(self, 'power_saved_brightness'):
                 self.power_saved_brightness = {}
 
@@ -580,49 +604,60 @@ class LEDController:
                 zone = self.zone_service.get_zone(zone_id)
                 self.power_saved_brightness[zone_id] = zone.brightness
 
-            # Save animation state and stop it
+            # Save animation state and stop it with transition
             self.power_saved_animation_enabled = self.animation_engine.is_running()
             if self.animation_engine.is_running():
-                from models.transition import TransitionConfig, TransitionType
-                # Use instant cut for power off (no fade needed)
-                transition = TransitionConfig(type=TransitionType.CUT)
-                asyncio.create_task(self.animation_engine.stop(transition))
+                # Use POWER_TOGGLE transition for smooth fade
+                transition = self.animation_engine.transition_service.POWER_TOGGLE
+                await self.animation_engine.stop(transition)
+            else:
+                # No animation running - apply fade-out transition to static state
+                transition = self.strip.transition_service.POWER_TOGGLE
+                await self.strip.transition_service.fade_out(transition)
 
-            # Turn off all zones
+            # Turn off all zones (state only, transition already rendered fade)
             for zone_id in self.zone_ids:
                 self.zone_service.set_brightness(zone_id, 0)
-                zone_id_str = zone_id.name.lower()
-                self.strip.set_zone_color(zone_id_str, 0, 0, 0)
 
             self.preview_panel.clear()
             log.log(LogCategory.SYSTEM, "Power OFF", saved="brightness and animation state")
         else:
-            # Turning ON: Restore saved brightness and animation state
+            # Turning ON: Restore saved brightness and animation state with fade-in
+            # Build target frame without showing (to avoid flicker)
+            target_colors = {}
+
             if hasattr(self, 'power_saved_brightness') and self.power_saved_brightness:
                 # Restore saved brightness
                 for zone_id in self.zone_ids:
                     saved = self.power_saved_brightness.get(zone_id, 64)
                     self.zone_service.set_brightness(zone_id, saved)
 
-                    # Apply color
+                    # Prepare target color (don't show yet)
                     r, g, b = self.zone_service.get_rgb(zone_id)
                     zone_id_str = zone_id.name.lower()
-                    self.strip.set_zone_color(zone_id_str, r, g, b)
+                    target_colors[zone_id_str] = (r, g, b)
                 log.log(LogCategory.SYSTEM, "Power ON", restored="saved brightness")
             else:
                 # No saved state, use default brightness (50%)
                 for zone_id in self.zone_ids:
                     self.zone_service.set_brightness(zone_id, 50)
 
-                    # Apply color
+                    # Prepare target color (don't show yet)
                     r, g, b = self.zone_service.get_rgb(zone_id)
                     zone_id_str = zone_id.name.lower()
-                    self.strip.set_zone_color(zone_id_str, r, g, b)
+                    target_colors[zone_id_str] = (r, g, b)
                 log.log(LogCategory.SYSTEM, "Power ON", brightness="default 50%")
+
+            # Build target frame for fade-in (zone colors → pixel frame)
+            target_frame = self.strip.build_frame_from_zones(target_colors)
+
+            # Apply fade-in transition (from black to target)
+            transition = self.strip.transition_service.POWER_TOGGLE
+            await self.strip.transition_service.fade_in(target_frame, transition)
 
             # Restore animation if it was running
             if hasattr(self, 'power_saved_animation_enabled') and self.power_saved_animation_enabled:
-                asyncio.create_task(self.start_animation())
+                await self.start_animation()
                 log.log(LogCategory.ANIMATION, "Animation restarted after power ON")
 
             self._sync_preview()
@@ -635,10 +670,9 @@ class LEDController:
 
     def _build_animation_params(self) -> Dict:
         """
-        Build animation-specific parameters with zone brightness applied
+        Build animation-specific parameters using domain model
 
-        Animations receive colors that already have zone brightness baked in,
-        so they match the brightness of static mode.
+        Delegates to AnimationCombined.build_params_for_engine() to avoid duplication.
 
         Returns:
             Dict of animation parameters
@@ -647,63 +681,12 @@ class LEDController:
         if not current_animation:
             return {"speed": 50}
 
-        animation_speed = current_animation.get_param_value(ParamID.ANIM_SPEED)
-        params = {"speed": animation_speed}
-
-        # Get current zone for reference (use its brightness/color)
+        # Get current zone for reference (used by build_params_for_engine)
         current_zone_id = self._get_current_zone_id()
         current_zone = self.zone_service.get_zone(current_zone_id)
 
-        # Get animation ID (with None check)
-        anim_id = self.current_animation_id
-        if not anim_id:
-            return params
-
-        if anim_id == AnimationID.BREATHE:
-            # Breathe: don't pass color parameter so animation uses per-zone cached colors
-            # Colors will be cached in start_animation() via _cache_zone_colors()
-            if ParamID.ANIM_INTENSITY in current_animation.parameters:
-                animation_intensity = current_animation.get_param_value(ParamID.ANIM_INTENSITY)
-                params["intensity"] = animation_intensity
-
-        elif anim_id == AnimationID.COLOR_FADE:
-            # Use current zone's hue as starting point
-            params["start_hue"] = current_zone.state.color.to_hue()
-
-        elif anim_id == AnimationID.SNAKE:
-            # Snake uses hue-based color with configurable length
-            if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
-                params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
-            else:
-                # Fallback: use zone color with brightness already applied
-                zone_red, zone_green, zone_blue = self.zone_service.get_rgb(current_zone_id)
-                params["color"] = (zone_red, zone_green, zone_blue)
-
-            if ParamID.ANIM_LENGTH in current_animation.parameters:
-                params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
-
-        elif anim_id == AnimationID.COLOR_SNAKE:
-            # Color snake uses hue-based colors with additional params from state
-            params["start_hue"] = current_zone.state.color.to_hue()
-
-            # Add other color_snake specific params if they exist
-            if ParamID.ANIM_LENGTH in current_animation.parameters:
-                params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
-            if ParamID.ANIM_HUE_OFFSET in current_animation.parameters:
-                params["hue_offset"] = current_animation.get_param_value(ParamID.ANIM_HUE_OFFSET)
-            if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
-                params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
-
-        elif anim_id == AnimationID.MATRIX:
-            # Matrix uses hue, length, and intensity
-            if ParamID.ANIM_PRIMARY_COLOR_HUE in current_animation.parameters:
-                params["hue"] = current_animation.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
-            if ParamID.ANIM_LENGTH in current_animation.parameters:
-                params["length"] = current_animation.get_param_value(ParamID.ANIM_LENGTH)
-            if ParamID.ANIM_INTENSITY in current_animation.parameters:
-                params["intensity"] = current_animation.get_param_value(ParamID.ANIM_INTENSITY)
-
-        return params
+        # Use domain model method (single source of truth)
+        return current_animation.build_params_for_engine(current_zone)
 
     def _cache_zone_colors(self):
         """Cache current zone colors with brightness for breathe animation"""
@@ -741,7 +724,6 @@ class LEDController:
         
         # Stop current animation with fade transition if running
         if self.animation_engine.is_running():
-            from models.transition import TransitionConfig
             transition = self.animation_engine.transition_service.ANIMATION_SWITCH
             await self.animation_engine.stop(transition)
         
@@ -754,9 +736,7 @@ class LEDController:
         current_animation = self.animation_service.get_current()
         if current_animation:
             animation_speed = current_animation.get_param_value(ParamID.ANIM_SPEED)
-            log.log(LogCategory.ANIMATION, "Animation started",
-                   id=current_animation.config.display_name,
-                   speed=f"{animation_speed}/100")
+            log.animation(f"Started: {current_animation.config.display_name} @ {animation_speed}/100")
 
     async def stop(self, clear_on_stop: bool = True):
         """Stop current animation and restore static colors"""
@@ -808,11 +788,7 @@ class LEDController:
         self.animation_service.set_current(new_animation_id)
 
         selected_animation = self.animation_service.get_animation(new_animation_id)
-        log.animation(
-            "Animation selected",
-            id=selected_animation.config.display_name,
-            index=f"{self.selected_animation_index + 1}/{len(self.available_animation_ids)}"
-        )
+        log.animation(f"Selected: {selected_animation.config.display_name} ({self.selected_animation_index + 1}/{len(self.available_animation_ids)})")
 
         # Update preview first (before restarting animation)
         self._sync_preview()
@@ -1155,30 +1131,28 @@ class LEDController:
         self._sync_preview()
 
         # Log parameter switch with current value
-        log_data = {"parameter": self.current_param.name}
-
         if self.main_mode == MainMode.STATIC:
             zone_id = self._get_current_zone_id()
             zone = self.zone_service.get_zone(zone_id)
-            log_data["zone"] = zone.config.display_name
-
+            value_str = ""
             if self.current_param == ParamID.ZONE_COLOR_HUE:
-                log_data["hue"] = f"{zone.state.color.to_hue()}°"
+                value_str = f"{zone.state.color.to_hue()}°"
             elif self.current_param == ParamID.ZONE_COLOR_PRESET:
-                log_data["preset"] = str(zone.state.color)
+                value_str = str(zone.state.color)
             elif self.current_param == ParamID.ZONE_BRIGHTNESS:
-                log_data["brightness"] = f"{zone.brightness}%"
+                value_str = f"{zone.brightness}%"
+            log.info(LogCategory.SYSTEM, f"Param cycled: {self.current_param.name} | {zone.config.display_name}: {value_str}")
         else:  # ANIMATION mode
             current_anim = self.animation_service.get_current()
+            value_str = ""
             if current_anim:
                 if self.current_param == ParamID.ANIM_SPEED:
-                    log_data["speed"] = f"{current_anim.get_param_value(ParamID.ANIM_SPEED)}/100"
+                    value_str = f"{current_anim.get_param_value(ParamID.ANIM_SPEED)}/100"
                 elif self.current_param == ParamID.ANIM_INTENSITY:
                     # Check if animation has ANIM_INTENSITY (not all do!)
                     if ParamID.ANIM_INTENSITY in current_anim.parameters:
-                        log_data["intensity"] = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
-
-        log.info(LogCategory.SYSTEM, "Parameter cycled", **log_data)
+                        value_str = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
+            log.info(LogCategory.SYSTEM, f"Param cycled: {self.current_param.name} = {value_str}")
         
         self.ui_session_service.save(current_param=self.current_param)
         

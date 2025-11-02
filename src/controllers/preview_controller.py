@@ -53,47 +53,72 @@ class PreviewController:
     
     def fill_with_color(self, color: Color) -> None:
         if self._animation_running:
-            self.stop_animation_preview()
-        
+            # Stop synchronously without crossfade
+            asyncio.create_task(self._stop_animation_without_crossfade())
+
         r, g, b = color.to_rgb()
         self.preview_panel.fill_with_color((r, g, b))
-        
-    def show_color(self, rgb: Tuple[int, int, int], brightness: int = 100) -> None:
+
+    def show_color(self, rgb: Tuple[int, int, int], brightness: int = 100, use_crossfade: bool = True) -> None:
         """
         Show static color on all 8 LEDs with brightness scaling
 
-        Stops any running animation before displaying.
+        Stops any running animation before displaying, optionally with crossfade.
 
         Args:
             rgb: RGB tuple (0-255 values)
             brightness: Brightness percentage (0-100)
+            use_crossfade: If True and animation is running, crossfade to new color
 
         Example:
             >>> controller.show_color((255, 100, 50), 75)  # Orange at 75%
         """
-        self.stop_animation_preview()
-        
         # Apply brightness scaling
         r, g, b = [int(c * brightness / 100) for c in rgb]
-        self.preview_panel.fill_with_color((r, g, b))
+        target_frame = [(r, g, b)] * self.preview_panel.count
+
+        if self._animation_running and use_crossfade:
+            # Stop with crossfade to target
+            asyncio.create_task(self.stop_animation_preview(target_frame))
+        else:
+            # Stop without crossfade or no animation running
+            if self._animation_running:
+                asyncio.create_task(self._stop_animation_without_crossfade())
+            self.preview_panel.fill_with_color((r, g, b))
 
     def show_bar(self, value: int, max_value: int = 100,
-                 color: Tuple[int, int, int] = (255, 255, 255)) -> None:
+                 color: Tuple[int, int, int] = (255, 255, 255), use_crossfade: bool = True) -> None:
         """
         Show bar indicator (0-8 LEDs lit proportionally to value)
 
-        Stops any running animation before displaying.
+        Stops any running animation before displaying, optionally with crossfade.
 
         Args:
             value: Current value
             max_value: Maximum value for normalization
             color: RGB color for lit LEDs
+            use_crossfade: If True and animation is running, crossfade to bar
 
         Example:
             >>> controller.show_bar(60, 100, (0, 255, 0))  # 5 LEDs green (60%)
         """
-        self.stop_animation_preview()
-        self.preview_panel.show_bar(value, max_value, color)
+        # Build target frame for bar
+        filled = int((value / max_value) * self.preview_panel.count)
+        filled = max(0, min(self.preview_panel.count, filled))
+        target_frame = [color if i < filled else (0, 0, 0) for i in range(self.preview_panel.count)]
+
+        if self._animation_running and use_crossfade:
+            # Stop with crossfade to bar
+            asyncio.create_task(self.stop_animation_preview(target_frame))
+        else:
+            # Stop without crossfade or no animation running
+            if self._animation_running:
+                asyncio.create_task(self._stop_animation_without_crossfade())
+            self.preview_panel.show_bar(value, max_value, color)
+
+    async def _stop_animation_without_crossfade(self) -> None:
+        """Stop animation immediately without crossfade"""
+        await self.stop_animation_preview(target_frame=None)
 
     # ===== ANIMATION PREVIEW METHODS =====
 
@@ -122,6 +147,7 @@ class PreviewController:
         from animations.color_fade import ColorFadeAnimation
         from animations.color_snake import ColorSnakeAnimation
         from animations.matrix import MatrixAnimation
+        from animations.color_cycle import ColorCycleAnimation
 
         # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
         empty_zones = []
@@ -137,11 +163,26 @@ class PreviewController:
             )
 
         elif animation_id == "breathe":
+            # For breathe preview, check if zone_colors provided (per-zone preview)
+            zone_colors = params.get('zone_colors')
+
+            # If no zone colors, convert hue to RGB for single-color preview
+            if zone_colors is None:
+                from utils.colors import hue_to_rgb
+                color = params.get('color')
+                if color is None and 'hue' in params:
+                    color = hue_to_rgb(params['hue'])
+                if color is None:
+                    color = (255, 0, 0)  # Default red
+            else:
+                color = None  # Will use zone_colors in run_preview
+
             return BreatheAnimation(
                 zones=empty_zones,
                 speed=speed,
-                color=params.get('color', (255, 0, 0)),
-                intensity=params.get('intensity', 100)
+                color=color,
+                intensity=params.get('intensity', 100),
+                zone_colors=zone_colors  # Pass zone colors for per-zone preview
             )
 
         elif animation_id == "color_fade":
@@ -168,12 +209,19 @@ class PreviewController:
                 length=params.get('length', 5),
                 intensity=params.get('intensity', 100)
             )
+        
+        elif animation_id == "color_cycle":
+            return ColorCycleAnimation(
+                zones=empty_zones,
+                speed=speed,
+                hue=params.get('hue', 120),  # Default green
+            )
 
         else:
             # Unknown animation
             return None
 
-    def start_animation_preview(self, animation_id: str, speed: int = 50, **params) -> None:
+    def start_animation_preview(self, animation_id: str, speed: int = 50, use_crossfade: bool = True, **params) -> None:
         """
         Start animation preview using animation's run_preview() method
 
@@ -183,6 +231,7 @@ class PreviewController:
         Args:
             animation_id: Animation name ('snake', 'breathe', 'color_fade', 'color_snake')
             speed: Animation speed (1-100)
+            use_crossfade: If True and previous animation running, crossfade between them
             **params: Additional animation parameters (color, intensity, start_hue, etc.)
 
         Example:
@@ -198,7 +247,70 @@ class PreviewController:
                     self._current_animation.update_param(key, value)
             return
 
-        self.stop_animation_preview()
+        # If crossfade enabled and animation running, do async crossfade transition
+        if use_crossfade and (self._animation_running or self._animation_task):
+            # Get first frame of new animation for crossfade target
+            asyncio.create_task(self._crossfade_to_new_animation(animation_id, speed, params))
+            return
+
+        # Stop previous animation IMMEDIATELY (no crossfade)
+        if self._animation_running or self._animation_task:
+            self._stop_animation_sync()
+
+        self._start_animation_preview_internal(animation_id, speed, params)
+
+    async def _crossfade_to_new_animation(self, animation_id: str, speed: int, params: dict) -> None:
+        """
+        Crossfade from current animation to new animation
+
+        Captures first frame of new animation and crossfades to it.
+        """
+        # Capture current frame before stopping
+        from_frame = self.preview_panel.get_frame()
+
+        # Stop old animation (wait for completion)
+        await self.stop_animation_preview(target_frame=None)  # Don't crossfade yet
+
+        # Create new animation instance temporarily to get first frame
+        try:
+            temp_anim = self._create_animation_instance(animation_id, speed, **params)
+            if temp_anim:
+                temp_anim.running = True
+                # Get first frame from preview
+                async for first_frame in temp_anim.run_preview(pixel_count=self.preview_panel.count):
+                    # Stop temporary animation
+                    temp_anim.stop()
+
+                    # Crossfade from old last frame to new first frame
+                    await self._crossfade_preview(from_frame, first_frame, duration_ms=200, steps=8)
+                    break
+        except Exception as e:
+            log.log(LogCategory.SYSTEM, "Crossfade failed, using instant switch",
+                   level=LogLevel.WARN, error=str(e))
+
+        # Start the actual animation
+        self._start_animation_preview_internal(animation_id, speed, params)
+
+    def _stop_animation_sync(self) -> None:
+        """
+        Stop animation synchronously (sets flags, cancels task)
+
+        Does NOT wait for task completion - old task will finish in background.
+        Does NOT perform crossfade - instant stop for animation-to-animation transitions.
+        """
+        self._animation_running = False
+
+        if self._current_animation:
+            self._current_animation.stop()
+
+        if self._animation_task:
+            self._animation_task.cancel()
+            self._animation_task = None
+
+        self._current_animation = None
+
+    def _start_animation_preview_internal(self, animation_id: str, speed: int, params: dict) -> None:
+        """Internal method to start animation preview (assumes no animation is running)"""
         self._current_animation_id = animation_id
 
         # Instantiate animation (no zones needed - preview mode uses simplified logic)
@@ -208,7 +320,7 @@ class PreviewController:
             )
 
             if not self._current_animation:
-                log.log(LogCategory.SYSTEM, "Unknown animation for preview",
+                log.log(LogCategory.ANIMATION, "Unknown animation for preview",
                        level=LogLevel.WARN, animation_id=animation_id)
                 # Fallback: show static color
                 self.show_color((50, 50, 50))
@@ -218,32 +330,87 @@ class PreviewController:
             self._animation_running = True
             self._animation_task = asyncio.create_task(self._run_preview_loop())
 
-            log.log(LogCategory.SYSTEM, "Preview animation started",
-                   animation_id=animation_id, speed=speed)
+            log.debug(LogCategory.ANIMATION, f"Preview: {animation_id} @ {speed}")
 
         except Exception as e:
             log.log(LogCategory.SYSTEM, "Failed to start preview animation",
                    level=LogLevel.ERROR, error=str(e), animation_id=animation_id)
             self.preview_panel.clear()
 
-    def stop_animation_preview(self) -> None:
+    async def stop_animation_preview(self, target_frame: Optional[List[Tuple[int, int, int]]] = None) -> None:
         """
         Stop currently running animation preview
 
-        Cancels async task, stops animation, and clears preview preview_panel.
+        Cancels async task, stops animation, and optionally crossfades to target frame.
+        If no target_frame provided, clears to black.
         Safe to call even if no animation is running.
+        Waits for task to actually finish before returning.
+
+        Args:
+            target_frame: Optional target frame to crossfade to (instead of clearing to black)
         """
+        # Capture current frame before stopping (for crossfade)
+        from_frame = self.preview_panel.get_frame() if target_frame else None
+
         self._animation_running = False
 
         if self._current_animation:
             self._current_animation.stop()
-            self._current_animation = None
 
         if self._animation_task:
             self._animation_task.cancel()
+            try:
+                await self._animation_task
+            except asyncio.CancelledError:
+                pass
             self._animation_task = None
 
-        self.preview_panel.clear()
+        self._current_animation = None
+
+        # Crossfade to target or clear
+        if target_frame and from_frame:
+            await self._crossfade_preview(from_frame, target_frame)
+        else:
+            self.preview_panel.clear()
+
+    async def _crossfade_preview(
+        self,
+        from_frame: List[Tuple[int, int, int]],
+        to_frame: List[Tuple[int, int, int]],
+        duration_ms: int = 300,
+        steps: int = 10
+    ) -> None:
+        """
+        Crossfade between two frames on preview panel
+
+        Smoothly interpolates RGB values from one frame to another.
+
+        Args:
+            from_frame: Starting frame
+            to_frame: Target frame
+            duration_ms: Total duration in milliseconds
+            steps: Number of interpolation steps
+        """
+        if len(from_frame) != len(to_frame):
+            # Fallback to instant switch if frames don't match
+            self.preview_panel.show_frame(to_frame)
+            return
+
+        step_delay = duration_ms / 1000 / steps
+
+        for step in range(steps + 1):
+            progress = step / steps
+
+            # Interpolate each pixel
+            interpolated_frame = []
+            for (r1, g1, b1), (r2, g2, b2) in zip(from_frame, to_frame):
+                r = int(r1 + (r2 - r1) * progress)
+                g = int(g1 + (g2 - g1) * progress)
+                b = int(b1 + (b2 - b1) * progress)
+                interpolated_frame.append((r, g, b))
+
+            self.preview_panel.show_frame(interpolated_frame)
+            await asyncio.sleep(step_delay)
 
     def update_param(self, param: str, value: Any) -> None:
         """
@@ -272,13 +439,15 @@ class PreviewController:
         Each animation provides its own simplified preview visualization for 8 pixels.
         Frames are directly displayed on the preview panel.
         """
-        if not self._current_animation:
+        # Capture animation instance at start to avoid race conditions
+        animation_instance = self._current_animation
+        if not animation_instance:
             return
 
         try:
-            self._current_animation.running = True
+            animation_instance.running = True
 
-            async for frame in self._current_animation.run_preview(pixel_count=self.preview_panel.count):
+            async for frame in animation_instance.run_preview(pixel_count=self.preview_panel.count):
                 if not self._animation_running:
                     break
 
@@ -292,6 +461,8 @@ class PreviewController:
             log.log(LogCategory.SYSTEM, "Preview animation error",
                    level=LogLevel.ERROR, error=str(e))
         finally:
-            self._current_animation = None
-            if self._animation_running:  # Only clear if not already cleared by stop()
-                self.preview_panel.clear()
+            # Only clear if this is still the current animation (not replaced by new one)
+            if self._current_animation is animation_instance:
+                self._current_animation = None
+                if self._animation_running:
+                    self.preview_panel.clear()

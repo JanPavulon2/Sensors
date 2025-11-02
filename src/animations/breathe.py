@@ -95,9 +95,10 @@ class BreatheAnimation(BaseAnimation):
 
     async def run_preview(self, pixel_count: int = 8):
         """
-        Simplified preview for 8-pixel preview panel
+        Preview for breathe animation
 
-        Shows all 8 pixels breathing in sync.
+        If zone_colors provided: Each pixel represents one zone with its own color.
+        Otherwise: All pixels breathe with the same specified color.
         """
         self.running = True
         start_time = time.time()
@@ -120,19 +121,35 @@ class BreatheAnimation(BaseAnimation):
             # Apply intensity scaling
             brightness_factor *= (self.intensity / 100)
 
-            # Use specified color or default
-            if self.color:
-                r, g, b = self.color
+            frame = []
+
+            # Check if zone_colors provided (per-zone preview)
+            if hasattr(self, 'zone_colors') and self.zone_colors:
+                # Each pixel = one zone with its own color
+                for i in range(pixel_count):
+                    if i < len(self.zone_colors):
+                        r, g, b = self.zone_colors[i]
+                    else:
+                        r, g, b = 0, 0, 0  # Black for extra pixels
+
+                    # Apply breathing brightness modulation
+                    r_out = int(r * brightness_factor)
+                    g_out = int(g * brightness_factor)
+                    b_out = int(b * brightness_factor)
+                    frame.append((r_out, g_out, b_out))
             else:
-                r, g, b = 255, 0, 0  # Default red for preview
+                # All pixels same color (fallback behavior)
+                if self.color:
+                    r, g, b = self.color
+                else:
+                    r, g, b = 255, 255, 255
 
-            # Apply brightness modulation
-            r_out = int(r * brightness_factor)
-            g_out = int(g * brightness_factor)
-            b_out = int(b * brightness_factor)
+                # Apply breathing brightness modulation
+                r_out = int(r * brightness_factor)
+                g_out = int(g * brightness_factor)
+                b_out = int(b * brightness_factor)
 
-            # All pixels same color (breathing in sync)
-            frame = [(r_out, g_out, b_out)] * pixel_count
+                frame = [(r_out, g_out, b_out)] * pixel_count
 
             yield frame
             await asyncio.sleep(frame_delay)

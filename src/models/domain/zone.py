@@ -88,7 +88,15 @@ class ZoneCombined:
         return self.get_param_value(ParamID.ZONE_BRIGHTNESS)
 
     def get_rgb(self) -> tuple[int, int, int]:
-        """Get current RGB color with brightness applied"""
+        """
+        Get current RGB color with brightness applied
+
+        Returns (0, 0, 0) if zone is disabled, otherwise returns color with brightness.
+        """
+        # Disabled zones are always black
+        if not self.config.enabled:
+            return (0, 0, 0)
+
         r, g, b = self.state.color.to_rgb()
         brightness_factor = self.brightness / 100.0
         return (

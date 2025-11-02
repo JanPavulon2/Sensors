@@ -94,7 +94,8 @@ class UISessionService:
             }
 
             self.assembler.save_partial_state(data)
-            log.log(LogCategory.SYSTEM, "UI session state saved", **data)
+            # Log only on LogLevel.DEBUG to reduce verbosity
+            log.debug(LogCategory.STATE, f"UI saved: {self.state.main_mode.name}|{self.state.current_param.name}|Z{self.state.current_zone_index}")
 
         except Exception as e:
             log.error(LogCategory.STATE, f"Failed to save UI session state: {e}")

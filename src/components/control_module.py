@@ -2,11 +2,16 @@
 Control Module - Hardware abstraction layer
 
 Provides event-driven interface for hardware input polling.
+Publishes events to EventBus instead of using callbacks.
 """
 
+import asyncio
 import RPi.GPIO as GPIO
 from components import RotaryEncoder, Button
 from managers.hardware_manager import HardwareManager
+from services.event_bus import EventBus
+from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
+from models.enums import EncoderSource, ButtonID
 
 
 class ControlModule:
@@ -14,41 +19,37 @@ class ControlModule:
     Hardware control module for LED station
 
     Components:
-        - Selector (Encoder): Selects items (zones in STATIC mode, animations in ANIMATION mode)
-        - Modulator (Encoder): Modulates parameter values (color, brightness, speed, intensity)
+        - Selector (Encoder): Selects items (zones, animations, etc.)
+        - Modulator (Encoder): Modulates parameter values
         - 4x Buttons: Mode toggles and special functions
 
-    Callbacks (assign functions to these):
-        - on_selector_rotate(delta): Called when selector encoder rotates
-        - on_selector_click(): Called when selector encoder button pressed
-        - on_modulator_rotate(delta): Called when modulator encoder rotates
-        - on_modulator_click(): Called when modulator encoder button pressed
-        - on_button: List of 4 button callbacks
+    Event-driven: Publishes events to EventBus instead of callbacks.
     """
 
-    def __init__(self, hardware_manager: HardwareManager):
+    def __init__(self, hardware_manager: HardwareManager, event_bus: EventBus):
         """
-        Initialize ControlModule with HardwareManager
+        Initialize ControlModule
 
         Args:
-            hardware_manager: HardwareManager instance providing hardware configuration
+            hardware_manager: Hardware configuration provider
+            event_bus: EventBus for publishing hardware events
         """
         self.hardware_manager = hardware_manager
+        self.event_bus = event_bus
 
         # Initialize GPIO
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
-        # Selector (Encoder) - selects items (zones/animations)
-        # Config key is still "zone_selector" for backward compatibility
-        selector_cfg = hardware_manager.get_encoder("zone_selector")
+        # Selector (Encoder) - multi-purpose selector
+        selector_cfg = hardware_manager.get_encoder("selector")
         self.selector = RotaryEncoder(
             clk=selector_cfg["clk"], # type: ignore
             dt=selector_cfg["dt"], # type: ignore
             sw=selector_cfg["sw"] # type: ignore
         )
 
-        # Modulator (Encoder) - modulates parameter values
+        # Modulator (Encoder) - parameter value modulation
         modulator_cfg = hardware_manager.get_encoder("modulator")
         self.modulator = RotaryEncoder(
             clk=modulator_cfg["clk"], # type: ignore
@@ -56,45 +57,44 @@ class ControlModule:
             sw=modulator_cfg["sw"] # type: ignore
         )
 
-        # Buttons - from HardwareManager
+        # Buttons
         button_pins = hardware_manager.button_pins
         self.buttons = [Button(pin) for pin in button_pins]
 
-        # Event callbacks (user assigns these)
-        self.on_selector_rotate = None
-        self.on_selector_click = None
-        self.on_modulator_rotate = None
-        self.on_modulator_click = None
-        self.on_button = [None, None, None, None]
-
     def poll(self):
         """
-        Poll all hardware inputs and call callbacks
+        Poll all hardware inputs and publish events to EventBus
 
-        Call this in your main loop to handle all hardware events.
+        Call this in main loop to process hardware events.
         """
         # Selector rotation
         delta = self.selector.read()
-        if delta != 0 and self.on_selector_rotate:
-            self.on_selector_rotate(delta)
+        if delta != 0:
+            event = EncoderRotateEvent(EncoderSource.SELECTOR, delta)
+            asyncio.create_task(self.event_bus.publish(event))
 
         # Selector button
-        if self.selector.is_pressed() and self.on_selector_click:
-            self.on_selector_click()
+        if self.selector.is_pressed():
+            event = EncoderClickEvent(EncoderSource.SELECTOR)
+            asyncio.create_task(self.event_bus.publish(event))
 
         # Modulator rotation
         delta = self.modulator.read()
-        if delta != 0 and self.on_modulator_rotate:
-            self.on_modulator_rotate(delta)
+        if delta != 0:
+            event = EncoderRotateEvent(EncoderSource.MODULATOR, delta)
+            asyncio.create_task(self.event_bus.publish(event))
 
         # Modulator button
-        if self.modulator.is_pressed() and self.on_modulator_click:
-            self.on_modulator_click()
+        if self.modulator.is_pressed():
+            event = EncoderClickEvent(EncoderSource.MODULATOR)
+            asyncio.create_task(self.event_bus.publish(event))
 
-        # Buttons
+        # Buttons (map index to ButtonID enum)
+        button_ids = [ButtonID.BTN1, ButtonID.BTN2, ButtonID.BTN3, ButtonID.BTN4]
         for i, btn in enumerate(self.buttons):
-            if btn.is_pressed() and self.on_button[i]:
-                self.on_button[i]() # type: ignore
+            if btn.is_pressed():
+                event = ButtonPressEvent(button_ids[i])
+                asyncio.create_task(self.event_bus.publish(event))
 
     def cleanup(self):
         """Clean up GPIO resources"""

@@ -63,7 +63,7 @@ class SnakeAnimation(BaseAnimation):
         # Track currently lit pixels to know which to turn off next frame
         self.previous_pixels: List[Tuple[str, int]] = []
 
-        log.info(f"SnakeAnimation initialized",
+        log.debug(f"SnakeAnimation initialized",
             length=self.length,
             total_pixels=self.total_pixels,
             zones=len(self.zone_order))

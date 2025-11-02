@@ -69,18 +69,19 @@ class DataAssembler:
             current_anim_params = state_json.get("current_animation", {}).get("parameters", {})
 
             for anim_info in available_animations:
-                animation_id = EnumHelper.to_enum(AnimationID, anim_info.id)
+                animation_id = anim_info.id  # Already AnimationID enum
                 parameter_ids = anim_info.get_all_parameters()
 
                 animation_config = AnimationConfig(
                     id=animation_id,
-                    tag=anim_info.id,
+                    tag=anim_info.tag,  # String tag for file/class lookup
                     display_name=anim_info.display_name,
                     description=anim_info.description,
                     parameters=parameter_ids
                 )
 
-                is_current = (current_anim_id == animation_id.name.lower())
+                # Compare uppercase enum names (state.json now stores "SNAKE" not "snake")
+                is_current = (current_anim_id == animation_id.name)
 
                 # Extract parameter values from state
                 param_values = {}
@@ -131,7 +132,8 @@ class DataAssembler:
             zones = []
 
             param_configs = self.parameter_manager.get_all_parameters()
-            zone_configs = self.config_manager.get_enabled_zones()  # Returns List[ZoneConfig] with indices calculated
+            # IMPORTANT: Use get_all_zones() to preserve pixel indices for disabled zones
+            zone_configs = self.config_manager.get_all_zones()  # Returns List[ZoneConfig] with indices calculated
 
             log(f"Building {len(zone_configs)} zone objects...")
 
@@ -189,16 +191,15 @@ class DataAssembler:
                 params_dict = {}
                 for param_id, param_combined in current_anim.parameters.items():
                     params_dict[param_id.name] = param_combined.state.value
-                    log(f"  {param_id.name} = {param_combined.state.value}")
 
                 state_json["current_animation"] = {
-                    "id": current_anim.config.id.name.lower(),
+                    "id": current_anim.config.id.name,  # Keep enum name uppercase (e.g., "SNAKE")
                     "parameters": params_dict
                 }
-                log(f"Saved current animation: {current_anim.config.display_name}")
+                log.debug(f"Saved anim state: {current_anim.config.display_name}")
             else:
                 state_json["current_animation"] = {"id": None, "parameters": {}}
-                log("Saved current animation: none")
+                log.debug("Saved anim state: none")
 
             self.save_state(state_json)
 
