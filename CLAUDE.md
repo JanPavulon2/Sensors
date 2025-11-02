@@ -8,6 +8,17 @@ Raspberry Pi LED control station with zone-based addressable RGB LED control, ro
 
 **Hardware**: WS2811 (12V) addressable LEDs controlled via rpi_ws281x library. Two separate strips (preview panel + main strip), 2 rotary encoders, 4 buttons.
 
+## Git Branching Strategy
+
+This project uses a **version-based branching strategy**. See [BRANCHING.md](BRANCHING.md) for full details.
+
+**Quick reference**:
+- `main` - Production-ready releases only
+- `version/X.Y` - Version in development (e.g., `version/0.1`)
+- `feature/name` - Individual features (merged to version branch)
+
+**Workflow**: Create feature branches from `version/X.Y`, merge features to version branch, merge completed versions to `main`.
+
 ## Running the Application
 
 ```bash
