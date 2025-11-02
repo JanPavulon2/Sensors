@@ -97,8 +97,8 @@ class BreatheAnimation(BaseAnimation):
         """
         Preview for breathe animation
 
-        Each pixel represents one zone with matching color/brightness.
-        Shows how each zone breathes with its own color.
+        If zone_colors provided: Each pixel represents one zone with its own color.
+        Otherwise: All pixels breathe with the same specified color.
         """
         self.running = True
         start_time = time.time()
@@ -121,34 +121,35 @@ class BreatheAnimation(BaseAnimation):
             # Apply intensity scaling
             brightness_factor *= (self.intensity / 100)
 
-            # Build frame: each pixel = one zone
             frame = []
-            for i, zone_name in enumerate(self.active_zones):
-                if i >= pixel_count:
-                    break  # Limit to preview pixel count
 
-                # Get zone's cached color
+            # Check if zone_colors provided (per-zone preview)
+            if hasattr(self, 'zone_colors') and self.zone_colors:
+                # Each pixel = one zone with its own color
+                for i in range(pixel_count):
+                    if i < len(self.zone_colors):
+                        r, g, b = self.zone_colors[i]
+                    else:
+                        r, g, b = 0, 0, 0  # Black for extra pixels
+
+                    # Apply breathing brightness modulation
+                    r_out = int(r * brightness_factor)
+                    g_out = int(g * brightness_factor)
+                    b_out = int(b * brightness_factor)
+                    frame.append((r_out, g_out, b_out))
+            else:
+                # All pixels same color (fallback behavior)
                 if self.color:
-                    # Use specified color
                     r, g, b = self.color
                 else:
-                    # Use zone's cached color
-                    cached = self.get_cached_color(zone_name)
-                    if cached:
-                        r, g, b = cached
-                    else:
-                        r, g, b = 255, 255, 255  # Fallback white
+                    r, g, b = 255, 255, 255
 
                 # Apply breathing brightness modulation
                 r_out = int(r * brightness_factor)
                 g_out = int(g * brightness_factor)
                 b_out = int(b * brightness_factor)
 
-                frame.append((r_out, g_out, b_out))
-
-            # Fill remaining pixels with black if fewer zones than pixels
-            while len(frame) < pixel_count:
-                frame.append((0, 0, 0))
+                frame = [(r_out, g_out, b_out)] * pixel_count
 
             yield frame
             await asyncio.sleep(frame_delay)

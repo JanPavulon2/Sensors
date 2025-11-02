@@ -192,9 +192,12 @@ class ConfigManager:
 
     # ===== Zone Access API =====
 
-    def get_enabled_zones(self) -> List[ZoneConfig]:
+    def get_all_zones(self) -> List[ZoneConfig]:
         """
-        Get enabled zones with calculated indices
+        Get ALL zones (enabled + disabled) with calculated indices
+
+        IMPORTANT: Disabled zones preserve their pixel indices to prevent physical LED shifting.
+        Domain layer (ZoneCombined.get_rgb()) renders disabled zones as black (0,0,0).
 
         Returns:
             List of ZoneConfig objects (immutable, with indices calculated)
@@ -204,27 +207,26 @@ class ConfigManager:
             log("No zones found in config!", LogLevel.WARN)
             return []
 
-        # Filter enabled and sort by order
-        enabled_dicts = [z for z in zones_raw if z.get("enabled", True)]
-        enabled_dicts.sort(key=lambda z: z.get("order", 0))
+        # Sort by order (ALL zones, not just enabled)
+        zones_raw.sort(key=lambda z: z.get("order", 0))
 
-        # Calculate indices
+        # Calculate indices for ALL zones (disabled zones preserve their pixel space)
         prev_end = -1
         zone_configs = []
 
-        for zone_dict in enabled_dicts:
+        for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
             start_index = prev_end + 1
             end_index = start_index + pixel_count - 1
             prev_end = end_index
 
-            # Build ZoneConfig object
+            # Build ZoneConfig object (preserve enabled flag)
             zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
             zone_config = ZoneConfig(
                 id=zone_id,
                 display_name=zone_dict.get("name", "Unknown"),
                 pixel_count=pixel_count,
-                enabled=True,  # Only enabled zones reach here
+                enabled=zone_dict.get("enabled", True),  # Preserve actual enabled state
                 reversed=zone_dict.get("reversed", False),
                 order=zone_dict.get("order", 0),
                 start_index=start_index,
@@ -232,8 +234,20 @@ class ConfigManager:
             )
             zone_configs.append(zone_config)
 
-        log(f"Built {len(zone_configs)} ZoneConfig objects with calculated indices")
+        log(f"Built {len(zone_configs)} ZoneConfig objects (includes disabled zones)")
         return zone_configs
+
+    def get_enabled_zones(self) -> List[ZoneConfig]:
+        """
+        Get only enabled zones (filtered from get_all_zones())
+
+        DEPRECATED: Use get_all_zones() instead to preserve pixel indices.
+        Only use this for UI zone selection, not for hardware rendering.
+
+        Returns:
+            List of ZoneConfig objects for enabled zones only
+        """
+        return [z for z in self.get_all_zones() if z.enabled]
 
     def get_zone_tags(self) -> List[str]:
         """

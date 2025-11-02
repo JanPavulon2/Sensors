@@ -37,7 +37,7 @@ class ColorCycleAnimation(BaseAnimation):
         ]
         self.current_index = 0
 
-        log.info("ColorCycleAnimation initialized (RGB test)")
+        log.debug("ColorCycleAnimation initialized (RGB test)")
 
     async def run(self) -> AsyncIterator[Tuple[str, int, int, int]]:
         """Run color cycle animation"""
@@ -60,14 +60,15 @@ class ColorCycleAnimation(BaseAnimation):
             await asyncio.sleep(3.0)
 
     async def run_preview(self, pixel_count: int = 8):
-        """Preview panel"""
+        """Preview panel - shows same color as main strip"""
         self.running = True
 
         while self.running:
             r, g, b = self.colors[self.current_index]
 
-            for i in range(pixel_count):
-                yield (i, r, g, b)
+            # All pixels same color (matches main strip behavior)
+            frame = [(r, g, b)] * pixel_count
+            yield frame
 
             self.current_index = (self.current_index + 1) % len(self.colors)
 

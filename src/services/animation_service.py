@@ -39,7 +39,7 @@ class AnimationService:
             anim.state.enabled = (anim.config.id == animation_id)
 
         current = self.get_animation(animation_id)
-        log(f"Set current animation: {current.config.display_name}")
+        log.debug(f"AnimService: set current → {current.config.display_name}")
         self.save()
         return current
 

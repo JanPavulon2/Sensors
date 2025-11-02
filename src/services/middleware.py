@@ -21,10 +21,14 @@ def log_middleware(event: Event) -> Event:
     # Format source (handle both enum and string)
     source_str = event.source.name if hasattr(event.source, 'name') else str(event.source)
 
+    # Format data compactly
+    if 'delta' in event.data:
+        data_str = f"delta={event.data['delta']}"
+    else:
+        data_str = str(event.data)
+
     log.debug(
         LogCategory.SYSTEM,
-        f"EVENT: {event.type.name}",
-        source=source_str,
-        data=event.data
+        f"Event: {event.type.name} from {source_str} | {data_str}"
     )
     return event

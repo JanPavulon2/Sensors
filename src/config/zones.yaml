@@ -15,7 +15,7 @@ zones:
     name: Left
     tag: left
     pixel_count: 4       # 9 physical LEDs (3 * 3)
-    enabled: true
+    enabled: false
     order: 2
 
   - id: TOP

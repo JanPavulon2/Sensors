@@ -120,7 +120,7 @@ class AnimationEngine:
         # Start animation loop
         self.animation_task = asyncio.create_task(self._run_loop())
 
-        log.info(f"Animation started: {name}", params=params)
+        log.debug(f"AnimEngine: started {name} | params:{params}")
         
     async def stop(self, transition: Optional[TransitionConfig] = None):
         """
@@ -156,10 +156,11 @@ class AnimationEngine:
                 pass
             self.animation_task = None
 
+        log.debug(f"AnimEngine: stopped {self.current_name}")
+        
         self.current_animation = None
         self.current_name = None
 
-        log.info("Animation stopped")
 
 
     def update_param(self, param: str, value):

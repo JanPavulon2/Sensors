@@ -123,10 +123,12 @@ class LEDController:
         # Only use base animation params (SPEED, INTENSITY) for cycling
         self.animation_params = [pid for pid in anim_params.keys() if pid in [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]]
 
-        # Get zones from ZoneService (domain objects are source of truth)
-        zones = self.zone_service.get_enabled()
-        self.zone_ids = [z.config.id for z in zones]  # List[ZoneID] for indexing
-        zone_configs = [z.config for z in zones]  # List[ZoneConfig] for ZoneStrip constructor
+        # Get ALL zones from ZoneService (domain objects are source of truth)
+        # IMPORTANT: Use get_all() to preserve pixel indices for disabled zones
+        # Disabled zones will be rendered as black via ZoneCombined.get_rgb()
+        all_zones = self.zone_service.get_all()
+        self.zone_ids = [z.config.id for z in all_zones]  # List[ZoneID] - physical mapping
+        zone_configs = [z.config for z in all_zones]  # List[ZoneConfig] for ZoneStrip constructor
 
         # Hardware setup via HardwareManager (dependency injection)
         if self.config_manager.hardware_manager is None:
@@ -169,7 +171,7 @@ class LEDController:
         # Zone selection (index into self.zone_ids) - validate bounds
 
         # Animation system
-        self.animation_engine: AnimationEngine = AnimationEngine(self.strip, zones)
+        self.animation_engine: AnimationEngine = AnimationEngine(self.strip, all_zones)
 
         # Animation list for selection (AnimationID enums)
         all_animations = self.animation_service.get_all()
@@ -276,6 +278,19 @@ class LEDController:
                     elif param_id == ParamID.ANIM_HUE_OFFSET:
                         params['hue_offset'] = value
 
+                # For breathe animation, pass zone colors for per-zone preview
+                if current_anim.config.tag == "breathe":
+                    zone_colors = []
+                    for zone in self.zone_service.get_all():
+                        rgb = zone.state.color.to_rgb()
+                        brightness = zone.brightness / 100.0  # Normalize to 0-1
+                        # Apply brightness to RGB
+                        r = int(rgb[0] * brightness)
+                        g = int(rgb[1] * brightness)
+                        b = int(rgb[2] * brightness)
+                        zone_colors.append((r, g, b))
+                    params['zone_colors'] = zone_colors
+
                 # Extract speed separately (required positional arg)
                 speed = params.pop('speed', 50)
 
@@ -348,13 +363,26 @@ class LEDController:
         """
         Check if zone should be skipped for current operation
 
+        Skips zones that are:
+        - Excluded (e.g., lamp in white mode)
+        - Disabled in configuration
+
         Args:
             zone_id: ZoneID to check
 
         Returns:
             True if zone should be skipped
         """
-        return zone_id in self.get_excluded_zone_ids()
+        # Skip excluded zones (e.g., lamp in white mode)
+        if zone_id in self.get_excluded_zone_ids():
+            return True
+
+        # Skip disabled zones (configured as enabled: false)
+        zone = self.zone_service.get_zone(zone_id)
+        if not zone.config.enabled:
+            return True
+
+        return False
 
     async def _pulse_zone_task(self):
         """Async pulsing animation for current zone - fixed 1s cycle"""
@@ -696,7 +724,6 @@ class LEDController:
         
         # Stop current animation with fade transition if running
         if self.animation_engine.is_running():
-            from models.transition import TransitionConfig
             transition = self.animation_engine.transition_service.ANIMATION_SWITCH
             await self.animation_engine.stop(transition)
         
@@ -709,9 +736,7 @@ class LEDController:
         current_animation = self.animation_service.get_current()
         if current_animation:
             animation_speed = current_animation.get_param_value(ParamID.ANIM_SPEED)
-            log.log(LogCategory.ANIMATION, "Animation started",
-                   id=current_animation.config.display_name,
-                   speed=f"{animation_speed}/100")
+            log.animation(f"Started: {current_animation.config.display_name} @ {animation_speed}/100")
 
     async def stop(self, clear_on_stop: bool = True):
         """Stop current animation and restore static colors"""
@@ -763,11 +788,7 @@ class LEDController:
         self.animation_service.set_current(new_animation_id)
 
         selected_animation = self.animation_service.get_animation(new_animation_id)
-        log.animation(
-            "Animation selected",
-            id=selected_animation.config.display_name,
-            index=f"{self.selected_animation_index + 1}/{len(self.available_animation_ids)}"
-        )
+        log.animation(f"Selected: {selected_animation.config.display_name} ({self.selected_animation_index + 1}/{len(self.available_animation_ids)})")
 
         # Update preview first (before restarting animation)
         self._sync_preview()

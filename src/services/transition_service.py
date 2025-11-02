@@ -252,6 +252,67 @@ class TransitionService:
                 self.strip.clear()
                 await self.fade_in(new_frame, config)
 
+    async def crossfade(
+        self,
+        from_frame: List[Tuple[int, int, int]],
+        to_frame: List[Tuple[int, int, int]],
+        config: Optional[TransitionConfig] = None
+    ):
+        """
+        Crossfade between two LED states
+
+        Smoothly blends from one frame to another by interpolating RGB values
+        for each pixel. No black frame - direct transition.
+
+        Args:
+            from_frame: Starting state - list of (r, g, b) tuples for each pixel
+            to_frame: Target state - list of (r, g, b) tuples for each pixel
+            config: Transition configuration (defaults to MODE_SWITCH)
+
+        Example:
+            >>> # Smooth transition from animation to static
+            >>> current = strip.get_frame()
+            >>> strip.apply_static_colors()  # Sets new state
+            >>> target = strip.get_frame()
+            >>> await transition_service.crossfade(current, target, config)
+        """
+        config = config or self.MODE_SWITCH
+
+        if config.type == TransitionType.NONE:
+            # Instant set to target frame
+            for i, (r, g, b) in enumerate(to_frame):
+                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
+            self.strip.show()
+            return
+
+        if len(from_frame) != len(to_frame):
+            log.warn(f"Frame size mismatch: {len(from_frame)} → {len(to_frame)}, using instant switch")
+            for i, (r, g, b) in enumerate(to_frame):
+                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
+            self.strip.show()
+            return
+
+        step_delay = config.duration_ms / 1000 / config.steps
+        log.info(f"Transition started: crossfade ({config.duration_ms}ms)")
+
+        # Gradually interpolate between frames
+        for step in range(config.steps + 1):
+            progress = step / config.steps
+            factor = config.ease_function(progress)
+
+            for i, ((r1, g1, b1), (r2, g2, b2)) in enumerate(zip(from_frame, to_frame)):
+                # Linear interpolation for each color channel
+                r = int(r1 + (r2 - r1) * factor)
+                g = int(g1 + (g2 - g1) * factor)
+                b = int(b1 + (b2 - b1) * factor)
+
+                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
+
+            self.strip.show()
+            await asyncio.sleep(step_delay)
+
+        log.info("Transition complete: crossfade")
+
     async def cut(self, config: Optional[TransitionConfig] = None):
         """
         Hard cut transition with brief black frame

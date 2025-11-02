@@ -77,24 +77,23 @@ class ZoneStrip:
 
         # Build internal zone mapping: zone_id -> [start_index, end_index]
         # Uses lowercase zone tags ("lamp", "top") to match ZoneConfig.tag property
+        # IMPORTANT: Include ALL zones (enabled and disabled) to preserve pixel indices
         self.zones: Dict[str, List[int]] = {
             zone.tag: [zone.start_index, zone.end_index]
             for zone in zones
-            if zone.enabled
         }
 
         # Store reversed flag for each zone (from config)
         self.zone_reversed: Dict[str, bool] = {
             zone.tag: zone.reversed
             for zone in zones
-            if zone.enabled
         }
 
         # Cache current color for each zone
+        # Initialize ALL zones (including disabled) to black
         self.zone_colors: Dict[str, Tuple[int, int, int]] = {
             zone.tag: (0, 0, 0)
             for zone in zones
-            if zone.enabled
         }
 
         # PixelStrip constructor parameters:
