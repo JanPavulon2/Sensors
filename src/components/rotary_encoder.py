@@ -10,7 +10,7 @@ Registers all GPIO pins via GPIOManager.
 
 import RPi.GPIO as GPIO
 import time
-from managers.GPIOManager import GPIOManager
+from infrastructure import GPIOManager
 from models.enums import GPIOPullMode
 
 

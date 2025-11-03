@@ -34,8 +34,8 @@ from models import Color, ColorMode, MainMode, PreviewMode, ParamID
 from models.enums import ZoneID, AnimationID, EncoderSource, ButtonID
 from models.events import EventType, EncoderRotateEvent, EncoderClickEvent
 from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
-from managers.GPIOManager import GPIOManager
-from services import DataAssembler, AnimationService, ZoneService, UISessionService
+from infrastructure import GPIOManager
+from services import DataAssembler, AnimationService, ZoneService, ApplicationStateService
 from services.event_bus import EventBus
 
 log = get_logger()
@@ -108,16 +108,16 @@ class LEDController:
         state = assembler.load_state()
 
         # Initialize UI/session service early (so we have current_mode etc.)
-        self.ui_session_service = UISessionService(assembler)
-        ui_state = self.ui_session_service.get_state()
+        self.app_state_service = ApplicationStateService(assembler)
+        app_state = self.app_state_service.get_state()
 
         # Core UI state
-        self.main_mode: MainMode = ui_state.main_mode
-        self.edit_mode: bool = ui_state.edit_mode
-        self.lamp_white_mode: bool = ui_state.lamp_white_mode
-        self.lamp_white_saved_state: Optional[Dict] = ui_state.lamp_white_saved_state
-        self.current_param: ParamID = ui_state.current_param
-        self.current_zone_index: int = ui_state.current_zone_index
+        self.main_mode: MainMode = app_state.main_mode
+        self.edit_mode: bool = app_state.edit_mode
+        self.lamp_white_mode: bool = app_state.lamp_white_mode
+        self.lamp_white_saved_state: Optional[Dict] = app_state.lamp_white_saved_state
+        self.current_param: ParamID = app_state.current_param
+        self.current_zone_index: int = app_state.current_zone_index
 
         # Build parameter cycling lists from ParameterManager
         zone_params = self.parameter_manager.get_zone_parameters()
@@ -485,7 +485,7 @@ class LEDController:
                 color=str(zone.state.color),
                 brightness=f"{zone.brightness}%")
 
-        self.ui_session_service.save(current_zone_index=self.current_zone_index)
+        self.app_state_service.set_current_zone_index(self.current_zone_index)
 
 
     def toggle_edit_mode(self):
@@ -511,7 +511,7 @@ class LEDController:
             log.log(LogCategory.SYSTEM, "Edit mode disabled")
             self._stop_pulse()
 
-        self.ui_session_service.save(edit_mode=self.edit_mode)
+        self.app_state_service.save(edit_mode=self.edit_mode)
 
     def quick_lamp_white(self):
         """
@@ -585,7 +585,7 @@ class LEDController:
             if self.animation_engine.is_running():
                 asyncio.create_task(self._restart_animation())
 
-        self.ui_session_service.save(
+        self.app_state_service.save(
             lamp_white_mode=self.lamp_white_mode,
             lamp_white_saved_state=self.lamp_white_saved_state
         )
@@ -899,10 +899,8 @@ class LEDController:
         else:
             self._switch_to_static_mode()
 
-        self.ui_session_service.save(
-            main_mode=self.main_mode,
-            current_param=self.current_param
-        )
+        self.app_state_service.set_main_mode(self.main_mode)
+        self.app_state_service.set_current_param(self.current_param)
 
     def handle_selector_rotation(self, delta: int):
         """
@@ -1160,7 +1158,7 @@ class LEDController:
                         value_str = f"{current_anim.get_param_value(ParamID.ANIM_INTENSITY)}/100"
             log.info(LogCategory.SYSTEM, f"Param cycled: {self.current_param.name} = {value_str}")
         
-        self.ui_session_service.save(current_param=self.current_param)
+        self.app_state_service.set_current_param(self.current_param)
         
     def get_status(self):
         """

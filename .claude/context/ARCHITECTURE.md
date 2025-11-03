@@ -11,17 +11,18 @@ This document provides a comprehensive overview of the Diuna LED control system 
 ## Table of Contents
 
 1. [System Overview](#1-system-overview)
-2. [Architecture Layers](#2-architecture-layers)
-3. [Directory Structure](#3-directory-structure)
-4. [Core Components](#4-core-components)
-5. [Design Patterns](#5-design-patterns)
-6. [Data Flow](#6-data-flow)
-7. [State Management](#7-state-management)
-8. [Configuration System](#8-configuration-system)
-9. [Animation System](#9-animation-system)
-10. [Hardware Integration](#10-hardware-integration)
-11. [Critical Constraints](#11-critical-constraints)
-12. [Extension Points](#12-extension-points)
+2. [Coding Standards](#2-coding-standards)
+3. [Architecture Layers](#3-architecture-layers)
+4. [Directory Structure](#4-directory-structure)
+5. [Core Components](#5-core-components)
+6. [Design Patterns](#6-design-patterns)
+7. [Data Flow](#7-data-flow)
+8. [State Management](#8-state-management)
+9. [Configuration System](#9-configuration-system)
+10. [Animation System](#10-animation-system)
+11. [Hardware Integration](#11-hardware-integration)
+12. [Critical Constraints](#12-critical-constraints)
+13. [Extension Points](#13-extension-points)
 
 ---
 
@@ -46,7 +47,145 @@ Raspberry Pi LED control station with zone-based addressable RGB LED control, ro
 
 ---
 
-## 2. Architecture Layers
+## 2. Coding Standards
+
+### 2.1 Code Quality DO's
+
+✓ **Use Enums Instead of Hardcoded Strings**
+```python
+# CORRECT ✓
+class MainMode(Enum):
+    STATIC = "STATIC"
+    ANIMATION = "ANIMATION"
+
+mode = MainMode.STATIC
+
+# WRONG ✗
+mode = "static"  # Typos not caught, no autocomplete
+```
+
+✓ **Prefer Strong Typing**
+```python
+# CORRECT ✓
+def set_color(self, zone_id: ZoneID, color: Color) -> None:
+    zone: ZoneCombined = self._by_id[zone_id]
+    zone.state.color = color
+
+# WRONG ✗
+def set_color(self, zone_id, color):  # No type hints
+    zone = self._by_id[zone_id]
+```
+
+✓ **Return Strong Types from Functions**
+```python
+# CORRECT ✓
+def get_zone(self, zone_id: ZoneID) -> ZoneCombined:
+    return self._by_id[zone_id]
+
+# WRONG ✗
+def get_zone(self, zone_id):  # Returns unknown type
+    return self._by_id[zone_id]
+```
+
+✓ **Add Logging Where Needed**
+```python
+# CORRECT ✓
+from utils.logger import get_category_logger, LogCategory
+
+log = get_category_logger(LogCategory.STATE)
+log("State saved", section="zones", count=len(zones))
+
+# Add logging for:
+# - State changes (saves, loads)
+# - Critical operations (GPIO setup, LED initialization)
+# - Error conditions
+# - Mode transitions
+```
+
+✓ **Use Dataclasses for Data Models**
+```python
+# CORRECT ✓
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class ZoneConfig:
+    id: ZoneID
+    display_name: str
+    pixel_count: int
+
+# WRONG ✗
+class ZoneConfig:
+    def __init__(self, id, display_name, pixel_count):
+        self.id = id
+        self.display_name = display_name
+        self.pixel_count = pixel_count
+```
+
+### 2.2 Code Quality DON'Ts
+
+✗ **Don't Recommend Non-Raspberry Pi Compatible Solutions**
+```python
+# WRONG ✗ - Not available on Raspberry Pi OS
+import windows_specific_library
+import mac_only_framework
+
+# CORRECT ✓ - Raspberry Pi compatible
+import RPi.GPIO
+from rpi_ws281x import PixelStrip
+```
+
+✗ **Don't Use Magic Strings/Numbers**
+```python
+# WRONG ✗
+if mode == "static":  # Magic string
+    brightness = 255  # Magic number
+
+# CORRECT ✓
+if mode == MainMode.STATIC:
+    brightness = self.parameters[ParamID.ZONE_BRIGHTNESS].value
+```
+
+✗ **Don't Silently Ignore Errors**
+```python
+# WRONG ✗
+try:
+    self.save_state()
+except:
+    pass  # Silent failure!
+
+# CORRECT ✓
+try:
+    self.save_state()
+except Exception as e:
+    log.error(f"Failed to save state: {e}")
+    raise
+```
+
+### 2.3 Architecture-Specific Rules
+
+✓ **Use Domain Models (Config + State + Combined)**
+```python
+# Follow the pattern from Zone/Animation:
+# 1. XxxConfig (frozen dataclass) - from YAML
+# 2. XxxState (mutable dataclass) - from JSON
+# 3. XxxCombined (class) - combines config + state + operations
+```
+
+✓ **Use Services for Business Logic**
+```python
+# Services coordinate domain objects and handle persistence
+# Follow pattern: ZoneService, AnimationService
+```
+
+✓ **Use Repository Pattern for Persistence**
+```python
+# Only DataAssembler should read/write state.json
+# Services delegate to DataAssembler for persistence
+```
+
+---
+
+## 3. Architecture Layers
 
 The system follows a **5-layer architecture** with clear separation of concerns:
 
@@ -282,12 +421,35 @@ class ZoneCombined:
         return self.state.color.to_rgb_with_brightness(brightness)
 ```
 
+#### State-Only Pattern (Application State)
+**Location**: `models/domain/application.py`
+
+For state that has no YAML configuration, we use a simplified **State-Only Pattern**:
+
+```python
+@dataclass
+class ApplicationState:
+    """Runtime application state (no config, only JSON state)"""
+    main_mode: MainMode = MainMode.STATIC
+    edit_mode: bool = True
+    lamp_white_mode: bool = False
+    lamp_white_saved_state: Optional[dict] = None
+    current_zone_index: int = 0
+    current_param: ParamID = ParamID.ZONE_COLOR_HUE
+    frame_by_frame_mode: bool = False  # Debugging
+    save_on_change: bool = True  # System config
+```
+
+**Why no Config?** Application state has no YAML configuration - it's purely runtime state from state.json, so we skip the Config/Combined pattern and use just State + Service.
+
+**Default Values**: Dataclass defaults are the single source of truth (no duplication between code and config).
+
 #### Domain Services
 Services provide CRUD operations with automatic persistence using the **Service Pattern**:
 
 - `ZoneService`: Zone operations with auto-save
 - `AnimationService`: Animation operations with auto-save
-- `UISessionService`: UI state management
+- `ApplicationStateService`: Application-level state management (mode, selection, debugging)
 - `TransitionService`: LED transition orchestration
 
 **Key Pattern**: **Service Pattern** - Business logic services that coordinate domain objects and persistence
@@ -300,6 +462,12 @@ class ZoneService:
         zone = self._by_id[zone_id]
         zone.state.color = color
         self.save()  # Auto-save via DataAssembler
+
+class ApplicationStateService:
+    def set_current_zone_index(self, index: int):
+        """Update current zone index"""
+        self.state.current_zone_index = index
+        self._save()  # Auto-save via DataAssembler
 ```
 
 #### DataAssembler - Repository Pattern
@@ -338,19 +506,20 @@ The system operates in **two main modes**:
 #### Key State Variables
 ```python
 class LEDController:
-    # Mode state
+    # Services (from domain layer - single source of truth)
+    zone_service: ZoneService
+    animation_service: AnimationService
+    app_state_service: ApplicationStateService
+
+    # Local state mirrors (for performance - synced with services)
     main_mode: MainMode              # STATIC or ANIMATION
     edit_mode: bool                  # Enable/disable editing
     lamp_white_mode: bool            # Desk lamp mode
-
-    # Selection state
     current_zone_index: int          # Selected zone (STATIC mode)
     current_param: ParamID           # Active parameter
+    lamp_white_saved_state: Optional[dict]  # Saved lamp state
 
-    # Services (from domain layer)
-    zone_service: ZoneService
-    animation_service: AnimationService
-    ui_session: UISessionService
+    # Update pattern: modify local → call service.set_xxx() to persist
 ```
 
 #### Critical Methods
@@ -1074,12 +1243,15 @@ ZoneService initialized with restored state
       "ANIM_INTENSITY": 80
     }
   },
-  "ui_session": {
+  "application": {
     "main_mode": "STATIC",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
+    "lamp_white_saved_state": null,
     "active_parameter": "ZONE_COLOR_HUE",
-    "selected_zone_index": 1
+    "selected_zone_index": 1,
+    "frame_by_frame_mode": false,
+    "save_on_change": true
   }
 }
 ```
@@ -1091,7 +1263,9 @@ ZoneService initialized with restored state
 - Three state categories:
   1. Zone state → `ZoneService.save()` → `DataAssembler.save_zone_state()`
   2. Animation state → `AnimationService.save()` → `DataAssembler.save_animation_state()`
-  3. UI session → `UISessionService.save()` → `DataAssembler.save_partial_state()`
+  3. Application state → `ApplicationStateService.set_xxx()` → `DataAssembler.save_application_state()`
+
+**Conditional Save**: ApplicationState includes `save_on_change` flag to enable/disable auto-save (useful for debugging).
 
 ### 7.3 State Loading
 ```python
@@ -1099,8 +1273,9 @@ ZoneService initialized with restored state
 1. ConfigManager.load() → load all YAML files
 2. DataAssembler.build_zones() → ZoneCombined objects
 3. DataAssembler.build_animations() → AnimationCombined objects
-4. Services initialized with domain objects
-5. LEDController restores UI session state
+4. DataAssembler.build_application_state() → ApplicationState object
+5. Services initialized with domain objects
+6. LEDController initialized with services
 ```
 
 ---
@@ -1614,6 +1789,7 @@ POWER_TOGGLE = TransitionConfig(type=FADE, duration_ms=400, steps=12)
 |---------|------------|------------------------------------------------------------|
 | 0.1     | 2025-11-02 | Initial architecture documentation                         |
 | 0.1.1   | 2025-11-03 | Added keyboard input system (Layer 1), dual backend architecture |
+| 0.1.2   | 2025-11-03 | Refactored UISessionService → ApplicationStateService, added State-Only pattern, updated state.json structure (ui_session → application) |
 
 ---
 

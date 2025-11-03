@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple, Optional
 from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
 from services.transition_service import TransitionService
-from managers.GPIOManager import GPIOManager
+from infrastructure import GPIOManager
 
 
 class ZoneStrip:

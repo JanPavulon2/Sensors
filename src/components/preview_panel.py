@@ -9,7 +9,7 @@ Registers WS281x GPIO pin via GPIOManager for conflict detection.
 
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
-from managers.GPIOManager import GPIOManager
+from infrastructure import GPIOManager
 
 
 class PreviewPanel:

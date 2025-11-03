@@ -8,7 +8,6 @@ See CLAUDE.md for full architecture documentation.
 import sys
 import os
 
-from managers.GPIOManager import GPIOManager
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
@@ -20,8 +19,9 @@ import asyncio
 from utils.logger import get_logger, configure_logger
 from models.enums import LogLevel
 from components import ControlPanel, KeyboardInputAdapter
-from controllers.led_controller import LEDController
-from managers.config_manager import ConfigManager
+from infrastructure import GPIOManager
+from controllers import LEDController
+from managers import ConfigManager
 from services.event_bus import EventBus
 from services.middleware import log_middleware
 

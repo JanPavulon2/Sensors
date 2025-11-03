@@ -3,11 +3,12 @@
 import json
 from pathlib import Path
 from typing import Dict, List
-from models.enums import ParamID, AnimationID, ZoneID
+from models.enums import ParamID, AnimationID, ZoneID, MainMode
 from models.domain import (
     ParameterConfig, ParameterState, ParameterCombined,
     AnimationConfig, AnimationState, AnimationCombined,
-    ZoneConfig, ZoneState, ZoneCombined
+    ZoneConfig, ZoneState, ZoneCombined,
+    ApplicationState
 )
 from models.color import Color
 from managers import ConfigManager
@@ -229,25 +230,76 @@ class DataAssembler:
             log(f"Failed to save zone state: {e}")
             raise
 
-    def save_partial_state(self, updates: dict) -> None:
-        """ 
-        Aktualizuje wybrane pola sekcji 'ui_session' w state.json
-        bez nadpisywania pozostałych danych (zones, animations...).
+    def build_application_state(self) -> ApplicationState:
+        """
+        Build application state object from state.json
+
+        Uses ApplicationState dataclass defaults as fallback values.
+
+        Returns:
+            ApplicationState with loaded or default values
+        """
+        try:
+            state_json = self.load_state()
+            app_data = state_json.get("application", {})
+
+            if not app_data:
+                log("No application state found, using defaults", LogLevel.WARN)
+                return ApplicationState()  # Use dataclass defaults
+
+            # Parse enums using EnumHelper with fallback to dataclass defaults
+            try:
+                main_mode = EnumHelper.to_enum(MainMode, app_data.get("main_mode"))
+            except (ValueError, TypeError):
+                main_mode = ApplicationState.main_mode  # Dataclass default
+
+            try:
+                current_param = EnumHelper.to_enum(ParamID, app_data.get("active_parameter"))
+            except (ValueError, TypeError):
+                current_param = ApplicationState.current_param  # Dataclass default
+
+            state = ApplicationState(
+                main_mode=main_mode,
+                edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
+                lamp_white_mode=app_data.get("lamp_white_mode_on", ApplicationState.lamp_white_mode),
+                lamp_white_saved_state=app_data.get("lamp_white_saved_state", ApplicationState.lamp_white_saved_state),
+                current_zone_index=int(app_data.get("selected_zone_index", ApplicationState.current_zone_index)),
+                current_param=current_param,
+                frame_by_frame_mode=app_data.get("frame_by_frame_mode", ApplicationState.frame_by_frame_mode),
+                save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
+            )
+
+            log(f"Built application state: {main_mode.name}, zone_idx={state.current_zone_index}")
+            return state
+
+        except Exception as e:
+            log(f"Failed to build application state, using defaults: {e}", LogLevel.WARN)
+            return ApplicationState()  # Use dataclass defaults
+
+    def save_application_state(self, app_state: ApplicationState) -> None:
+        """
+        Save application state to state.json
+
+        Args:
+            app_state: ApplicationState instance to persist
         """
         try:
             state_json = self.load_state()
 
-            # Upewnij się, że node istnieje
-            if "ui_session" not in state_json:
-                state_json["ui_session"] = {}
-
-            # Nadpisz tylko wskazane pola
-            for key, value in updates.items():
-                state_json["ui_session"][key] = value
+            state_json["application"] = {
+                "main_mode": EnumHelper.to_name(app_state.main_mode),
+                "edit_mode_on": app_state.edit_mode,
+                "lamp_white_mode_on": app_state.lamp_white_mode,
+                "lamp_white_saved_state": app_state.lamp_white_saved_state,
+                "active_parameter": EnumHelper.to_name(app_state.current_param),
+                "selected_zone_index": app_state.current_zone_index,
+                "frame_by_frame_mode": app_state.frame_by_frame_mode,
+                "save_on_change": app_state.save_on_change,
+            }
 
             self.save_state(state_json)
-            log(f"Updated ui_session fields: {list(updates.keys())}", LogLevel.DEBUG)
+            log(f"Saved application state", LogLevel.DEBUG)
 
         except Exception as e:
-            log(f"Failed to save ui_session state: {e}", LogLevel.ERROR)
+            log(f"Failed to save application state: {e}", LogLevel.ERROR)
             raise

@@ -11,7 +11,7 @@ Publishes events to EventBus instead of using callbacks.
 import asyncio
 from components import RotaryEncoder, Button, PreviewPanel
 from managers.hardware_manager import HardwareManager
-from managers.GPIOManager import GPIOManager
+from infrastructure import GPIOManager
 from services.event_bus import EventBus
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
 from models.enums import EncoderSource, ButtonID
