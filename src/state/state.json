@@ -75,18 +75,20 @@
     }
   },
   "current_animation": {
-    "id": "COLOR_CYCLE",
+    "id": "COLOR_SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_LENGTH": 5,
+      "ANIM_HUE_OFFSET": 30
     }
   },
   "ui_session": {
-    "main_mode": "ANIMATION",
+    "main_mode": "STATIC",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 6
+    "active_parameter": "ZONE_COLOR_HUE",
+    "selected_zone_index": 2
   }
 }

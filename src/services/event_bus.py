@@ -96,7 +96,7 @@ class EventBus:
         # Sort by priority (descending - highest first)
         self._handlers[event_type].sort(key=lambda h: h.priority, reverse=True)
 
-        log.debug(
+        log.info(
             LogCategory.SYSTEM,
             "Event handler subscribed",
             event_type=event_type.name,
@@ -126,7 +126,7 @@ class EventBus:
             bus.add_middleware(log_middleware)
         """
         self._middleware.append(middleware)
-        log.debug(
+        log.info(
             LogCategory.SYSTEM,
             "Middleware registered",
             middleware=middleware.__name__
@@ -152,6 +152,12 @@ class EventBus:
             event = EncoderRotateEvent("selector", 1)
             await bus.publish(event)
         """
+        log.info(
+            LogCategory.EVENT,
+            "Event: ",
+            event_type=event.type.name
+        )
+        
         # Apply middleware pipeline
         for middleware in self._middleware:
             processed_event = middleware(event)
@@ -168,11 +174,11 @@ class EventBus:
         # Get handlers for this event type
         handlers = self._handlers.get(event.type, [])
         if not handlers:
-            log.debug(
-                LogCategory.SYSTEM,
+            log.info(
+                LogCategory.EVENT,
                 "No handlers for event",
                 event_type=event.type.name,
-                level=LogLevel.DEBUG
+                event_data=event.data
             )
             return
 

@@ -127,3 +127,4 @@ class LogCategory(Enum):
     ZONE = auto()        # Zone selection, zone operations
     SYSTEM = auto()      # Startup, shutdown, errors
     TRANSITION = auto()  # LED state transitions
+    EVENT = auto()       # Event bus events and handling

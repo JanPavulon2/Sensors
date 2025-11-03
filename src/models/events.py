@@ -7,18 +7,20 @@ All hardware inputs (encoders, buttons) are published as events.
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 import time
 from models.enums import EncoderSource, ButtonID
 
 
 class EventType(Enum):
     """Event types in the system"""
-    # Hardware events
+    # Hardware events (RPI)
     ENCODER_ROTATE = auto()
     ENCODER_CLICK = auto()
     BUTTON_PRESS = auto()
-
+    # Keyboard eventss
+    KEYBOARD_KEYPRESS = auto() 
+    
     # Future: Web API, MQTT, system events
     WEB_COMMAND = auto()
     MQTT_COMMAND = auto()
@@ -37,7 +39,7 @@ class Event:
     - timestamp: float (when it happened)
     """
     type: EventType
-    source: Enum  # EncoderSource or ButtonID
+    source: Optional[Enum]  # EncoderSource or ButtonID
     data: Dict[str, Any]
     timestamp: float
 
@@ -97,3 +99,27 @@ class ButtonPressEvent(Event):
             data={},
             timestamp=time.time()
         )
+
+class KeyboardKeyPressEvent(Event):
+    """Keyboard key press event"""
+
+    def __init__(self, key: str, modifiers: Optional[List[str]] = None):
+        """
+        Args:
+            key: The key that was pressed (e.g., 'a', 'Enter', etc.)
+        """
+        super().__init__(
+            type=EventType.KEYBOARD_KEYPRESS,
+            source=None,
+            data={"key": key, "modifiers": modifiers or []},
+            timestamp=time.time()
+        )
+
+    @property
+    def key(self) -> str:
+        """The key that was pressed"""
+        return self.data["key"]
+    
+    @property
+    def modifiers(self) -> List[str]:
+        return self.data["modifiers"]

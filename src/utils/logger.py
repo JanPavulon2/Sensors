@@ -229,6 +229,10 @@ class Logger:
     def warning(self, category: LogCategory, message: str, **kwargs):
         """Log warning """
         self.log(category, message, LogLevel.WARN, **kwargs)
+    
+    def warn(self, category: LogCategory, message: str, **kwargs):
+        """Log warning """
+        self.log(category, message, LogLevel.WARN, **kwargs)
 
     def info(self, log_category: LogCategory, message: str, **kwargs):
         """Log info """

@@ -17,7 +17,7 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
 import asyncio
 from utils.logger import get_logger, configure_logger
 from models.enums import LogLevel
-from components import ControlModule
+from components import ControlModule, KeyboardInputAdapter
 from controllers.led_controller import LEDController
 from managers.config_manager import ConfigManager
 from services.event_bus import EventBus
@@ -42,13 +42,19 @@ async def main():
     log.system("Initializing event bus...")
     event_bus = EventBus()
 
+    # Register middleware
+    log.system("Registering event bus middleware...")
+    event_bus.add_middleware(log_middleware)
+
     # Initialize LED controller (loads state via DataAssembler)
     log.system("Initializing LED controller...")
     led = LEDController(config_manager, event_bus)
 
-    # Register middleware
-    log.system("Registering middleware...")
-    event_bus.add_middleware(log_middleware)
+    
+    # Initialize keyboard input adapter (runs in background)
+    log.system("Initializing keyboard input adapter...")
+    keyboard_adapter = KeyboardInputAdapter(event_bus)
+    keyboard_task = asyncio.create_task(keyboard_adapter.run())
 
     # Initialize hardware control module
     log.system("Initializing hardware...")
@@ -87,6 +93,14 @@ async def main():
     finally:
         # Graceful shutdown sequence
         log.system("Shutting down...")
+
+        # Cancel keyboard input task first (prevents threading errors)
+        log.system("Stopping keyboard input...")
+        keyboard_task.cancel()
+        try:
+            await keyboard_task
+        except asyncio.CancelledError:
+            pass  # Expected - task was cancelled
 
         log.system("Stopping animations...")
         await led.animation_engine.stop()
