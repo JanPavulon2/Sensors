@@ -18,6 +18,7 @@ class EventType(Enum):
     ENCODER_ROTATE = auto()
     ENCODER_CLICK = auto()
     BUTTON_PRESS = auto()
+    
     # Keyboard eventss
     KEYBOARD_KEYPRESS = auto() 
     
@@ -25,7 +26,6 @@ class EventType(Enum):
     WEB_COMMAND = auto()
     MQTT_COMMAND = auto()
     SYSTEM_EVENT = auto()
-
 
 @dataclass
 class Event:
@@ -42,7 +42,6 @@ class Event:
     source: Optional[Enum]  # EncoderSource or ButtonID
     data: Dict[str, Any]
     timestamp: float
-
 
 @dataclass
 class EncoderRotateEvent(Event):
@@ -66,7 +65,6 @@ class EncoderRotateEvent(Event):
         """Rotation direction (-1 or +1)"""
         return self.data["delta"]
 
-
 @dataclass
 class EncoderClickEvent(Event):
     """Encoder button click event"""
@@ -82,7 +80,6 @@ class EncoderClickEvent(Event):
             data={},
             timestamp=time.time()
         )
-
 
 @dataclass
 class ButtonPressEvent(Event):
@@ -100,6 +97,7 @@ class ButtonPressEvent(Event):
             timestamp=time.time()
         )
 
+@dataclass
 class KeyboardKeyPressEvent(Event):
     """Keyboard key press event"""
 

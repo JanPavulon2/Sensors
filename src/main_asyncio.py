@@ -6,8 +6,6 @@ See CLAUDE.md for full architecture documentation.
 """
 
 import sys
-import os
-
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
@@ -71,7 +69,7 @@ async def main():
     control_panel = ControlPanel(config_manager.hardware_manager, event_bus, gpio_manager)
 
     # Log GPIO pin allocations (useful for debugging conflicts)
-    gpio_manager.log_registry()
+    # gpio_manager.log_registry()
 
     async def hardware_loop():
         """Poll hardware inputs at 100Hz"""

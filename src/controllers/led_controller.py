@@ -511,7 +511,7 @@ class LEDController:
             log.log(LogCategory.SYSTEM, "Edit mode disabled")
             self._stop_pulse()
 
-        self.app_state_service.save(edit_mode=self.edit_mode)
+        self.app_state_service.set_edit_mode(self.edit_mode)
 
     def quick_lamp_white(self):
         """
@@ -585,10 +585,8 @@ class LEDController:
             if self.animation_engine.is_running():
                 asyncio.create_task(self._restart_animation())
 
-        self.app_state_service.save(
-            lamp_white_mode=self.lamp_white_mode,
-            lamp_white_saved_state=self.lamp_white_saved_state
-        )
+        self.app_state_service.set_lamp_white_saved_state(self.lamp_white_saved_state)
+        self.app_state_service.set_lamp_white_mode(self.lamp_white_mode)
 
     def power_toggle(self):
         """Toggle power for all zones (ON/OFF) - saves and restores brightness and animation state"""
@@ -833,6 +831,7 @@ class LEDController:
         current_animation = self.animation_service.get_current()
         log_kwargs = {"animation_id": current_animation.config.display_name if current_animation else "None",
                      "parameter": self.current_param.name}
+        
         if current_animation:
             if self.current_param == ParamID.ANIM_SPEED:
                 animation_speed = current_animation.get_param_value(ParamID.ANIM_SPEED)
@@ -840,6 +839,7 @@ class LEDController:
             elif self.current_param == ParamID.ANIM_INTENSITY and ParamID.ANIM_INTENSITY in current_animation.parameters:
                 animation_intensity = current_animation.get_param_value(ParamID.ANIM_INTENSITY)
                 log_kwargs["intensity"] = f"{animation_intensity}/100"
+        
         log.info(LogCategory.SYSTEM, "Mode switched to ANIMATION", **log_kwargs)
 
     def _switch_to_static_mode(self):

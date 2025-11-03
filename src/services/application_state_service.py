@@ -91,17 +91,17 @@ class ApplicationStateService:
 
     # === Mode Management ===
 
-    def toggle_edit_mode(self) -> None:
-        """Toggle edit mode ON/OFF"""
-        self.state.edit_mode = not self.state.edit_mode
+    def set_edit_mode(self, enabled: bool) -> None:
+        """Set edit mode ON/OFF"""
+        self.state.edit_mode = enabled
         self._save()
-        log(f"Edit mode toggled: {self.state.edit_mode}")
+        log(f"Edit mode set to: {self.state.edit_mode}")
 
-    def toggle_lamp_white_mode(self) -> None:
-        """Toggle lamp white mode ON/OFF"""
-        self.state.lamp_white_mode = not self.state.lamp_white_mode
+    def set_lamp_white_mode(self, enabled: bool) -> None:
+        """Set lamp white mode ON/OFF"""
+        self.state.lamp_white_mode = enabled
         self._save()
-        log(f"Lamp white mode toggled: {self.state.lamp_white_mode}")
+        log(f"Lamp white mode set to: {self.state.lamp_white_mode}")
 
     def set_main_mode(self, mode: MainMode) -> None:
         """
@@ -110,9 +110,7 @@ class ApplicationStateService:
         Args:
             mode: MainMode.STATIC or MainMode.ANIMATION
         """
-        if not isinstance(mode, MainMode):
-            log.error(f"Invalid main_mode type: {type(mode)}")
-            return
+        
         self.state.main_mode = mode
         self._save()
         log(f"Main mode changed: {self.state.main_mode.name}")
