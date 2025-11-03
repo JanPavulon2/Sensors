@@ -8,6 +8,8 @@ See CLAUDE.md for full architecture documentation.
 import sys
 import os
 
+from managers.GPIOManager import GPIOManager
+
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
     sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
@@ -17,7 +19,7 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
 import asyncio
 from utils.logger import get_logger, configure_logger
 from models.enums import LogLevel
-from components import ControlModule, KeyboardInputAdapter
+from components import ControlPanel, KeyboardInputAdapter
 from controllers.led_controller import LEDController
 from managers.config_manager import ConfigManager
 from services.event_bus import EventBus
@@ -46,27 +48,35 @@ async def main():
     log.system("Registering event bus middleware...")
     event_bus.add_middleware(log_middleware)
 
-    # Initialize LED controller (loads state via DataAssembler)
-    log.system("Initializing LED controller...")
-    led = LEDController(config_manager, event_bus)
+    # Initialize GPIO manager (MUST be first - all hardware components register pins here)
+    log.system("Initializing GPIO manager...")
+    gpio_manager = GPIOManager()
 
-    
+    # Initialize LED controller (loads state via DataAssembler, registers WS281x pins)
+    log.system("Initializing LED controller...")
+    led = LEDController(config_manager, event_bus, gpio_manager)
+
+    # await asyncio.sleep(2)
+
     # Initialize keyboard input adapter (runs in background)
     log.system("Initializing keyboard input adapter...")
     keyboard_adapter = KeyboardInputAdapter(event_bus)
     keyboard_task = asyncio.create_task(keyboard_adapter.run())
 
-    # Initialize hardware control module
+    # Initialize hardware control panel (registers encoders, buttons, preview panel pins)
     log.system("Initializing hardware...")
     if config_manager.hardware_manager is None:
         log.system("ERROR: Hardware manager not initialized!")
         return
-    module = ControlModule(config_manager.hardware_manager, event_bus)
+    control_panel = ControlPanel(config_manager.hardware_manager, event_bus, gpio_manager)
+
+    # Log GPIO pin allocations (useful for debugging conflicts)
+    gpio_manager.log_registry()
 
     async def hardware_loop():
         """Poll hardware inputs at 100Hz"""
         while True:
-            module.poll()
+            control_panel.poll()
             await asyncio.sleep(0.01)
 
     # Log initial state
@@ -113,7 +123,8 @@ async def main():
         led.clear_all()
 
         log.system("Cleaning up GPIO...")
-        module.cleanup()
+        gpio_manager.cleanup()
+        # module.cleanup()
 
         log.system("Shutdown complete. Goodbye!")
 

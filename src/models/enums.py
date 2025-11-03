@@ -117,6 +117,19 @@ class LogLevel(Enum):
     ERROR = auto()
 
 
+class GPIOPullMode(Enum):
+    """GPIO pull-up/down resistor configuration"""
+    PULL_UP = auto()     # Internal pull-up resistor (pin reads HIGH when open)
+    PULL_DOWN = auto()   # Internal pull-down resistor (pin reads LOW when open)
+    NO_PULL = auto()     # No pull resistor (floating)
+
+
+class GPIOInitialState(Enum):
+    """GPIO output pin initial state"""
+    LOW = auto()         # Start LOW (0V)
+    HIGH = auto()        # Start HIGH (3.3V)
+
+
 class LogCategory(Enum):
     """Log categories for grouping related events"""
     CONFIG = auto()      # Configuration loading, validation

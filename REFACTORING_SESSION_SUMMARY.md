@@ -36,9 +36,9 @@ Complete cleanup and refactoring batch with goals:
   - Start animation (line 643)
   - Handle rotation (line 817)
 
-### **Phase 7: ControlModule Refactor**
+### **Phase 7: ControlPanel Refactor**
 - ✅ **HardwareManager Integration**:
-  - ControlModule now accepts `HardwareManager` instead of raw config dict
+  - ControlPanel now accepts `HardwareManager` instead of raw config dict
   - Uses `hardware_manager.get_encoder()` and `hardware_manager.button_pins`
   - Removed 9 lines of redundant config building code from main_asyncio.py
 - ✅ **Encoder Naming**:

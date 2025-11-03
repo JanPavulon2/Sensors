@@ -35,7 +35,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "r") as f:
                 state = json.load(f)
-                log(f"Loaded state from {self.state_path}")
+                log(f"Loaded state from {self.state_path}", LogLevel.DEBUG)
                 return state
         except FileNotFoundError:
             log(f"State file not found: {self.state_path}", LogLevel.ERROR)
@@ -49,7 +49,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
-                log(f"Saved state to {self.state_path}")
+                log(f"Saved state to {self.state_path}", LogLevel.DEBUG)
         except Exception as e:
             log(f"Failed to save state: {e}", LogLevel.ERROR)
             raise
@@ -223,7 +223,7 @@ class DataAssembler:
                 }
 
             self.save_state(state_json)
-            log(f"Successfully saved {len(zones)} zone states")
+            log(f"Successfully saved {len(zones)} zone states", LogLevel.DEBUG)
 
         except Exception as e:
             log(f"Failed to save zone state: {e}")
@@ -246,7 +246,7 @@ class DataAssembler:
                 state_json["ui_session"][key] = value
 
             self.save_state(state_json)
-            log(f"Updated ui_session fields: {list(updates.keys())}")
+            log(f"Updated ui_session fields: {list(updates.keys())}", LogLevel.DEBUG)
 
         except Exception as e:
             log(f"Failed to save ui_session state: {e}", LogLevel.ERROR)

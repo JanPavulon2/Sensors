@@ -34,6 +34,7 @@ from models import Color, ColorMode, MainMode, PreviewMode, ParamID
 from models.enums import ZoneID, AnimationID, EncoderSource, ButtonID
 from models.events import EventType, EncoderRotateEvent, EncoderClickEvent
 from managers import ConfigManager, ColorManager, AnimationManager, ParameterManager, HardwareManager
+from managers.GPIOManager import GPIOManager
 from services import DataAssembler, AnimationService, ZoneService, UISessionService
 from services.event_bus import EventBus
 
@@ -67,23 +68,26 @@ class LEDController:
     """
 
 
-    def __init__(self, config_manager: ConfigManager, event_bus: EventBus):
+    def __init__(self, config_manager: ConfigManager, event_bus: EventBus, gpio_manager: GPIOManager):
         """
         Initialize LED Controller
 
         Args:
             config_manager: ConfigManager instance (provides all config + sub-managers)
             event_bus: EventBus for subscribing to hardware events
+            gpio_manager: GPIOManager for LED strip GPIO registration
 
         Architecture:
             ConfigManager is the single source of truth for all configuration.
             DataAssembler loads state from state.json and builds domain objects.
             Services (ZoneService, AnimationService) manage runtime state with auto-save.
             EventBus provides event-driven hardware input handling.
+            GPIOManager provides centralized GPIO pin allocation and conflict detection.
         """
 
-        # Store event bus
+        # Store dependencies
         self.event_bus = event_bus
+        self.gpio_manager = gpio_manager
 
         # Get ConfigManager and submanagers from it (dependency injection)
         self.config_manager: ConfigManager = config_manager
@@ -141,6 +145,7 @@ class LEDController:
         assert preview_config is not None
         self.preview_panel = PreviewPanel(
             gpio=preview_config["gpio"],  # Separate GPIO for preview
+            gpio_manager=gpio_manager,
             count=preview_config["count"],
             color_order=ws.WS2811_STRIP_GRB,  # Preview panel is GRB (CJMCU-2812-8)
             brightness=255  # Max hardware brightness (software handles brightness via RGB scaling)
@@ -153,6 +158,7 @@ class LEDController:
             gpio=strip_config["gpio"],  # Separate GPIO for strip
             pixel_count=self.zone_service.get_total_pixel_count(),  # Auto-calculated from zones.yaml
             zones=zone_configs,  # Use ZoneConfig objects from domain layer
+            gpio_manager=gpio_manager,
             color_order=ws.WS2811_STRIP_BRG,  # Strip uses BRG
             brightness=255  # Max hardware brightness (software handles brightness via RGB scaling)
         )

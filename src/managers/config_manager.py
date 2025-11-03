@@ -236,24 +236,3 @@ class ConfigManager:
 
         log(f"Built {len(zone_configs)} ZoneConfig objects (includes disabled zones)")
         return zone_configs
-
-    def get_enabled_zones(self) -> List[ZoneConfig]:
-        """
-        Get only enabled zones (filtered from get_all_zones())
-
-        DEPRECATED: Use get_all_zones() instead to preserve pixel indices.
-        Only use this for UI zone selection, not for hardware rendering.
-
-        Returns:
-            List of ZoneConfig objects for enabled zones only
-        """
-        return [z for z in self.get_all_zones() if z.enabled]
-
-    def get_zone_tags(self) -> List[str]:
-        """
-        Get list of enabled zone tags in order
-
-        Returns:
-            List of zone tags: ["STRIP", "LAMP", "LEFT", "TOP", "RIGHT", "BOTTOM"]
-        """
-        return [z.id.name for z in self.get_enabled_zones()]

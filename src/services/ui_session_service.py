@@ -51,19 +51,22 @@ class UISessionService:
             )
 
         try:
-            main_mode_str = data.get("main_mode", "STATIC")
+            # Read from "ui_session" key (not root level)
+            ui_session_data = data.get("ui_session", {})
+
+            main_mode_str = ui_session_data.get("main_mode", "STATIC")
             main_mode = MainMode[main_mode_str] if main_mode_str in MainMode.__members__ else MainMode.STATIC
 
-            current_param_str = data.get("active_parameter", "ZONE_COLOR_HUE")
+            current_param_str = ui_session_data.get("active_parameter", "ZONE_COLOR_HUE")
             current_param = ParamID[current_param_str] if current_param_str in ParamID.__members__ else ParamID.ZONE_COLOR_HUE
 
             state = UISessionState(
                 main_mode=main_mode,
-                edit_mode=data.get("edit_mode_on", True),
-                lamp_white_mode=data.get("lamp_white_mode_on", False),
-                lamp_white_saved_state=data.get("lamp_white_saved_state", None),
+                edit_mode=ui_session_data.get("edit_mode_on", True),
+                lamp_white_mode=ui_session_data.get("lamp_white_mode_on", False),
+                lamp_white_saved_state=ui_session_data.get("lamp_white_saved_state", None),
                 current_param=current_param,
-                current_zone_index=int(data.get("selected_zone_index", 0)),
+                current_zone_index=int(ui_session_data.get("selected_zone_index", 0)),
             )
 
             log.log(LogCategory.SYSTEM, "UI session state loaded", **asdict(state))

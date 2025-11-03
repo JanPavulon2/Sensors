@@ -48,19 +48,94 @@ Raspberry Pi LED control station with zone-based addressable RGB LED control, ro
 
 ## 2. Architecture Layers
 
-The system follows a **4-layer architecture** with clear separation of concerns:
+The system follows a **5-layer architecture** with clear separation of concerns:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Layer 4: Infrastructure (Config, Events, Logging)  │
-├─────────────────────────────────────────────────────┤
-│  Layer 3: Application (Controllers, Orchestration)  │
-├─────────────────────────────────────────────────────┤
-│  Layer 2: Domain (Models, Services, Business Logic) │
-├─────────────────────────────────────────────────────┤
-│  Layer 1: Hardware (GPIO, LEDs, Buttons, Encoders)  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Layer 4: Infrastructure (Config, Events, Logging)   │
+├──────────────────────────────────────────────────────┤
+│  Layer 3: Application (Controllers, Orchestration)   │
+├──────────────────────────────────────────────────────┤
+│  Layer 2: Domain (Models, Services, Business Logic)  │
+├──────────────────────────────────────────────────────┤
+│  Layer 1: Hardware Abstraction (Components)          │
+├──────────────────────────────────────────────────────┤
+│  Layer 0: GPIO Infrastructure (Pin Management)       │
+└──────────────────────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────────────────────┐
+│  Hardware Drivers (RPi.GPIO, rpi_ws281x)             │
+└──────────────────────────────────────────────────────┘
 ```
+
+### 2.0 Layer 0: GPIO Infrastructure Layer
+**Location**: `managers/GPIOManager.py`
+
+**Purpose**: Centralized GPIO resource management and conflict detection.
+
+**Component**: `GPIOManager`
+
+**Responsibilities**:
+- Initialize RPi.GPIO library (BCM mode, disable warnings)
+- Track all registered GPIO pins (prevent conflicts)
+- Provide pin registration API for HAL components
+- Clean up all GPIO pins on shutdown
+
+**Key Features**:
+- **Pin Registry**: Dict mapping pin number → component name
+- **Conflict Detection**: Raises `ValueError` if pin already registered
+- **Logging**: Comprehensive logging of all pin allocations
+- **Typed API**: Uses `GPIOPullMode` and `GPIOInitialState` enums (no RPi.GPIO types exposed)
+
+**API Methods**:
+```python
+gpio_manager = GPIOManager()
+
+# Register input pins (buttons, encoders)
+gpio_manager.register_input(
+    pin=22,
+    component="Button(22)",
+    pull_mode=GPIOPullMode.PULL_UP
+)
+
+# Register output pins (generic digital outputs)
+gpio_manager.register_output(
+    pin=17,
+    component="StatusLED",
+    initial=GPIOInitialState.LOW
+)
+
+# Register WS281x pins (DMA-based, tracking only)
+gpio_manager.register_ws281x(
+    pin=18,
+    component="ZoneStrip(GPIO18,45px)"
+)
+
+# Get registry for debugging
+registry = gpio_manager.get_registry()  # {22: "Button(22)", ...}
+
+# Log all pin allocations
+gpio_manager.log_registry()
+
+# Cleanup all pins on shutdown
+gpio_manager.cleanup()
+```
+
+**Why This Layer Exists**:
+- **Before**: Each component directly called `GPIO.setup()`, no conflict detection
+- **After**: Centralized registration prevents pin conflicts, provides debugging visibility
+- **Architecture**: Infrastructure concern, not domain or HAL logic
+
+**Initialization Order** (critical):
+```python
+# In main_asyncio.py
+gpio_manager = GPIOManager()  # 1. FIRST - initialize GPIO library
+led = LEDController(..., gpio_manager)  # 2. Register LED strips
+control_panel = ControlPanel(..., gpio_manager)  # 3. Register encoders/buttons
+gpio_manager.log_registry()  # 4. Log all pin allocations
+```
+
+---
 
 ### 2.1 Layer 1: Hardware Abstraction Layer (HAL)
 **Location**: `components/`
@@ -70,7 +145,7 @@ The system follows a **4-layer architecture** with clear separation of concerns:
 **Components**:
 - `Button`: Debounced button input
 - `RotaryEncoder`: Rotation + click detection
-- `ControlModule`: Hardware input aggregator (publishes events) - **IMPORTANT: Physical AND logical entity**
+- `ControlPanel`: Hardware physical entity containing: 2x encoders with click (selector and modulator), 4x buttons, preview panel
 - `ZoneStrip`: WS281x LED strip with zone-based addressing
 - `PreviewPanel`: 8-LED preview strip controller
 - `KeyboardInputAdapter`: Computer keyboard input (dual backend: evdev/stdin)
@@ -79,17 +154,19 @@ The system follows a **4-layer architecture** with clear separation of concerns:
 
 **Rule**: This layer contains NO business logic, only hardware abstraction.
 
-#### ControlModule - Physical & Logical Entity
-**CRITICAL NOTE**: ControlModule is both a **physical module** and a **logical component**. The hardware components (2 encoders + 4 buttons) are assembled in a physical box/case and are **inseparable and unmodifiable**.
+**GPIO Registration**: All components receive `GPIOManager` via constructor and register their pins during initialization.
 
-**Implication**: If you need to add new input hardware (e.g., another button or encoder for a different purpose), its events will **NOT** be handled inside ControlModule code. ControlModule is a fixed, closed system representing the physical control panel.
+#### ControlPanel - Physical & Logical Entity
+The hardware components (2 encoders + 4 buttons + preview panel (cjmcu-8)) are assembled in a physical box/case and are inseparable and unmodifiable.
 
-**New input sources** should publish events directly to EventBus from their own modules, not through ControlModule.
+**Implication**: If you need to add new input hardware (e.g., another button or encoder for a different purpose), its events will **NOT** be handled inside ControlPanel code. ControlPanel is a fixed, closed system representing the physical control panel.
+
+**New input sources** should publish events directly to EventBus from their own modules, not through ControlPanel.
 
 #### KeyboardInputAdapter - Dual Backend Architecture
 **Location**: `components/keyboard/`
 
-**Purpose**: Provide computer keyboard input as an alternative/additional input source. Does NOT extend ControlModule (which represents fixed physical hardware).
+**Purpose**: Provide computer keyboard input as an alternative/additional input source. Does NOT extend ControlPanel (which represents fixed physical hardware).
 
 **Dual Backend Strategy**:
 1. **EvdevKeyboardAdapter** - Physical keyboard via Linux evdev (`/dev/input/event*`)
@@ -731,11 +808,11 @@ class ZoneService:
 ## 5. Design Patterns
 
 ### 5.1 Event-Driven Architecture
-**Implementation**: EventBus + ControlModule
+**Implementation**: EventBus + ControlPanel
 
 **Flow**:
 ```
-Hardware GPIO → ControlModule.poll() → Publish Event
+Hardware GPIO → ControlPanel.poll() → Publish Event
     ↓
 EventBus (with middleware)
     ↓
@@ -856,7 +933,7 @@ async for zone_name, r, g, b in animation.run():
 ---
 
 ### 5.7 Facade Pattern (Hardware Abstraction)
-**Implementation**: ZoneStrip, PreviewPanel, ControlModule
+**Implementation**: ZoneStrip, PreviewPanel, ControlPanel
 
 **Benefits**:
 - Simplifies complex APIs
@@ -875,7 +952,7 @@ GPIO pins change (CLK/DT)
     ↓
 RotaryEncoder.read() → delta (-1 or +1)
     ↓
-ControlModule.poll() detects change
+ControlPanel.poll() detects change
     ↓
 Publish EncoderRotateEvent(SELECTOR, delta=1)
     ↓
@@ -1319,8 +1396,8 @@ cycle_duration = self.animation_speed / 50.0
 - Lamp excluded from pulsing
 - Lamp color locked to warm_white preset (255, 200, 150)
 
-### 11.6 ControlModule is Fixed Hardware
-**ControlModule represents physical control panel** - cannot be extended with new inputs. New input sources (web API, MQTT, additional hardware) must publish events directly to EventBus from their own modules.
+### 11.6 ControlPanel is Fixed Hardware
+**ControlPanel represents physical control panel** - cannot be extended with new inputs. New input sources (web API, MQTT, additional hardware) must publish events directly to EventBus from their own modules.
 
 ---
 
@@ -1359,7 +1436,7 @@ class NewAnimation(BaseAnimation):
 ```
 
 ### 12.2 Adding New Input Source
-**IMPORTANT**: Do NOT add to ControlModule (it's a fixed physical module)
+**IMPORTANT**: Do NOT add to ControlPanel (it's a fixed physical module)
 
 1. Create event class in `models/events.py`
 2. Add event type to `EventType` enum

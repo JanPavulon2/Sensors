@@ -20,7 +20,7 @@
     "floor": {
       "color": {
         "mode": "HUE",
-        "hue": 120
+        "hue": 40
       },
       "brightness": 100
     },
@@ -34,9 +34,9 @@
     "top": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "magenta"
+        "preset_name": "yellow"
       },
-      "brightness": 100
+      "brightness": 50
     },
     "right": {
       "color": {
@@ -54,10 +54,10 @@
     },
     "lamp": {
       "color": {
-        "mode": "HUE",
-        "hue": 180
+        "mode": "PRESET",
+        "preset_name": "sky_blue"
       },
-      "brightness": 100
+      "brightness": 90
     },
     "back": {
       "color": {
@@ -75,20 +75,19 @@
     }
   },
   "current_animation": {
-    "id": "COLOR_SNAKE",
+    "id": "SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5,
-      "ANIM_HUE_OFFSET": 30
+      "ANIM_LENGTH": 5
     }
   },
   "ui_session": {
-    "main_mode": "STATIC",
+    "main_mode": "ANIMATION",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ZONE_COLOR_HUE",
-    "selected_zone_index": 2
+    "active_parameter": "ANIM_SPEED",
+    "selected_zone_index": 1
   }
 }

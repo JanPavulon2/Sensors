@@ -42,7 +42,7 @@ The system uses an asyncio-based event-driven architecture with a central state 
 ```
 Hardware Input (encoders/buttons)
     ↓
-ControlModule (event callbacks)
+ControlPanel (event callbacks)
     ↓
 LEDController (state machine + business logic)
     ↓

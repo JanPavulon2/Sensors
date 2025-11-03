@@ -8,7 +8,7 @@ Dual backend implementation:
 Publishes KeyboardKeyPressEvent to EventBus with proper modifier tracking.
 
 Architecture note: This is a Layer 1 (HAL) component that publishes events
-directly to EventBus, similar to ControlModule. It does NOT extend ControlModule
+directly to EventBus, similar to ControlPanel. It does NOT extend ControlPanel
 as that represents fixed physical hardware.
 """
 

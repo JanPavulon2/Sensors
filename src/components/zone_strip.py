@@ -3,12 +3,15 @@ Zone Strip Component - Hardware abstraction for WS281x LED strips
 
 Manages LED strip divided into addressable zones with independent colors.
 Uses zone identifiers (uppercase enum names like "LAMP", "TOP") for addressing.
+
+Registers WS281x GPIO pin via GPIOManager for conflict detection.
 """
 
 from typing import Dict, List, Tuple, Optional
 from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
 from services.transition_service import TransitionService
+from managers.GPIOManager import GPIOManager
 
 
 class ZoneStrip:
@@ -22,15 +25,18 @@ class ZoneStrip:
         gpio: GPIO pin number (18=PWM0, 19=PCM)
         pixel_count: Total number of addressable pixels on strip
         zones: List of ZoneConfig objects (provides zone ID, start/end indices)
+        gpio_manager: GPIOManager instance for pin registration
         color_order: WS281x color constant (e.g., ws.WS2811_STRIP_BRG)
         brightness: Global hardware brightness 0-255
 
     Example:
         zones = [...]  # List of ZoneConfig from domain layer
+        gpio_manager = GPIOManager()
         strip = ZoneStrip(
             gpio=18,
             pixel_count=45,
             zones=zones,
+            gpio_manager=gpio_manager,
             color_order=ws.WS2811_STRIP_BRG,
             brightness=255
         )
@@ -51,6 +57,7 @@ class ZoneStrip:
         gpio: int,
         pixel_count: int,
         zones: List[ZoneConfig],
+        gpio_manager: GPIOManager,
         color_order: Optional[int] = None,
         brightness: int = 255
     ) -> None:
@@ -61,6 +68,7 @@ class ZoneStrip:
             gpio: GPIO pin number (18=PWM0, 19=PCM)
             pixel_count: Total number of addressable pixels
             zones: List of ZoneConfig objects from domain layer
+            gpio_manager: GPIOManager instance for pin registration
             color_order: WS281x color constant (None = RGB default)
             brightness: Global hardware brightness (0-255, default 255 for max)
 
@@ -74,6 +82,12 @@ class ZoneStrip:
             color_order = ws.WS2811_STRIP_RGB  # Default
 
         self.pixel_count: int = pixel_count
+
+        # Register WS281x pin via GPIOManager (tracking only, no setup needed)
+        gpio_manager.register_ws281x(
+            pin=gpio,
+            component=f"ZoneStrip(GPIO{gpio},{pixel_count}px)"
+        )
 
         # Build internal zone mapping: zone_id -> [start_index, end_index]
         # Uses lowercase zone tags ("lamp", "top") to match ZoneConfig.tag property

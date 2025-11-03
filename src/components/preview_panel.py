@@ -1,12 +1,15 @@
 """
-Preview Panel Component
+Preview Panel Component - Hardware Abstraction Layer (Layer 1)
 
 CJMCU-2812-8 module - 8 RGB LEDs for previewing colors and animations.
 Hardware abstraction layer for WS2811 strip (GPIO 19, GRB color order).
+
+Registers WS281x GPIO pin via GPIOManager for conflict detection.
 """
 
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
+from managers.GPIOManager import GPIOManager
 
 
 class PreviewPanel:
@@ -24,18 +27,27 @@ class PreviewPanel:
 
     Args:
         gpio: GPIO pin number
+        gpio_manager: GPIOManager instance for pin registration
         count: Number of LEDs (default 8)
         color_order: Color order constant from ws module (default GRB)
         brightness: Global hardware brightness 0-255 (default 32)
 
     Example:
-        >>> preview = PreviewPanel(gpio=19)
+        >>> gpio_manager = GPIOManager()
+        >>> preview = PreviewPanel(gpio=19, gpio_manager=gpio_manager)
         >>> preview.show_color((255, 0, 0))  # All LEDs red
         >>> preview.show_bar(75, 100, (0, 255, 0))  # 6 LEDs green (75% of 8)
         >>> preview.clear()
     """
 
-    def __init__(self, gpio: int, count: int = 8, color_order=None, brightness: int = 32):
+    def __init__(
+        self,
+        gpio: int,
+        gpio_manager: GPIOManager,
+        count: int = 8,
+        color_order=None,
+        brightness: int = 32
+    ):
         from rpi_ws281x import ws
 
         if color_order is None:
@@ -43,6 +55,12 @@ class PreviewPanel:
 
         self.count = count
         self.brightness = brightness
+
+        # Register WS281x pin via GPIOManager (tracking only, no setup needed)
+        gpio_manager.register_ws281x(
+            pin=gpio,
+            component=f"PreviewPanel(GPIO{gpio},{count}px)"
+        )
 
         # Private WS2811 strip - use public methods instead of direct access
         self._strip = PixelStrip(
