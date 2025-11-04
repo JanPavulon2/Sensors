@@ -7,7 +7,7 @@ All hardware inputs (encoders, buttons) are published as events.
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Generic, TypeVar
 import time
 from models.enums import EncoderSource, ButtonID
 
@@ -27,8 +27,10 @@ class EventType(Enum):
     MQTT_COMMAND = auto()
     SYSTEM_EVENT = auto()
 
+TSource = TypeVar("TSource", bound=Enum)
+
 @dataclass
-class Event:
+class Event(Generic[TSource]):
     """
     Base event class
 
@@ -39,12 +41,12 @@ class Event:
     - timestamp: float (when it happened)
     """
     type: EventType
-    source: Optional[Enum]  # EncoderSource or ButtonID
+    source: TSource | None  # EncoderSource or ButtonID
     data: Dict[str, Any]
     timestamp: float
 
 @dataclass
-class EncoderRotateEvent(Event):
+class EncoderRotateEvent(Event[EncoderSource]):
     """Encoder rotation event"""
 
     def __init__(self, source: EncoderSource, delta: int):
@@ -66,7 +68,7 @@ class EncoderRotateEvent(Event):
         return self.data["delta"]
 
 @dataclass
-class EncoderClickEvent(Event):
+class EncoderClickEvent(Event[EncoderSource]):
     """Encoder button click event"""
 
     def __init__(self, source: EncoderSource):
@@ -82,17 +84,17 @@ class EncoderClickEvent(Event):
         )
 
 @dataclass
-class ButtonPressEvent(Event):
+class ButtonPressEvent(Event[ButtonID]):
     """Button press event"""
 
-    def __init__(self, button_id: ButtonID):
+    def __init__(self, source: ButtonID):
         """
         Args:
             button_id: ButtonID.BTN1, ButtonID.BTN2, ButtonID.BTN3, or ButtonID.BTN4
         """
         super().__init__(
             type=EventType.BUTTON_PRESS,
-            source=button_id,
+            source=source,
             data={},
             timestamp=time.time()
         )

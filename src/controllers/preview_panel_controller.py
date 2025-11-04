@@ -10,6 +10,7 @@ from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
 from models import Color
+from services.transition_service import TransitionService
 
 if TYPE_CHECKING:
     from animations.base import BaseAnimation
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 log = get_logger()
 
 
-class PreviewController:
+class PreviewPanelController:
     """
     Preview panel orchestration controller
 
@@ -41,8 +42,9 @@ class PreviewController:
         >>> controller.stop_animation_preview()
     """
 
-    def __init__(self, preview_panel: PreviewPanel):
+    def __init__(self, preview_panel: PreviewPanel, transition_service: TransitionService):
         self.preview_panel = preview_panel
+        self.transition_service = transition_service
         self._animation_task: Optional[asyncio.Task] = None
         self._current_animation: Optional['BaseAnimation'] = None
         self._animation_running = False
@@ -50,7 +52,6 @@ class PreviewController:
 
     # ===== STATIC DISPLAY METHODS =====
 
-    
     def fill_with_color(self, color: Color) -> None:
         if self._animation_running:
             # Stop synchronously without crossfade
@@ -466,3 +467,11 @@ class PreviewController:
                 self._current_animation = None
                 if self._animation_running:
                     self.preview_panel.clear()
+
+    def clear(self) -> None:
+        """Clear preview panel immediately"""
+        # if self._animation_running:
+        #     # Stop synchronously without crossfade
+        #     asyncio.create_task(self._stop_animation_without_crossfade())
+
+        self.preview_panel.clear()  

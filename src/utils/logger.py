@@ -49,6 +49,7 @@ CATEGORY_COLORS = {
     LogCategory.ANIMATION: Colors.BRIGHT_YELLOW,
     LogCategory.ZONE: Colors.BRIGHT_GREEN,
     LogCategory.SYSTEM: Colors.BRIGHT_WHITE,
+    LogCategory.TRANSITION: Colors.MAGENTA,
 }
 
 # Level symbols

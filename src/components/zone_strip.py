@@ -2,9 +2,9 @@
 Zone Strip Component - Hardware abstraction for WS281x LED strips
 
 Manages LED strip divided into addressable zones with independent colors.
-Uses zone identifiers (uppercase enum names like "LAMP", "TOP") for addressing.
+Each zone is addressed by string identifiers (e.g. "LAMP", "TOP").
 
-Registers WS281x GPIO pin via GPIOManager for conflict detection.
+Handles only low-level pixel operations and caching.
 """
 
 from typing import Dict, List, Tuple, Optional
@@ -12,44 +12,32 @@ from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
 from services.transition_service import TransitionService
 from infrastructure import GPIOManager
+from utils.enum_helper import EnumHelper
 
 
 class ZoneStrip:
     """
     Hardware abstraction for WS281x LED strip with zone-based control.
 
-    This class provides a simple interface for controlling LED zones without
-    coupling to domain models (uses plain strings for zone IDs).
+    Provides direct hardware operations:
+      - Set color for zones or individual pixels
+      - Apply batches efficiently
+      - Clear or restore LED state
+
+    Accepts string zone identifiers (e.g. "LAMP"), not enums.
+
+    Does NOT handle:
+      - Brightness scaling
+      - Color model conversions
+      - Any domain logic
 
     Args:
         gpio: GPIO pin number (18=PWM0, 19=PCM)
-        pixel_count: Total number of addressable pixels on strip
-        zones: List of ZoneConfig objects (provides zone ID, start/end indices)
-        gpio_manager: GPIOManager instance for pin registration
-        color_order: WS281x color constant (e.g., ws.WS2811_STRIP_BRG)
-        brightness: Global hardware brightness 0-255
-
-    Example:
-        zones = [...]  # List of ZoneConfig from domain layer
-        gpio_manager = GPIOManager()
-        strip = ZoneStrip(
-            gpio=18,
-            pixel_count=45,
-            zones=zones,
-            gpio_manager=gpio_manager,
-            color_order=ws.WS2811_STRIP_BRG,
-            brightness=255
-        )
-
-        # Single zone
-        strip.set_zone_color("LAMP", 255, 0, 0)  # Red
-
-        # Multiple zones (efficient)
-        strip.set_multiple_zones({
-            "LAMP": (255, 0, 0),
-            "TOP": (0, 255, 0),
-            "RIGHT": (0, 0, 255)
-        })
+        pixel_count: Total number of addressable pixels
+        zones: List of ZoneConfig objects
+        gpio_manager: GPIOManager for pin registration
+        color_order: WS281x color constant (default RGB)
+        brightness: Global hardware brightness (0–255)
     """
 
     def __init__(
@@ -61,52 +49,34 @@ class ZoneStrip:
         color_order: Optional[int] = None,
         brightness: int = 255
     ) -> None:
-        """
-        Initialize LED strip with zone configuration.
-
-        Args:
-            gpio: GPIO pin number (18=PWM0, 19=PCM)
-            pixel_count: Total number of addressable pixels
-            zones: List of ZoneConfig objects from domain layer
-            gpio_manager: GPIOManager instance for pin registration
-            color_order: WS281x color constant (None = RGB default)
-            brightness: Global hardware brightness (0-255, default 255 for max)
-
-        Note:
-            Hardware brightness is typically set to 255 (max). Software brightness
-            control is handled by scaling RGB values in the domain layer.
-        """
         from rpi_ws281x import ws
 
         if color_order is None:
-            color_order = ws.WS2811_STRIP_RGB  # Default
+            color_order = ws.WS2811_STRIP_BRG  # Default for WS2811
 
         self.pixel_count: int = pixel_count
 
-        # Register WS281x pin via GPIOManager (tracking only, no setup needed)
+        # Register WS281x pin via GPIOManager
         gpio_manager.register_ws281x(
             pin=gpio,
             component=f"ZoneStrip(GPIO{gpio},{pixel_count}px)"
         )
 
-        # Build internal zone mapping: zone_id -> [start_index, end_index]
-        # Uses lowercase zone tags ("lamp", "top") to match ZoneConfig.tag property
-        # IMPORTANT: Include ALL zones (enabled and disabled) to preserve pixel indices
+        # Build internal mapping: "LAMP" → [start_index, end_index]
         self.zones: Dict[str, List[int]] = {
-            zone.tag: [zone.start_index, zone.end_index]
+            EnumHelper.to_string(zone.id): [zone.start_index, zone.end_index]
             for zone in zones
         }
 
-        # Store reversed flag for each zone (from config)
+        # Reversed zones (for inverted physical layout)
         self.zone_reversed: Dict[str, bool] = {
-            zone.tag: zone.reversed
+            EnumHelper.to_string(zone.id): zone.reversed
             for zone in zones
         }
 
-        # Cache current color for each zone
-        # Initialize ALL zones (including disabled) to black
+        # Cached colors (initialized to black)
         self.zone_colors: Dict[str, Tuple[int, int, int]] = {
-            zone.tag: (0, 0, 0)
+            EnumHelper.to_string(zone.id): (0, 0, 0)
             for zone in zones
         }
 
@@ -129,10 +99,15 @@ class ZoneStrip:
             0,              # channel: PWM channel 0
             color_order     # strip_type: ws.WS2811_STRIP_BRG
         )
+        
         self.strip.begin()
 
         # Initialize transition service for smooth state changes
-        self.transition_service = TransitionService(self)
+        # self.transition_service = TransitionService(self)
+
+    # -----------------------------------------------------------------------
+    # Internal helpers
+    # -----------------------------------------------------------------------
 
     def _validate_zone(self, zone_id: str) -> bool:
         """
@@ -162,13 +137,17 @@ class ZoneStrip:
         if self.zone_reversed.get(zone_id, False):
             # Reversed: logical 0 maps to physical end, logical max maps to physical start
             return end - logical_index
-        else:
-            # Normal: logical 0 maps to physical start
-            return start + logical_index
+        
+        # Normal: logical 0 maps to physical start
+        return start + logical_index
+
+    # -----------------------------------------------------------------------
+    # Public API
+    # -----------------------------------------------------------------------
 
     def set_zone_color(self, zone_id: str, r: int, g: int, b: int) -> None:
         """
-        Set color for a single zone.
+        Set uniform color for an entire zone.
 
         Args:
             zone_id: Zone identifier string (e.g., "LAMP", "TOP")
@@ -189,6 +168,7 @@ class ZoneStrip:
         # Apply to all pixels in zone
         start, end = self.zones[zone_id]
         color = Color(r, g, b)
+        
         for i in range(start, end + 1):
             if i < self.pixel_count:
                 self.strip.setPixelColor(i, color)
@@ -196,21 +176,40 @@ class ZoneStrip:
         # Update hardware
         self.strip.show()
 
-    def get_zone_color(self, zone_id: str) -> Optional[Tuple[int, int, int]]:
+    def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:
         """
-        Get current cached color of zone.
+        Set colors for multiple zones at once (efficient - single strip.show()).
+
+        Recommended for batch updates to avoid flickering from multiple show() calls.
 
         Args:
-            zone_id: Zone identifier string
+            zone_colors: Dict mapping zone_id to (r, g, b) tuple
+        
+        Example: {"LAMP": (255, 0, 0), "TOP": (0, 255, 0)}
 
-        Returns:
-            (r, g, b) tuple or None if zone doesn't exist
+        Note:
+            Invalid zone IDs are silently skipped.
         """
-        return self.zone_colors.get(zone_id)
+        for zone_id, (r, g, b) in zone_colors.items():
+            if not self._validate_zone(zone_id):
+                continue
+
+            # Cache color
+            self.zone_colors[zone_id] = (r, g, b)
+
+            # Apply to all pixels in zone
+            start, end = self.zones[zone_id]
+            color = Color(r, g, b)
+            for i in range(start, end + 1):
+                if i < self.pixel_count:
+                    self.strip.setPixelColor(i, color)
+
+        # Single hardware update for all zones
+        self.strip.show()
 
     def set_pixel_color(self, zone_id: str, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
         """
-        Set color for a specific pixel within a zone.
+        Set color of a specific pixel inside a zone.
 
         Args:
             zone_id: Zone identifier string
@@ -240,89 +239,10 @@ class ZoneStrip:
         if physical_position >= self.pixel_count:
             return
 
-        color = Color(r, g, b)
-        self.strip.setPixelColor(physical_position, color)
+        self.strip.setPixelColor(physical_position, Color(r, g, b))
 
         if show:
             self.strip.show()
-
-    def show(self) -> None:
-        """
-        Update strip hardware - call after batch of set_pixel_color(show=False) calls
-        """
-        self.strip.show()
-
-    def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:
-        """
-        Set colors for multiple zones at once (efficient - single strip.show()).
-
-        Recommended for batch updates to avoid flickering from multiple show() calls.
-
-        Args:
-            zone_colors: Dict mapping zone_id to (r, g, b) tuple
-                        Example: {"LAMP": (255, 0, 0), "TOP": (0, 255, 0)}
-
-        Note:
-            Invalid zone IDs are silently skipped.
-        """
-        for zone_id, (r, g, b) in zone_colors.items():
-            if not self._validate_zone(zone_id):
-                continue
-
-            # Cache color
-            self.zone_colors[zone_id] = (r, g, b)
-
-            # Apply to all pixels in zone
-            start, end = self.zones[zone_id]
-            color = Color(r, g, b)
-            for i in range(start, end + 1):
-                if i < self.pixel_count:
-                    self.strip.setPixelColor(i, color)
-
-        # Single hardware update for all zones
-        self.strip.show()
-
-    def apply_all_zones(self) -> None:
-        """
-        Reapply all cached zone colors to hardware.
-
-        Useful after hardware reset or when resuming from sleep.
-        """
-        self.set_multiple_zones(self.zone_colors)
-
-    def clear(self) -> None:
-        """
-        Turn off all LEDs and reset zone color cache.
-
-        Sets all pixels to black (0, 0, 0) and updates hardware immediately.
-        """
-        for i in range(self.pixel_count):
-            self.strip.setPixelColor(i, Color(0, 0, 0))
-        self.strip.show()
-
-        # Reset color cache
-        self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
-
-    # ===== TransitionService Support Methods =====
-
-    def get_frame(self) -> List[Tuple[int, int, int]]:
-        """
-        Capture current LED state as list of RGB tuples.
-
-        Used by TransitionService for smooth transitions.
-
-        Returns:
-            List of (r, g, b) tuples for each pixel (index 0 to pixel_count-1)
-        """
-        frame = []
-        for i in range(self.pixel_count):
-            color = self.strip.getPixelColor(i)
-            # Extract RGB from 32-bit color value (format: 0x00RRGGBB for RGB order)
-            r = (color >> 16) & 0xFF
-            g = (color >> 8) & 0xFF
-            b = color & 0xFF
-            frame.append((r, g, b))
-        return frame
 
     def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
         """
@@ -345,32 +265,69 @@ class ZoneStrip:
             if show:
                 self.strip.show()
 
-    def build_frame_from_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+    def show(self) -> None:
         """
-        Build pixel-level frame from zone colors (for transitions)
+        Update strip hardware - call after batch of set_pixel_color(show=False) calls
+        """
+        self.strip.show()
 
-        Converts zone-based colors to pixel-level frame for TransitionService.
+    def clear(self) -> None:
+        """
+        Turn off all LEDs and reset zone color cache.
 
-        Args:
-            zone_colors: Dict mapping zone tag (lowercase, e.g., "lamp", "top") to (r, g, b) tuple
+        Sets all pixels to black (0, 0, 0) and updates hardware immediately.
+        """
+        for i in range(self.pixel_count):
+            self.strip.setPixelColor(i, Color(0, 0, 0))
+        self.strip.show()
+
+        # Reset color cache
+        self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
+
+    # -----------------------------------------------------------------------
+    # TransitionService Support Methods
+    # -----------------------------------------------------------------------
+
+    def get_frame(self) -> List[Tuple[int, int, int]]:
+        """
+        Capture current LED state as list of RGB tuples.
+
+        Used by TransitionService for smooth transitions.
 
         Returns:
             List of (r, g, b) tuples for each pixel (index 0 to pixel_count-1)
-
-        Example:
-            >>> zone_colors = {"lamp": (255, 0, 0), "top": (0, 255, 0)}
-            >>> frame = strip.build_frame_from_zones(zone_colors)
-            >>> await transition_service.fade_in(frame, config)
         """
-        frame = [(0, 0, 0)] * self.pixel_count
-
-        # Fill frame with zone colors
-        for zone_tag, (r, g, b) in zone_colors.items():
-            if zone_tag in self.zones:
-                start, end = self.zones[zone_tag]
-                for i in range(start, end + 1):
-                    if i < self.pixel_count:
-                        frame[i] = (r, g, b)
-
+        frame = []
+        for i in range(self.pixel_count):
+            color: int = int(self.strip.getPixelColor(i)) # type: ignore
+            # Extract RGB from 32-bit color value (format: 0xRRGGBB for RGB order)
+            r = (color >> 16) & 0xFF
+            g = (color >> 8) & 0xFF
+            b = color & 0xFF
+            frame.append((r, g, b))
+            
         return frame
 
+    def get_zone_color(self, zone_id: str) -> Optional[Tuple[int, int, int]]:
+        """
+        Get current cached color of zone.
+
+        Args:
+            zone_id: Zone identifier string
+
+        Returns:
+            (r, g, b) tuple or None if zone doesn't exist
+        """
+        return self.zone_colors.get(zone_id)
+
+    def build_frame_from_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+        """Build pixel-level frame from given zone colors (for transitions)."""
+        frame = [(0, 0, 0)] * self.pixel_count
+        for zone_id, (r, g, b) in zone_colors.items():
+            if zone_id not in self.zones:
+                continue
+            start, end = self.zones[zone_id]
+            for i in range(start, end + 1):
+                if i < self.pixel_count:
+                    frame[i] = (r, g, b)
+        return frame

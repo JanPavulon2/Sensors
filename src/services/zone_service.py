@@ -69,6 +69,13 @@ class ZoneService:
         zone = self.get_zone(zone_id)
         return zone.get_rgb()
 
+    def get_zones_states(self) -> dict[ZoneID, tuple[Color, int]]:
+        """Get current zone states as dict of (Color, brightness)"""
+        return {
+            zone.config.id: (zone.state.color, zone.brightness)
+            for zone in self.get_all()
+        }
+        
     def save(self) -> None:
         """Persist current state"""
         self.assembler.save_zone_state(self.zones)

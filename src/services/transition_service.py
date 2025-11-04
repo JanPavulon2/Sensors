@@ -41,14 +41,17 @@ class TransitionService:
     """
 
     # === Transition Presets ===
-    # TEMPORARY: All set to NONE for testing - will enable gradually
 
     STARTUP = TransitionConfig(
-        type=TransitionType.NONE
+        type=TransitionType.FADE,
+        duration_ms=2000,
+        steps=30
     )
 
     SHUTDOWN = TransitionConfig(
-        type=TransitionType.NONE
+        type=TransitionType.FADE,
+        duration_ms=600,
+        steps=15
     )
 
     MODE_SWITCH = TransitionConfig(

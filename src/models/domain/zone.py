@@ -5,7 +5,7 @@ from models.color import Color
 from models.enums import ParamID, ZoneID
 from models.domain.parameter import ParameterCombined
 from typing import Dict, Any, Optional
-
+from utils.enum_helper import EnumHelper 
 
 @dataclass(frozen=True)
 class ZoneConfig:
@@ -74,7 +74,15 @@ class ZoneCombined:
         self.start_index = previous_end_index + 1 if previous_end_index >= 0 else 0
         self.end_index = self.start_index + self.config.pixel_count - 1
 
-
+    @property
+    def id(self) -> ZoneID:
+        """Get ZoneID enum"""
+        return self.config.id
+    
+    def get_str_id(self) -> str:
+        """Get string representation of ZoneID enum"""
+        return EnumHelper.to_string(self.config.id)
+    
     @property
     def brightness(self) -> int:
         """

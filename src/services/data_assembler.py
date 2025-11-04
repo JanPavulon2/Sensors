@@ -287,11 +287,11 @@ class DataAssembler:
             state_json = self.load_state()
 
             state_json["application"] = {
-                "main_mode": EnumHelper.to_name(app_state.main_mode),
+                "main_mode": EnumHelper.to_string(app_state.main_mode),
                 "edit_mode_on": app_state.edit_mode,
                 "lamp_white_mode_on": app_state.lamp_white_mode,
                 "lamp_white_saved_state": app_state.lamp_white_saved_state,
-                "active_parameter": EnumHelper.to_name(app_state.current_param),
+                "active_parameter": EnumHelper.to_string(app_state.current_param),
                 "selected_zone_index": app_state.current_zone_index,
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,
                 "save_on_change": app_state.save_on_change,

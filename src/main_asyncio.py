@@ -1,11 +1,21 @@
 """
-LED Control Station - Main Entry Point
+main_asyncio.py — Application entry point for Diuna
+--------------------------------------------------
 
-Asyncio-based event-driven architecture for Raspberry Pi LED control.
-See CLAUDE.md for full architecture documentation.
+Responsible for:
+- initializing managers, services, and controllers
+- wiring dependencies (Dependency Injection)
+- starting the async main loop
+- graceful shutdown on Ctrl +C or fatal errors
 """
 
+import contextlib
 import sys
+
+
+# ---------------------------------------------------------------------------
+# UTF-8 ENCODING FIX (important for Raspberry Pi)
+# ---------------------------------------------------------------------------
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
@@ -13,116 +23,224 @@ if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
+import signal
 import asyncio
+from pathlib import Path
 from utils.logger import get_logger, configure_logger
-from models.enums import LogLevel
-from components import ControlPanel, KeyboardInputAdapter
+from models.enums import LogCategory, LogLevel
+from components import ControlPanel, KeyboardInputAdapter, ZoneStrip
 from infrastructure import GPIOManager
-from controllers import LEDController
+from controllers.led_controller.led_controller import LEDController
+from controllers import ControlPanelController, PreviewPanelController, ZoneStripController
 from managers import ConfigManager
-from services.event_bus import EventBus
+from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService
 from services.middleware import log_middleware
+from services.transition_service import TransitionService
 
-configure_logger(LogLevel.INFO)
+# ---------------------------------------------------------------------------
+# LOGGER SETUP
+# ---------------------------------------------------------------------------
+
+configure_logger(LogLevel.DEBUG)
 log = get_logger()
 
 
-async def main():
-    """Main application entry point"""
-    log.system("=" * 60)
-    log.system("LED Control Station - Starting...")
-    log.system("=" * 60)
+# ---------------------------------------------------------------------------
+# SHUTDOWN HANDLER
+# ---------------------------------------------------------------------------
 
-    # Load configuration
+async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
+    """Gracefully shut down all tasks and hardware."""
+    if signal_name:
+        log.system(f"Received signal: {signal_name} → initiating graceful shutdown...")
+
+    # Cancel all running tasks except current
+    tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task(loop)]
+    log.debug(LogCategory.SYSTEM, f"Cancelling {len(tasks)} running tasks...")
+    for task in tasks:
+        task.cancel()
+
+    # Wait for cancellation
+    await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Allow pending logs to flush
+    await asyncio.sleep(0.05)
+    log.info(LogCategory.SYSTEM, "Shutdown complete. Goodbye!")
+    
+
+# ---------------------------------------------------------------------------
+# Application Entry
+# ---------------------------------------------------------------------------
+
+async def main():
+    """Main async entry point (dependency injection and event loop startup)."""
+
+    log.info(LogCategory.SYSTEM, "Starting Diuna application...")
+
+    # ========================================================================
+    # INFRASTRUCTURE
+    # ========================================================================
+
     log.system("Loading configuration...")
     config_manager = ConfigManager()
     config_manager.load()
 
-    # Create event bus
     log.system("Initializing event bus...")
     event_bus = EventBus()
-
-    # Register middleware
-    log.system("Registering event bus middleware...")
     event_bus.add_middleware(log_middleware)
 
-    # Initialize GPIO manager (MUST be first - all hardware components register pins here)
     log.system("Initializing GPIO manager...")
     gpio_manager = GPIOManager()
 
-    # Initialize LED controller (loads state via DataAssembler, registers WS281x pins)
+    # ========================================================================
+    # REPOSITORY & SERVICES
+    # ========================================================================
+
+    log.system("Loading application state...")
+    state_file = Path(__file__).resolve().parent / "state" / "state.json"
+    assembler = DataAssembler(config_manager, state_file)
+
+    log.system("Initializing services...")
+    zone_service = ZoneService(assembler)
+    animation_service = AnimationService(assembler)
+    app_state_service = ApplicationStateService(assembler)
+
+    # ========================================================================
+    # LAYER 1: HARDWARE
+    # ========================================================================
+
+    log.system("Initializing hardware control panel...")
+    control_panel = ControlPanel(
+        config_manager.hardware_manager,
+        event_bus,
+        gpio_manager
+    )
+
+    log.system("Initializing LED strip...")
+    zone_strip = ZoneStrip(
+        gpio=config_manager.hardware_manager.get_led_strip("zone_strip")["gpio"],  # type: ignore
+        pixel_count=zone_service.get_total_pixel_count(),
+        zones=[z.config for z in zone_service.get_all()],
+        gpio_manager=gpio_manager
+    )
+
+    # ========================================================================
+    # SERVICES: TRANSITIONS
+    # ========================================================================
+
+    log.system("Creating transition services...")
+    zone_strip_transition_service = TransitionService(zone_strip)
+    preview_panel_transition_service = TransitionService(control_panel.preview_panel)
+
+    # ========================================================================
+    # LAYER 2: CONTROLLERS
+    # ========================================================================
+
+    log.system("Initializing controllers...")
+    zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service)
+    preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
+    control_panel_controller = ControlPanelController(control_panel, event_bus)
+
+    # ========================================================================
+    # LAYER 3: APPLICATION
+    # ========================================================================
+
     log.system("Initializing LED controller...")
-    led = LEDController(config_manager, event_bus, gpio_manager)
+    led_controller = LEDController(
+        config_manager=config_manager,
+        event_bus=event_bus,
+        gpio_manager=gpio_manager,
+        zone_service=zone_service,
+        animation_service=animation_service,
+        app_state_service=app_state_service,
+        preview_panel_controller=preview_panel_controller,
+        zone_strip_controller=zone_strip_controller
+    )
 
-    # await asyncio.sleep(2)
+    # ========================================================================
+    # ADAPTERS
+    # ========================================================================
 
-    # Initialize keyboard input adapter (runs in background)
-    log.system("Initializing keyboard input adapter...")
+    log.system("Initializing keyboard input...")
     keyboard_adapter = KeyboardInputAdapter(event_bus)
     keyboard_task = asyncio.create_task(keyboard_adapter.run())
 
-    # Initialize hardware control panel (registers encoders, buttons, preview panel pins)
-    log.system("Initializing hardware...")
-    if config_manager.hardware_manager is None:
-        log.system("ERROR: Hardware manager not initialized!")
-        return
-    control_panel = ControlPanel(config_manager.hardware_manager, event_bus, gpio_manager)
+    # ========================================================================
+    # STARTUP TRANSITION
+    # ========================================================================
 
-    # Log GPIO pin allocations (useful for debugging conflicts)
-    # gpio_manager.log_registry()
+    log.system("Performing startup transition...")
+    await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
 
-    async def hardware_loop():
-        """Poll hardware inputs at 100Hz"""
-        while True:
-            control_panel.poll()
-            await asyncio.sleep(0.01)
+    # ========================================================================
+    # SYSTEM STATUS
+    # ========================================================================
 
-    # Log initial state
-    status = led.get_status()
+    log.system("=" * 60)
     log.system("Initial state loaded:")
-    log.system(f"  Mode: {led.main_mode.name}")
-    log.system(f"  Edit Mode: {'ON' if status['edit_mode'] else 'OFF'}")
-    if led.main_mode.name == "STATIC":
-        log.system(f"  Zone: {led._get_current_zone_id().name}")
-        log.system(f"  Parameter: {led.current_param.name}")
-    else:
-        anim_id = led.current_animation_id
-        log.system(f"  Animation: {anim_id.name if anim_id else 'None'}")
-        log.system(f"  Parameter: {led.current_param.name}")
-
+    log.system(f"  Mode: {led_controller.main_mode.name}")
+    log.system(f"  Edit Mode: {'ON' if led_controller.edit_mode else 'OFF'}")
     log.system("=" * 60)
     log.system("System ready. Press Ctrl+C to exit.")
     log.system("=" * 60)
-    
-    try:
-        await hardware_loop()
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        log.system("Shutdown signal received")
-    finally:
-        # Graceful shutdown sequence
-        log.system("Shutting down...")
 
-        # Cancel keyboard input task first (prevents threading errors)
-        log.system("Stopping keyboard input...")
-        keyboard_task.cancel()
+    # ========================================================================
+    # RUN LOOPS
+    # ========================================================================
+
+    async def hardware_polling_loop():
+        """Poll hardware inputs at 50Hz"""
         try:
-            await keyboard_task
+            while True:
+                await control_panel_controller.poll()
+                await asyncio.sleep(0.02)
         except asyncio.CancelledError:
-            pass  # Expected - task was cancelled
+            log.debug(LogCategory.SYSTEM, "Hardware polling loop cancelled.")
+            raise
+    
+        
+    polling_task = asyncio.create_task(hardware_polling_loop(), name="HardwarePolling")
+    
+    # Register signal handlers for graceful exit
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(loop, s.name)))
+
+    try:
+        await asyncio.gather(keyboard_task, polling_task)
+    except asyncio.CancelledError:
+        log.debug(LogCategory.SYSTEM, "Main loop cancelled.")
+    finally:
+        # Graceful cleanup
+        log.system("🧹 Starting cleanup...")
+
+        if not keyboard_task.done():
+            keyboard_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await keyboard_task
+                
+        
+        if not polling_task.done():
+            polling_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await polling_task
 
         log.system("Stopping animations...")
-        await led.animation_engine.stop()
-
+        led_controller.animation_mode.animation_service.stop_all()
+        
+        
         log.system("Stopping pulsing...")
-        led._stop_pulse()
-        await asyncio.sleep(0.1)  # Let colors restore
+        led_controller.static_mode._stop_pulse()
+        await asyncio.sleep(0.05)
+
+        log.system("Performing shutdown transition...")
+        await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
         log.system("Clearing LEDs...")
-        led.clear_all()
+        led_controller.clear_all()
 
         log.system("Cleaning up GPIO...")
         gpio_manager.cleanup()
-        # module.cleanup()
 
         log.system("Shutdown complete. Goodbye!")
 

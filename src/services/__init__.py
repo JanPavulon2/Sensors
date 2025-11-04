@@ -1,13 +1,11 @@
 """Services layer"""
 
-from services.data_assembler import DataAssembler
-from services.animation_service import AnimationService
-from services.zone_service import ZoneService
-from services.application_state_service import ApplicationStateService
-from services.transition_service import TransitionService
-
-# Backward compatibility alias
-UISessionService = ApplicationStateService
+from .data_assembler import DataAssembler
+from .animation_service import AnimationService
+from .zone_service import ZoneService
+from .application_state_service import ApplicationStateService
+from .transition_service import TransitionService
+from .event_bus import EventBus
 
 __all__ = [
     "DataAssembler",
@@ -15,5 +13,5 @@ __all__ = [
     "ZoneService",
     "ApplicationStateService",
     "TransitionService",
-    "UISessionService",  # Backward compat
+    "EventBus", 
 ]

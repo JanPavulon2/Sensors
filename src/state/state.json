@@ -24,7 +24,7 @@
       },
       "brightness": 100
     },
-    "left": {
+    "LEFT": {
       "color": {
         "mode": "HUE",
         "hue": 330
@@ -34,28 +34,28 @@
     "top": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "yellow"
+        "preset_name": "magenta"
       },
-      "brightness": 50
+      "brightness": 100
     },
-    "right": {
+    "RIGHT": {
       "color": {
         "mode": "HUE",
-        "hue": 140
+        "hue": 330
       },
-      "brightness": 40
+      "brightness": 80
     },
     "bottom": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "green"
+        "mode": "HUE",
+        "hue": 290
       },
       "brightness": 100
     },
     "lamp": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "warm_white"
+        "mode": "HUE",
+        "hue": 137
       },
       "brightness": 100
     },
@@ -69,32 +69,40 @@
     "desk": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "white"
+      },
+      "brightness": 100
+    },
+    "left": {
+      "color": {
+        "mode": "HUE",
+        "hue": 250
+      },
+      "brightness": 100
+    },
+    "right": {
+      "color": {
+        "mode": "HUE",
+        "hue": 310
       },
       "brightness": 100
     }
   },
   "current_animation": {
-    "id": "SNAKE",
+    "id": "COLOR_FADE",
     "parameters": {
-      "ANIM_SPEED": 1,
+      "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 1
+      "ANIM_INTENSITY": 100
     }
   },
   "application": {
-    "main_mode": "ANIMATION",
+    "main_mode": "STATIC",
     "edit_mode_on": true,
-    "lamp_white_mode_on": true,
-    "lamp_white_saved_state": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "sky_blue"
-      },
-      "brightness": 90
-    },
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 6,
+    "lamp_white_mode_on": false,
+    "lamp_white_saved_state": null,
+    "active_parameter": "ZONE_BRIGHTNESS",
+    "selected_zone_index": 2,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

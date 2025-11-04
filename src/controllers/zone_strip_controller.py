@@ -1,0 +1,227 @@
+"""
+Zone Strip Controller - Layer 2
+
+Orchestrates rendering operations on the main LED strip.
+Provides high-level interface for zone rendering using domain types (ZoneID, Color).
+
+Responsibilities:
+    - Render individual zones with color and brightness
+    - Render all zones at once (batch update)
+    - Power on/off all zones
+    - Clear all LEDs
+    - Translate domain types (ZoneID) to hardware types (string tags)
+
+Does NOT:
+    - Decide WHICH zone to show (that's LEDController L3)
+    - Manage state (that's Services)
+    - Handle user input (that's ControlPanelController L2)
+"""
+
+from typing import Dict, Tuple
+from components import ZoneStrip
+from models import Color
+from models.domain import ZoneCombined
+from models.enums import ZoneID
+from utils.logger import get_logger, LogCategory
+from utils.enum_helper import EnumHelper
+from services.transition_service import TransitionService
+
+log = get_logger()
+
+
+class ZoneStripController:
+    """
+    High-level controller for the main LED strip.
+
+    Responsibilities:
+      - Render zones based on domain data (ZoneCombined, Color)
+      - Apply brightness scaling
+      - Batch updates for efficiency
+      - Provide clear/power control operations
+
+    Args:
+        zone_strip: ZoneStrip hardware component (L1)
+    """
+
+    def __init__(self, zone_strip: ZoneStrip, transition_service: TransitionService):
+        """
+        Initialize ZoneStripController
+
+        Args:
+            zone_strip: ZoneStrip hardware component (injected from main)
+            transition_service: TransitionService instance for this strip
+        """
+        self.zone_strip = zone_strip
+        self.transition_service = transition_service
+        log.info(LogCategory.SYSTEM, "ZoneStripController initialized")
+
+    # -----------------------------------------------------------------------
+    # Rendering
+    # -----------------------------------------------------------------------
+
+    def render_zone(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
+        """
+        Render single zone with color and brightness
+
+        Args:
+            zone_id: ZoneID enum value representing the zone
+            color: Color object (HUE, PRESET, RGB, or WHITE mode)
+            brightness: Brightness percentage (0-100)
+
+        Example:
+            color = Color.from_hue(240)  # Blue
+            controller.render_zone(ZoneID.LAMP, color, brightness=75)
+        """
+        r, g, b = color.to_rgb()
+
+        # Apply brightness scaling
+        r = int(r * brightness / 100)
+        g = int(g * brightness / 100)
+        b = int(b * brightness / 100)
+
+        zone_id_str = EnumHelper.to_string(zone_id)
+        self.zone_strip.set_zone_color(zone_id_str, r, g, b)
+        log.debug(LogCategory.SYSTEM, f"Rendered zone {zone_id_str}: RGB({r},{g},{b}) @ {brightness}%")
+
+    def render_zone_combined(self, zone: ZoneCombined) -> None:
+        """
+        Render a zone directly from ZoneCombined domain object.
+        """
+        self.render_zone(zone.config.id, zone.state.color, zone.brightness)
+
+    def render_all_zones(self, zone_states: Dict[ZoneID, Tuple[Color, int]]) -> None:
+        """
+        Render all zones at once (batch update)
+
+        More efficient than calling render_zone() multiple times
+        because it only calls show() once at the end.
+
+        Args:
+            zone_states: Dict mapping ZoneID to (Color, brightness) tuples
+
+        Example:
+            states = {
+                ZoneID.LAMP: (Color.from_hue(0), 100),
+                ZoneID.TOP: (Color.from_hue(120), 80),
+                ZoneID.STRIP: (Color.from_hue(240), 60)
+            }
+            controller.render_all_zones(states)
+        """
+        # Build dict with lowercase tags for hardware layer
+        colors_dict = {}
+
+        for zone_id, (color, brightness) in zone_states.items():
+            zone_id_str = EnumHelper.to_string(zone_id)
+            r, g, b = color.to_rgb()
+
+            colors_dict[zone_id_str] = (
+            # Apply brightness scaling
+                int(r * brightness / 100),
+                int(g * brightness / 100),
+                int(b * brightness / 100)
+            )
+
+        # Set all zones at once (efficient - single show() call)
+        self.zone_strip.set_multiple_zones(colors_dict)
+        log.debug(LogCategory.ZONE, f"Rendered {len(zone_states)} zones (batch)")
+
+    # -----------------------------------------------------------------------
+    # Power & Clear
+    # -----------------------------------------------------------------------
+
+    def clear_all(self) -> None:
+        """
+        Turn off all LEDs (set all to black)
+        """
+        self.zone_strip.clear()
+        log.debug(LogCategory.ZONE, "Cleared all zones")
+
+    def power_on(self, zone_states: Dict[ZoneID, Tuple[Color, int]]) -> None:
+        """
+        Restore all zones to saved state (power on)
+
+        Same as render_all_zones() but semantically represents
+        restoring from power-off state.
+
+        Args:
+            zone_states: Dict mapping ZoneID to (Color, brightness) tuples
+        """
+        self.render_all_zones(zone_states)
+        log.info(LogCategory.ZONE, "Power ON - restored all zones")
+
+    def power_off(self) -> None:
+        """
+        Turn off all zones (power off)
+
+        Same as clear_all() but semantically represents
+        entering power-off state.
+        """
+        self.clear_all()
+        log.info(LogCategory.ZONE, "Power OFF - cleared all zones")
+
+    # -----------------------------------------------------------------------
+    # Brightness-only updates
+    # -----------------------------------------------------------------------
+
+    def update_brightness(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
+        """
+        Update zone brightness (keeps same color)
+
+        Convenience method for brightness-only updates.
+
+        Args:
+            zone_id: Zone identifier enum
+            color: Current zone color
+            brightness: New brightness percentage (0-100)
+        """
+        self.render_zone(zone_id, color, brightness)
+
+    # -----------------------------------------------------------------------
+    # Transitions
+    # -----------------------------------------------------------------------
+
+    async def fade_out_all(self, config) -> None:
+        """
+        Fade out all zones to black
+
+        Args:
+            config: TransitionConfig (duration_ms, steps, ease_function)
+        """
+        current_frame = self.zone_strip.get_frame()
+        await self.transition_service.fade_out(current_frame, config)
+        log.info(LogCategory.TRANSITION, f"Faded out all zones ({config.duration_ms}ms)")
+
+    async def fade_in_all(self, target_frame, config) -> None:
+        """
+        Fade in all zones from black to target frame
+
+        Args:
+            target_frame: List of RGB tuples (one per pixel)
+            config: TransitionConfig
+        """
+        await self.transition_service.fade_in(target_frame, config)
+        log.info(LogCategory.TRANSITION, f"Faded in all zones ({config.duration_ms}ms)")
+
+    async def startup_fade_in(self, zone_service, config) -> None:
+        """
+        Fade in from black to current zone states (app startup)
+
+        Builds target frame from zone service WITHOUT rendering to strip,
+        then performs smooth fade-in transition. No flash.
+
+        Args:
+            zone_service: ZoneService instance to read zone colors from
+            config: TransitionConfig for fade timing
+        """
+        from utils.enum_helper import EnumHelper
+
+        # Build target frame from zone states (no rendering yet)
+        color_map = {
+            EnumHelper.to_string(z.config.id): z.get_rgb()
+            for z in zone_service.get_all()
+        }
+        target_frame = self.zone_strip.build_frame_from_zones(color_map)
+
+        # Fade in from black
+        await self.transition_service.fade_in(target_frame, config)
+        log.info(LogCategory.TRANSITION, f"Startup fade-in complete ({config.duration_ms}ms)")
