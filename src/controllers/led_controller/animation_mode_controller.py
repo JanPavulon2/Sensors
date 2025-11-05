@@ -7,6 +7,7 @@ from controllers.preview_panel_controller import PreviewPanelController
 from models.enums import ParamID, PreviewMode
 from utils.logger import get_logger, LogCategory, LogLevel
 from services import AnimationService, ApplicationStateService
+from animations.engine import AnimationEngine
 
 log = get_logger()
 
@@ -15,11 +16,15 @@ class AnimationModeController:
     def __init__(self, parent):
         self.parent = parent
         self.animation_service: AnimationService = parent.animation_service
-        self.animation_engine = parent.animation_engine
+        self.animation_engine: AnimationEngine = parent.animation_engine
         self.preview_panel_controller: PreviewPanelController = parent.preview_panel_controller
-        self.app_state = parent.app_state_service
+        self.app_state_service: ApplicationStateService = parent.app_state_service
 
-        self.current_param = self.app_state.get_state().current_param
+        # Use saved param if it's an animation param, otherwise default to ANIM_SPEED
+        saved_param = self.app_state_service.get_state().current_param
+        anim_params = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
+        self.current_param = saved_param if saved_param in anim_params else ParamID.ANIM_SPEED
+
         self.available_animations = [
             a.config.id for a in self.animation_service.get_all()
         ]
@@ -38,25 +43,47 @@ class AnimationModeController:
     # --- Animation Selection ---
 
     def select_animation(self, delta: int):
-        self.selected_animation_index = (
-            self.selected_animation_index + delta
-        ) % len(self.available_animations)
+        """Cycle through available animations by encoder rotation."""
+        if not self.available_animations:
+            log.warn(LogCategory.ANIMATION, "No animations available")
+            return
+        
+        self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
         anim_id = self.available_animations[self.selected_animation_index]
+        
         self.animation_service.set_current(anim_id)
-        self._sync_preview()
         log.animation(f"Selected animation: {anim_id.name}")
+        
+        self._sync_preview()
 
     async def toggle_animation(self):
-        """Start or stop current animation"""
+        """Start or stop the currently selected animation."""
+        log.info(LogCategory.ANIMATION, "Toggle animation called")
+
         current_anim = self.animation_service.get_current()
         if not current_anim:
             log.warn(LogCategory.ANIMATION, "No animation selected")
             return
 
-        if self.parent.animation_engine and self.parent.animation_engine.is_running():
-            await self.parent.animation_engine.stop()
-        else:
-            await self.parent.start_animation()
+        engine = self.animation_engine
+        
+        if engine and engine.is_running():
+            log.info(LogCategory.ANIMATION, f"Stopping running animation: {engine.get_current_animation_id().name}")
+            await engine.stop()
+            return
+
+        anim_id = current_anim.config.id
+        params = current_anim.build_params_for_engine()
+        
+        # Build parameters dynamically
+        params = current_anim.build_params_for_engine()
+        log.info(LogCategory.ANIMATION, f"Starting animation: {anim_id.name} ({params})")
+        safe_params = {
+            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
+        }
+        await self.parent.animation_engine.start(anim_id, **safe_params)
+        
+        log.info(LogCategory.ANIMATION, "Animation start call completed")
 
     # --- Parameter Adjustments ---
 
@@ -72,14 +99,23 @@ class AnimationModeController:
         self.animation_service.adjust_parameter(current_anim.config.id, pid, delta)
         new_value = current_anim.get_param_value(pid)
 
+        engine = self.animation_engine
+        if engine and engine.is_running():
+            if pid == ParamID.ANIM_SPEED:
+                engine.update_param("speed", new_value)
+            elif pid == ParamID.ANIM_INTENSITY:
+                engine.update_param("intensity", new_value)
+            elif pid == ParamID.ANIM_PRIMARY_COLOR_HUE:
+                engine.update_param("hue", new_value)
+                
         # Propagate live update to animation engine
-        if self.parent.animation_engine and self.parent.animation_engine.is_running():
-            param_map = {
-                ParamID.ANIM_SPEED: "speed",
-                ParamID.ANIM_INTENSITY: "intensity",
-            }
-            if pid in param_map:
-                self.parent.animation_engine.update_param(param_map[pid], new_value)
+        # if self.parent.animation_engine and self.parent.animation_engine.is_running():
+        #     param_map = {
+        #         ParamID.ANIM_SPEED: "speed",
+        #         ParamID.ANIM_INTENSITY: "intensity",
+        #     }
+        #     if pid in param_map:
+        #         self.parent.animation_engine.update_param(param_map[pid], new_value)
 
         log.animation(f"Adjusted {pid.name} → {new_value}")
         self._sync_preview()
@@ -88,13 +124,28 @@ class AnimationModeController:
         params = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
         idx = params.index(self.current_param)
         self.current_param = params[(idx + 1) % len(params)]
-        self.app_state.set_current_param(self.current_param)
+        self.app_state_service.set_current_param(self.current_param)
         self._sync_preview()
         log.info(LogCategory.SYSTEM, f"Cycled animation param: {self.current_param.name}")
 
+    # ------------------------------------------------------------------
+    # Preview management
+    # ------------------------------------------------------------------
+
     def _sync_preview(self):
         anim = self.animation_service.get_current()
-        if anim:
-            speed = anim.get_param_value(ParamID.ANIM_SPEED)
-            hue = anim.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
-            self.preview_panel_controller.start_animation_preview("snake", speed=speed, hue=hue)
+        if not anim:
+            log.warn(LogCategory.ANIMATION, "No current animation for preview")
+            return
+        
+        anim_id = anim.config.id
+        params = anim.build_params_for_engine()
+        safe_params = {
+        (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
+    }
+        try:
+            self.preview_panel_controller.start_animation_preview(anim_id, **safe_params)
+            log.debug(LogCategory.ANIMATION, f"Preview synced for {anim_id.name}")
+        except Exception as e:
+            log.warn(LogCategory.ANIMATION, f"Failed to start preview for {anim_id.name}: {e}")
+            

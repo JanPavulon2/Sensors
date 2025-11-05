@@ -188,7 +188,9 @@ class ZoneStripController:
             config: TransitionConfig (duration_ms, steps, ease_function)
         """
         current_frame = self.zone_strip.get_frame()
-        await self.transition_service.fade_out(current_frame, config)
+        
+        #await self.transition_service.fade_out(current_frame, config)
+        await self.transition_service.fade_out(config)
         log.info(LogCategory.TRANSITION, f"Faded out all zones ({config.duration_ms}ms)")
 
     async def fade_in_all(self, target_frame, config) -> None:

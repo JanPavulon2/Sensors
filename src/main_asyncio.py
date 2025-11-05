@@ -226,16 +226,30 @@ async def main():
                 await polling_task
 
         log.system("Stopping animations...")
-        led_controller.animation_mode.animation_service.stop_all()
+        led_controller.animation_mode_controller.animation_service.stop_all()
         
         
         log.system("Stopping pulsing...")
-        led_controller.static_mode._stop_pulse()
+        led_controller.static_mode_controller._stop_pulse()
         await asyncio.sleep(0.05)
 
         log.system("Performing shutdown transition...")
         await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
+        keyboard_task.cancel()
+        try:
+            await keyboard_task
+        except asyncio.CancelledError:
+            pass
+
+        # Stop animations safely
+        log.system("Stopping animations...")
+        if led_controller.animation_engine and led_controller.animation_engine.is_running():
+            await led_controller.animation_engine.stop()
+
+        if hasattr(led_controller, "animation_service"):
+            led_controller.animation_service.stop_all()
+            
         log.system("Clearing LEDs...")
         led_controller.clear_all()
 

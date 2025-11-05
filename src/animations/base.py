@@ -7,48 +7,50 @@ All animations inherit from BaseAnimation and implement the run() method.
 import asyncio
 from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
 from models.domain.zone import ZoneCombined
+from models.enums import ZoneID
 
 
 class BaseAnimation:
     """
     Base class for all LED animations
 
-    Animations are async generators that yield (zone_name, r, g, b) tuples
+    Animations are async generators that yield (zone_id, r, g, b) tuples
     to update LED colors frame by frame.
 
     Args:
-        zones: List of Zone objects
+        zones: List of ZoneCombined objects
         speed: Animation speed (1-100, where 100 is fastest)
+        excluded_zones: List of ZoneID enums to exclude from animation
         **kwargs: Animation-specific parameters
 
     Example:
-        async for zone_name, r, g, b in animation.run():
-            strip.set_zone_color(zone_name, r, g, b)
+        async for zone_id, r, g, b in animation.run():
+            strip.set_zone_color(zone_id, r, g, b)
     """
 
-    def __init__(self, zones: List[ZoneCombined], speed: int = 50, excluded_zones=None, **kwargs):
+    def __init__(self, zones: List[ZoneCombined], speed: int = 50, excluded_zones: Optional[List[ZoneID]] = None, **kwargs):
         self.zones = zones
         self.excluded_zones = excluded_zones or []
         self.speed = max(1, min(100, speed))  # Clamp 1-100
         self.running = False
-        self.zone_colors = {}  # Cache current zone colors
-        self.zone_brightness = {}  # Cache current zone brightness
+        self.zone_colors: Dict[ZoneID, Tuple[int, int, int]] = {}  # Cache current zone colors
+        self.zone_brightness: Dict[ZoneID, int] = {}  # Cache current zone brightness
 
-        # Filter out excluded zones and build dict for compatibility
-        self.active_zones = {
-            zone.config.tag: [zone.config.start_index, zone.config.end_index]
+        # Filter out excluded zones - use ZoneID as keys
+        self.active_zones: Dict[ZoneID, List[int]] = {
+            zone.config.id: [zone.config.start_index, zone.config.end_index]
             for zone in zones
-            if zone.config.tag not in self.excluded_zones
+            if zone.config.id not in self.excluded_zones
         }
 
-    async def run(self) -> AsyncIterator[Tuple[str, int, int, int]]:
+    async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
         """
-        Main animation loop - yields (zone_name, r, g, b) tuples
+        Main animation loop - yields (zone_id, r, g, b) tuples
 
         Must be implemented by subclasses.
 
         Yields:
-            Tuple of (zone_name, red, green, blue)
+            Tuple of (ZoneID enum, red, green, blue)
         """
         raise NotImplementedError("Subclasses must implement run()")
 
@@ -67,21 +69,21 @@ class BaseAnimation:
         if hasattr(self, param):
             setattr(self, param, value)
 
-    def set_zone_color_cache(self, zone_name: str, r: int, g: int, b: int):
+    def set_zone_color_cache(self, zone_id: ZoneID, r: int, g: int, b: int):
         """Cache zone color for animations that need current colors"""
-        self.zone_colors[zone_name] = (r, g, b)
+        self.zone_colors[zone_id] = (r, g, b)
 
-    def set_zone_brightness_cache(self, zone_name: str, brightness: int):
+    def set_zone_brightness_cache(self, zone_id: ZoneID, brightness: int):
         """Cache zone brightness for animations that need current brightness"""
-        self.zone_brightness[zone_name] = brightness
+        self.zone_brightness[zone_id] = brightness
 
-    def get_cached_color(self, zone_name: str) -> Optional[Tuple[int, int, int]]:
+    def get_cached_color(self, zone_id: ZoneID) -> Optional[Tuple[int, int, int]]:
         """Get cached color for zone"""
-        return self.zone_colors.get(zone_name)
+        return self.zone_colors.get(zone_id)
 
-    def get_cached_brightness(self, zone_name: str) -> Optional[int]:
+    def get_cached_brightness(self, zone_id: ZoneID) -> Optional[int]:
         """Get cached brightness for zone"""
-        return self.zone_brightness.get(zone_name)
+        return self.zone_brightness.get(zone_id)
 
     def _calculate_frame_delay(self) -> float:
         """

@@ -1,10 +1,19 @@
-"""Animation domain models"""
+"""
+Animation domain models
+=======================
+
+Defines immutable config, mutable state, and combined runtime model
+for all animations in the system.
+
+This version fully uses AnimationID and ParamID enums until the
+lowest runtime layer (AnimationEngine).
+"""
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from models.enums import ParamID, AnimationID, LogCategory
 from models.domain.parameter import ParameterCombined
-from utils.logger import get_logger, get_category_logger
+from utils.logger import  get_category_logger
 
 log = get_category_logger(LogCategory.ANIMATION)
 
@@ -34,6 +43,10 @@ class AnimationCombined:
     state: AnimationState
     parameters: Dict[ParamID, ParameterCombined]
 
+    # ----------------------------------------------------------------------
+    # PARAMETER ACCESS
+    # ----------------------------------------------------------------------
+
     def get_param_value(self, param_id: ParamID) -> Any:
         """Get current parameter value"""
         return self.parameters[param_id].state.value
@@ -50,72 +63,64 @@ class AnimationCombined:
         """Adjust parameter by delta steps"""
         self.parameters[param_id].adjust(delta)
 
-    def build_params_for_engine(self, current_zone: 'ZoneCombined' = None) -> Dict[str, Any]:
-        """
-        Build animation parameters for AnimationEngine
 
-        Maps domain ParamIDs to engine parameter names and adds animation-specific
-        parameters based on animation type.
+    # ----------------------------------------------------------------------
+    # PARAMETER PACKING FOR ENGINE
+    # ----------------------------------------------------------------------
+
+    def build_params_for_engine(self, current_zone: Optional['ZoneCombined'] = None) -> Dict[ParamID, Any]:
+        """
+        Build a dictionary of parameters for AnimationEngine.
+
+        This method remains fully enum-typed — keys are still ParamID.
+        Conversion to string (.name) happens inside the engine itself.
 
         Args:
-            current_zone: Optional current zone for color/hue references
-
+            current_zone: Optional current ZoneCombined for color/hue references
         Returns:
-            Dict of parameters for AnimationEngine.start()
-
-        Example:
-            >>> anim = animation_service.get_current()
-            >>> params = anim.build_params_for_engine(current_zone)
-            >>> await engine.start(anim.config.tag, **params)
+            Dict[ParamID, Any]
         """
-        from models.domain.zone import ZoneCombined
+        
         from models.enums import AnimationID
-
+        
         # Base parameters (all animations have speed)
-        params = {"speed": self.get_param_value(ParamID.ANIM_SPEED)}
+        params: Dict[ParamID, Any] = {}
+        
+        # Every animation has speed
+        if ParamID.ANIM_SPEED in self.parameters:
+            params[ParamID.ANIM_SPEED] = self.get_param_value(ParamID.ANIM_SPEED)
 
-        # Animation-specific parameter building
+
+        # Specific animation parameter handling
         if self.config.id == AnimationID.BREATHE:
-            # Breathe uses per-zone cached colors, only pass intensity
             if ParamID.ANIM_INTENSITY in self.parameters:
-                params["intensity"] = self.get_param_value(ParamID.ANIM_INTENSITY)
+                params[ParamID.ANIM_INTENSITY] = self.get_param_value(ParamID.ANIM_INTENSITY)
 
         elif self.config.id == AnimationID.COLOR_FADE:
-            # Color fade needs starting hue from current zone
             if current_zone:
-                params["start_hue"] = current_zone.state.color.to_hue()
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = current_zone.state.color.to_hue()
 
         elif self.config.id == AnimationID.SNAKE:
-            # Snake can use hue or fallback to zone RGB
             if ParamID.ANIM_PRIMARY_COLOR_HUE in self.parameters:
-                params["hue"] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
             elif current_zone:
-                # Fallback: use zone color with brightness
-                params["color"] = current_zone.get_rgb()
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = current_zone.state.color.to_hue()
 
             if ParamID.ANIM_LENGTH in self.parameters:
-                params["length"] = self.get_param_value(ParamID.ANIM_LENGTH)
+                params[ParamID.ANIM_LENGTH] = self.get_param_value(ParamID.ANIM_LENGTH)
 
         elif self.config.id == AnimationID.COLOR_SNAKE:
-            # Color snake uses hue with offset
-            if current_zone:
-                params["start_hue"] = current_zone.state.color.to_hue()
-
-            if ParamID.ANIM_LENGTH in self.parameters:
-                params["length"] = self.get_param_value(ParamID.ANIM_LENGTH)
-            if ParamID.ANIM_HUE_OFFSET in self.parameters:
-                params["hue_offset"] = self.get_param_value(ParamID.ANIM_HUE_OFFSET)
             if ParamID.ANIM_PRIMARY_COLOR_HUE in self.parameters:
-                params["hue"] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+            if ParamID.ANIM_LENGTH in self.parameters:
+                params[ParamID.ANIM_LENGTH] = self.get_param_value(ParamID.ANIM_LENGTH)
+            if ParamID.ANIM_HUE_OFFSET in self.parameters:
+                params[ParamID.ANIM_HUE_OFFSET] = self.get_param_value(ParamID.ANIM_HUE_OFFSET)
 
         elif self.config.id == AnimationID.MATRIX:
-            # Matrix uses hue, length, intensity
-            if ParamID.ANIM_PRIMARY_COLOR_HUE in self.parameters:
-                params["hue"] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
-            if ParamID.ANIM_LENGTH in self.parameters:
-                params["length"] = self.get_param_value(ParamID.ANIM_LENGTH)
-            if ParamID.ANIM_INTENSITY in self.parameters:
-                params["intensity"] = self.get_param_value(ParamID.ANIM_INTENSITY)
+            for pid in (ParamID.ANIM_PRIMARY_COLOR_HUE, ParamID.ANIM_LENGTH, ParamID.ANIM_INTENSITY):
+                if pid in self.parameters:
+                    params[pid] = self.get_param_value(pid)
 
         return params
 

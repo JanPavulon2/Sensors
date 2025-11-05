@@ -69,8 +69,8 @@ class LEDController:
         self.edit_mode = state.edit_mode
         
         # Initialize feature controllers
-        self.static_mode = StaticModeController(self)
-        self.animation_mode = AnimationModeController(self)
+        self.static_mode_controller = StaticModeController(self)
+        self.animation_mode_controller = AnimationModeController(self)
         self.lamp_white_mode = LampWhiteModeController(self)
         self.power_toggle = PowerToggleController(self)
         
@@ -89,9 +89,9 @@ class LEDController:
     def _enter_mode(self, mode: MainMode):
         """Enter specified mode (called on init and after mode toggle)"""
         if mode == MainMode.STATIC:
-            self.static_mode.enter_mode()
+            self.static_mode_controller.enter_mode()
         else:
-            self.animation_mode.enter_mode()
+            self.animation_mode_controller.enter_mode()
 
     # ------------------------------------------------------------------
     # EVENT BUS SUBSCRIPTIONS
@@ -140,41 +140,41 @@ class LEDController:
 
     def _handle_selector_rotation(self, delta: int):
         if self.main_mode == MainMode.STATIC:
-            self.static_mode.change_zone(delta)
+            self.static_mode_controller.change_zone(delta)
         else:
-            self.animation_mode.select_animation(delta)
+            self.animation_mode_controller.select_animation(delta)
             
     def _handle_selector_click(self):
         if self.main_mode == MainMode.STATIC:
             log.info(LogCategory.SYSTEM, "Selector click ignored in STATIC mode")
-        # else:
-            # self.animation_mode.toggle_animation()
+        else:
+            asyncio.create_task(self.animation_mode_controller.toggle_animation())
             
     def _handle_modulator_rotation(self, delta: int):
         if not self.edit_mode:
             log.info(LogCategory.SYSTEM, "Modulator rotation ignored when not in edit mode")
             return
         if self.main_mode == MainMode.STATIC:
-            self.static_mode.adjust_param(delta)
+            self.static_mode_controller.adjust_param(delta)
         else:
-            self.animation_mode.adjust_param(delta)
+            self.animation_mode_controller.adjust_param(delta)
         
     def _handle_modulator_click(self):
         if not self.edit_mode:
             return
         if self.main_mode == MainMode.STATIC:
-            self.static_mode.cycle_parameter()
+            self.static_mode_controller.cycle_parameter()
         else: 
-            self.animation_mode.cycle_param()
+            self.animation_mode_controller.cycle_param()
         
     def _toggle_edit_mode(self):
         self.edit_mode = not self.edit_mode
         self.app_state_service.set_edit_mode(self.edit_mode)
         
         if self.main_mode == MainMode.STATIC:
-            self.static_mode.on_edit_mode_change(self.edit_mode)
+            self.static_mode_controller.on_edit_mode_change(self.edit_mode)
         else:
-            self.animation_mode.on_edit_mode_change(self.edit_mode)
+            self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
         
     def _toggle_main_mode(self):
         """Switch between STATIC ↔ ANIMATION"""

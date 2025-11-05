@@ -30,9 +30,9 @@ class PowerToggleController:
     async def toggle(self):
         """Power on/off all zones with fade transition"""
         # Stop pulse during transition to prevent race condition
-        pulse_was_active = self.parent.static_mode.pulse_active
+        pulse_was_active = self.parent.static_mode_controller.pulse_active
         if pulse_was_active:
-            self.parent.static_mode._stop_pulse()
+            self.parent.static_mode_controller._stop_pulse()
 
         zones = self.zone_service.get_all()
         any_on = any(z.brightness > 0 for z in zones)
@@ -44,7 +44,7 @@ class PowerToggleController:
 
         # Restore pulse if edit mode is still enabled
         if pulse_was_active and self.app_state.get_state().edit_mode:
-            self.parent.static_mode._start_pulse()
+            self.parent.static_mode_controller._start_pulse()
 
     async def _power_off(self, zones):
         """Fade out and set all zones to 0 brightness"""

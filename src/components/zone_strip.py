@@ -109,6 +109,13 @@ class ZoneStrip:
     # Internal helpers
     # -----------------------------------------------------------------------
 
+    def _resolve_zone(self, zone):
+        """Accept either ZoneID enum or string tag."""
+        from models.enums import ZoneID
+        if isinstance(zone, ZoneID):
+            return zone.name  # use tag-like string internally
+        return zone
+
     def _validate_zone(self, zone_id: str) -> bool:
         """
         Validate if zone exists.

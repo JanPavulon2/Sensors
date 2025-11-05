@@ -10,6 +10,7 @@ from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
 from models import Color
+from models.enums import AnimationID
 from services.transition_service import TransitionService
 
 if TYPE_CHECKING:
@@ -48,7 +49,7 @@ class PreviewPanelController:
         self._animation_task: Optional[asyncio.Task] = None
         self._current_animation: Optional['BaseAnimation'] = None
         self._animation_running = False
-        self._current_animation_id: Optional[str] = None  # Track which animation is running
+        self._current_animation_id: Optional[AnimationID] = None  # Track which animation is running
 
     # ===== STATIC DISPLAY METHODS =====
 
@@ -125,7 +126,7 @@ class PreviewPanelController:
 
     def _create_animation_instance(
         self,
-        animation_id: str,
+        animation_id: AnimationID,
         speed: int,
         **params
     ) -> Optional['BaseAnimation']:
@@ -154,7 +155,7 @@ class PreviewPanelController:
         empty_zones = []
 
         # Animation factory mapping
-        if animation_id == "snake":
+        if animation_id == AnimationID.SNAKE:
             return SnakeAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -163,7 +164,7 @@ class PreviewPanelController:
                 color=params.get('color')  # Backwards compat
             )
 
-        elif animation_id == "breathe":
+        elif animation_id == AnimationID.BREATHE:
             # For breathe preview, check if zone_colors provided (per-zone preview)
             zone_colors = params.get('zone_colors')
 
@@ -186,14 +187,14 @@ class PreviewPanelController:
                 zone_colors=zone_colors  # Pass zone colors for per-zone preview
             )
 
-        elif animation_id == "color_fade":
+        elif animation_id == AnimationID.COLOR_FADE:
             return ColorFadeAnimation(
                 zones=empty_zones,
                 speed=speed,
                 start_hue=params.get('start_hue', 0)
             )
 
-        elif animation_id == "color_snake":
+        elif animation_id == AnimationID.COLOR_SNAKE:
             return ColorSnakeAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -202,16 +203,16 @@ class PreviewPanelController:
                 hue_offset=params.get('hue_offset', 30)
             )
 
-        elif animation_id == "matrix":
-            return MatrixAnimation(
-                zones=empty_zones,
-                speed=speed,
-                hue=params.get('hue', 120),  # Default green
-                length=params.get('length', 5),
-                intensity=params.get('intensity', 100)
-            )
+        # elif animation_id == "matrix":
+        #     return MatrixAnimation(
+        #         zones=empty_zones,
+        #         speed=speed,
+        #         hue=params.get('hue', 120),  # Default green
+        #         length=params.get('length', 5),
+        #         intensity=params.get('intensity', 100)
+        #     )
         
-        elif animation_id == "color_cycle":
+        elif animation_id == AnimationID.COLOR_CYCLE:
             return ColorCycleAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -222,7 +223,7 @@ class PreviewPanelController:
             # Unknown animation
             return None
 
-    def start_animation_preview(self, animation_id: str, speed: int = 50, use_crossfade: bool = True, **params) -> None:
+    def start_animation_preview(self, animation_id: AnimationID, speed: int = 50, use_crossfade: bool = True, **params) -> None:
         """
         Start animation preview using animation's run_preview() method
 
@@ -260,7 +261,7 @@ class PreviewPanelController:
 
         self._start_animation_preview_internal(animation_id, speed, params)
 
-    async def _crossfade_to_new_animation(self, animation_id: str, speed: int, params: dict) -> None:
+    async def _crossfade_to_new_animation(self, animation_id: AnimationID, speed: int, params: dict) -> None:
         """
         Crossfade from current animation to new animation
 
@@ -310,7 +311,7 @@ class PreviewPanelController:
 
         self._current_animation = None
 
-    def _start_animation_preview_internal(self, animation_id: str, speed: int, params: dict) -> None:
+    def _start_animation_preview_internal(self, animation_id: AnimationID, speed: int, params: dict) -> None:
         """Internal method to start animation preview (assumes no animation is running)"""
         self._current_animation_id = animation_id
 
