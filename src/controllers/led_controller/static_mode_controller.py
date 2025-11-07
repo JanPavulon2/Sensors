@@ -46,16 +46,20 @@ class StaticModeController:
 
         # Check if this is first enter BEFORE changing the flag
         is_first_enter = self.first_enter
+        log.debug(LogCategory.SYSTEM, f"STATIC enter_mode: first_enter={is_first_enter}")
 
         # Skip rendering on first enter (startup transition handles it)
         if not is_first_enter:
+            log.debug(LogCategory.SYSTEM, f"STATIC: Rendering {len(self.zone_service.get_all())} zones")
             for zone in self.zone_service.get_all():
                 self.strip_controller.render_zone(
                     zone.config.id,
                     zone.state.color,
                     zone.brightness
                 )
+            log.debug(LogCategory.SYSTEM, "STATIC: Rendering complete")
         else:
+            log.debug(LogCategory.SYSTEM, "STATIC: Skipping render (first enter)")
             self.first_enter = False
 
         self._sync_preview()
@@ -64,7 +68,16 @@ class StaticModeController:
         # (on startup, pulse will be started after transition completes)
         if not is_first_enter and self.app_state_service.get_state().edit_mode:
             self._start_pulse()
-        
+
+    def exit_mode(self):
+        """
+        Exit static mode: stop pulsing and cleanup
+
+        Called when switching away from STATIC mode.
+        """
+        log.info(LogCategory.SYSTEM, "Exiting STATIC mode")
+        self._stop_pulse()
+
     def on_edit_mode_change(self, enabled: bool):
         """Start or stop pulsing"""
         if enabled:
@@ -119,8 +132,14 @@ class StaticModeController:
     def cycle_parameter(self):
         """Cycle through editable parameters"""
         params = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
-        current_index = params.index(self.current_param)
-        self.current_param = params[(current_index + 1) % len(params)]
+
+        # If current param is not in list (e.g., ANIM_SPEED from animation mode), start from first param
+        if self.current_param not in params:
+            self.current_param = params[0]
+        else:
+            current_index = params.index(self.current_param)
+            self.current_param = params[(current_index + 1) % len(params)]
+
         self.app_state_service.set_current_param(self.current_param)
         self._sync_preview()
         log.info(LogCategory.SYSTEM, f"Cycled param to {self.current_param.name}")

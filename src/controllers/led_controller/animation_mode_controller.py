@@ -33,8 +33,23 @@ class AnimationModeController:
     # --- Mode Entry/Exit ---
 
     def enter_mode(self):
-        """Initialize or resume animation preview"""
+        """Initialize or resume animation preview and auto-start animation"""
         self._sync_preview()
+
+        # Auto-start animation if not already running
+        if not self.animation_engine.is_running():
+            asyncio.create_task(self.toggle_animation())
+
+    async def exit_mode(self):
+        """
+        Exit animation mode: stop running animation and cleanup
+
+        Called when switching away from ANIMATION mode.
+        NOTE: Caller (_toggle_main_mode) handles fade_out, so we skip it here.
+        """
+        log.info(LogCategory.SYSTEM, "Exiting ANIMATION mode")
+        if self.animation_engine.is_running():
+            await self.animation_engine.stop(skip_fade=True)
 
     def on_edit_mode_change(self, enabled: bool):
         """No pulse here"""
@@ -43,18 +58,42 @@ class AnimationModeController:
     # --- Animation Selection ---
 
     def select_animation(self, delta: int):
-        """Cycle through available animations by encoder rotation."""
+        """
+        Cycle through available animations by encoder rotation.
+
+        Automatically starts/switches to selected animation on main strip.
+        """
         if not self.available_animations:
             log.warn(LogCategory.ANIMATION, "No animations available")
             return
-        
+
         self.selected_animation_index = (self.selected_animation_index + delta) % len(self.available_animations)
         anim_id = self.available_animations[self.selected_animation_index]
-        
+
         self.animation_service.set_current(anim_id)
         log.animation(f"Selected animation: {anim_id.name}")
-        
+
+        # Auto-start/switch animation on main strip (always, regardless of current state)
+        asyncio.create_task(self._switch_to_selected_animation())
+
         self._sync_preview()
+
+    async def _switch_to_selected_animation(self):
+        """Switch main strip to currently selected animation (with transition)."""
+        current_anim = self.animation_service.get_current()
+        if not current_anim:
+            return
+
+        anim_id = current_anim.config.id
+        params = current_anim.build_params_for_engine()
+
+        log.info(LogCategory.ANIMATION, f"Auto-switching to animation: {anim_id.name}")
+        safe_params = {
+            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
+        }
+
+        # AnimationEngine.start() will handle stop → fade_out → fade_in → start
+        await self.parent.animation_engine.start(anim_id, **safe_params)
 
     async def toggle_animation(self):
         """Start or stop the currently selected animation."""
@@ -135,14 +174,26 @@ class AnimationModeController:
     def _sync_preview(self):
         anim = self.animation_service.get_current()
         if not anim:
-            log.warn(LogCategory.ANIMATION, "No current animation for preview")
-            return
-        
+            # Fallback: select first available animation if none is current
+            if self.available_animations:
+                default_id = self.available_animations[0]
+                log.info(LogCategory.ANIMATION, f"No current animation, defaulting to {default_id.name}")
+                self.animation_service.set_current(default_id)
+                anim = self.animation_service.get_current()
+            else:
+                log.error(LogCategory.ANIMATION, "No animations available!")
+                return
+
         anim_id = anim.config.id
-        params = anim.build_params_for_engine()
+
+        # Get first zone for color reference (used by BREATHE, COLOR_FADE, etc.)
+        zones = self.parent.zone_service.get_all()
+        current_zone = zones[0] if zones else None
+
+        params = anim.build_params_for_engine(current_zone)
         safe_params = {
-        (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
-    }
+            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
+        }
         try:
             self.preview_panel_controller.start_animation_preview(anim_id, **safe_params)
             log.debug(LogCategory.ANIMATION, f"Preview synced for {anim_id.name}")

@@ -132,7 +132,7 @@ class LEDController:
         elif btn == ButtonID.BTN3:
             asyncio.create_task(self.power_toggle.toggle())
         elif btn == ButtonID.BTN4:
-            self._toggle_main_mode()
+            asyncio.create_task(self._toggle_main_mode())
             
     # ------------------------------------------------------------------
     # ACTIONS (DISPATCH)
@@ -176,18 +176,98 @@ class LEDController:
         else:
             self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
         
-    def _toggle_main_mode(self):
-        """Switch between STATIC ↔ ANIMATION"""
-        next_mode = (
-            MainMode.ANIMATION
-            if self.main_mode == MainMode.STATIC
-            else MainMode.STATIC
-        )
+    async def _toggle_main_mode(self):
+        """
+        Switch between STATIC ↔ ANIMATION with smooth crossfade transitions.
 
+        Flow:
+        1. Capture current frame (for crossfade)
+        2. Exit current mode (cleanup, no fade)
+        3. Switch mode
+        4. Prepare new mode state
+        5. CROSSFADE from old to new (no black frame)
+        6. Enter new mode
+        """
+        log.info(LogCategory.SYSTEM, "Toggling main mode...")
+
+        # 1. Determine next mode
+        if self.main_mode == MainMode.STATIC:
+            next_mode = MainMode.ANIMATION
+        else:
+            next_mode = MainMode.STATIC
+
+        # 2. Capture current frame BEFORE any changes (for crossfade)
+        old_frame = self.zone_strip_controller.zone_strip.get_frame()
+
+        # 3. Exit current mode (cleanup only, NO fade)
+        if self.main_mode == MainMode.STATIC:
+            self.static_mode_controller.exit_mode()  # Stop pulse
+        else:
+            await self.animation_mode_controller.exit_mode()  # Stop animation (skip_fade=True already)
+        log.debug(LogCategory.SYSTEM, f"Exited {self.main_mode.name} mode")
+
+        # 4. Switch mode
         self.main_mode = next_mode
         self.app_state_service.set_main_mode(next_mode)
+        log.debug(LogCategory.SYSTEM, f"Switched to {next_mode.name}")
 
-        self._enter_mode(next_mode)
+        # 5. Prepare new state and crossfade
+        if next_mode == MainMode.STATIC:
+            # STATIC mode: render to buffer, then crossfade to it
+            # Render all zones to buffer (show=False)
+            for zone in self.zone_service.get_all():
+                r, g, b = zone.get_rgb()
+                self.zone_strip_controller.zone_strip.set_zone_color(
+                    zone.config.id.name,
+                    r, g, b,
+                    show=False
+                )
+
+            # Get target frame
+            new_frame = self.zone_strip_controller.zone_strip.get_frame()
+
+            # CROSSFADE from old to new (no black frame!)
+            if old_frame and new_frame and len(old_frame) == len(new_frame):
+                log.debug(LogCategory.TRANSITION, "Mode toggle: crossfading to STATIC")
+                await self.zone_strip_controller.transition_service.crossfade(
+                    old_frame,
+                    new_frame,
+                    self.zone_strip_controller.transition_service.MODE_SWITCH
+                )
+            else:
+                # Fallback: fade in from black
+                log.debug(LogCategory.TRANSITION, "Mode toggle: fade in to STATIC (no old frame)")
+                await self.zone_strip_controller.fade_in_all(
+                    new_frame,
+                    self.zone_strip_controller.transition_service.MODE_SWITCH
+                )
+
+            # Post-transition setup
+            self.static_mode_controller._sync_preview()
+            if self.edit_mode:
+                self.static_mode_controller._start_pulse()
+
+        else:
+            # ANIMATION mode: Start animation with crossfade from old_frame
+            current_anim = self.animation_service.get_current()
+            if current_anim:
+                anim_id = current_anim.config.id
+                params = current_anim.build_params_for_engine()
+
+                # Convert param keys to strings (AnimationEngine needs string keys)
+                safe_params = {
+                    (k.name if hasattr(k, "name") else str(k)): v
+                    for k, v in params.items()
+                }
+
+                log.debug(LogCategory.SYSTEM, f"ANIMATION mode: starting {anim_id.name} with crossfade")
+                # Pass old_frame for crossfade (no black frame!)
+                await self.animation_engine.start(anim_id, from_frame=old_frame, **safe_params)
+
+                # Sync preview to match main animation
+                self.animation_mode_controller._sync_preview()
+            else:
+                log.warn(LogCategory.SYSTEM, "No animation selected, cannot enter ANIMATION mode")
 
         log.info(LogCategory.SYSTEM, f"Switched to {next_mode.name} mode")
         

@@ -43,9 +43,10 @@ class PreviewPanelController:
         >>> controller.stop_animation_preview()
     """
 
-    def __init__(self, preview_panel: PreviewPanel, transition_service: TransitionService):
+    def __init__(self, preview_panel: PreviewPanel, transition_service: TransitionService, parent_controller=None):
         self.preview_panel = preview_panel
         self.transition_service = transition_service
+        self._parent_controller = parent_controller  # Parent LEDController reference for mode checking
         self._animation_task: Optional[asyncio.Task] = None
         self._current_animation: Optional['BaseAnimation'] = None
         self._animation_running = False
@@ -475,4 +476,90 @@ class PreviewPanelController:
         #     # Stop synchronously without crossfade
         #     asyncio.create_task(self._stop_animation_without_crossfade())
 
-        self.preview_panel.clear()  
+        self.preview_panel.clear()
+
+    # ===== POWER TOGGLE FADE SUPPORT =====
+
+    async def fade_out_for_power_off(self, duration_ms: int = 500, steps: int = 20):
+        """
+        Fade out preview panel to black (for power toggle).
+
+        Preview panel doesn't have TransitionService, so we do manual fade.
+        This is called by PowerToggleController during power off.
+
+        Args:
+            duration_ms: Total fade duration in milliseconds
+            steps: Number of fade steps
+        """
+        try:
+            current_frame = self.preview_panel.get_frame()
+            step_delay = duration_ms / 1000 / steps
+
+            for step in range(steps, -1, -1):
+                factor = step / steps
+                faded_frame = [
+                    (int(r * factor), int(g * factor), int(b * factor))
+                    for r, g, b in current_frame
+                ]
+                self.preview_panel.show_frame(faded_frame)
+                await asyncio.sleep(step_delay)
+
+            self.preview_panel.clear()
+            log.debug(LogCategory.TRANSITION, "Preview panel faded out")
+
+        except Exception as e:
+            log.log(LogCategory.TRANSITION, "Preview fade-out failed",
+                   level=LogLevel.WARN, error=str(e))
+
+    async def fade_in_for_power_on(self, duration_ms: int = 500, steps: int = 20):
+        """
+        Fade in preview panel from black to current state (for power toggle).
+
+        Builds target frame from current zone/animation state.
+        This is called by PowerToggleController during power on.
+
+        Args:
+            duration_ms: Total fade duration in milliseconds
+            steps: Number of fade steps
+        """
+        try:
+            # Import here to avoid circular dependency
+            from models.enums import MainMode
+
+            # Build target frame based on current mode
+            if hasattr(self, '_parent_controller'):
+                # If we have parent reference
+                parent = self._parent_controller
+                if parent.main_mode == MainMode.STATIC:
+                    # Static mode: show current zone color
+                    current_zone = parent.static_mode_controller._get_current_zone()
+                    r, g, b = current_zone.state.color.to_rgb()
+                    brightness = current_zone.brightness
+                    r = int(r * brightness / 100)
+                    g = int(g * brightness / 100)
+                    b = int(b * brightness / 100)
+                    target_frame = [(r, g, b)] * self.preview_panel.count
+                else:
+                    # Animation mode: get current preview frame
+                    target_frame = self.preview_panel.get_frame()
+            else:
+                # Fallback: use current frame (if animation is running)
+                target_frame = self.preview_panel.get_frame()
+
+            # Fade in from black to target
+            step_delay = duration_ms / 1000 / steps
+
+            for step in range(steps + 1):
+                factor = step / steps
+                faded_frame = [
+                    (int(r * factor), int(g * factor), int(b * factor))
+                    for r, g, b in target_frame
+                ]
+                self.preview_panel.show_frame(faded_frame)
+                await asyncio.sleep(step_delay)
+
+            log.debug(LogCategory.TRANSITION, "Preview panel faded in")
+
+        except Exception as e:
+            log.log(LogCategory.TRANSITION, "Preview fade-in failed",
+                   level=LogLevel.WARN, error=str(e))

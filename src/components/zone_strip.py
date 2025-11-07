@@ -89,7 +89,7 @@ class ZoneStrip:
         # - brightness: global brightness 0-255
         # - channel: PWM channel (0 or 1)
         # - strip_type: color order constant (ws.WS2811_STRIP_BRG for your hardware)
-        self.strip: PixelStrip = PixelStrip(
+        self.pixel_strip: PixelStrip = PixelStrip(
             pixel_count,    # num: total LED count
             gpio,           # pin: GPIO number
             800000,         # freq_hz: 800kHz signal frequency
@@ -100,7 +100,7 @@ class ZoneStrip:
             color_order     # strip_type: ws.WS2811_STRIP_BRG
         )
         
-        self.strip.begin()
+        self.pixel_strip.begin()
 
         # Initialize transition service for smooth state changes
         # self.transition_service = TransitionService(self)
@@ -152,7 +152,7 @@ class ZoneStrip:
     # Public API
     # -----------------------------------------------------------------------
 
-    def set_zone_color(self, zone_id: str, r: int, g: int, b: int) -> None:
+    def set_zone_color(self, zone_id: str, r: int, g: int, b: int, show: bool = True) -> None:
         """
         Set uniform color for an entire zone.
 
@@ -161,10 +161,12 @@ class ZoneStrip:
             r: Red value (0-255)
             g: Green value (0-255)
             b: Blue value (0-255)
+            show: If True, immediately update LEDs. If False, buffer only.
 
         Note:
-            Calls strip.show() immediately. For setting multiple zones,
-            use set_multiple_zones() for better performance.
+            By default calls strip.show() immediately. For batch updates,
+            set show=False and call show() manually after all updates.
+            For setting multiple zones, use set_multiple_zones() for better performance.
         """
         if not self._validate_zone(zone_id):
             return
@@ -175,13 +177,14 @@ class ZoneStrip:
         # Apply to all pixels in zone
         start, end = self.zones[zone_id]
         color = Color(r, g, b)
-        
+
         for i in range(start, end + 1):
             if i < self.pixel_count:
-                self.strip.setPixelColor(i, color)
+                self.pixel_strip.setPixelColor(i, color)
 
-        # Update hardware
-        self.strip.show()
+        # Update hardware if requested
+        if show:
+            self.pixel_strip.show()
 
     def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:
         """
@@ -209,10 +212,10 @@ class ZoneStrip:
             color = Color(r, g, b)
             for i in range(start, end + 1):
                 if i < self.pixel_count:
-                    self.strip.setPixelColor(i, color)
+                    self.pixel_strip.setPixelColor(i, color)
 
         # Single hardware update for all zones
-        self.strip.show()
+        self.pixel_strip.show()
 
     def set_pixel_color(self, zone_id: str, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
         """
@@ -246,10 +249,10 @@ class ZoneStrip:
         if physical_position >= self.pixel_count:
             return
 
-        self.strip.setPixelColor(physical_position, Color(r, g, b))
+        self.pixel_strip.setPixelColor(physical_position, Color(r, g, b))
 
         if show:
-            self.strip.show()
+            self.pixel_strip.show()
 
     def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
         """
@@ -268,15 +271,15 @@ class ZoneStrip:
         """
         if 0 <= pixel_index < self.pixel_count:
             color = Color(r, g, b)
-            self.strip.setPixelColor(pixel_index, color)
+            self.pixel_strip.setPixelColor(pixel_index, color)
             if show:
-                self.strip.show()
+                self.pixel_strip.show()
 
     def show(self) -> None:
         """
         Update strip hardware - call after batch of set_pixel_color(show=False) calls
         """
-        self.strip.show()
+        self.pixel_strip.show()
 
     def clear(self) -> None:
         """
@@ -285,8 +288,8 @@ class ZoneStrip:
         Sets all pixels to black (0, 0, 0) and updates hardware immediately.
         """
         for i in range(self.pixel_count):
-            self.strip.setPixelColor(i, Color(0, 0, 0))
-        self.strip.show()
+            self.pixel_strip.setPixelColor(i, Color(0, 0, 0))
+        self.pixel_strip.show()
 
         # Reset color cache
         self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
@@ -306,7 +309,7 @@ class ZoneStrip:
         """
         frame = []
         for i in range(self.pixel_count):
-            color: int = int(self.strip.getPixelColor(i)) # type: ignore
+            color: int = int(self.pixel_strip.getPixelColor(i)) # type: ignore
             # Extract RGB from 32-bit color value (format: 0xRRGGBB for RGB order)
             r = (color >> 16) & 0xFF
             g = (color >> 8) & 0xFF

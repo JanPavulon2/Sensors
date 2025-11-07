@@ -157,6 +157,9 @@ async def main():
         zone_strip_controller=zone_strip_controller
     )
 
+    # Set parent controller reference for preview panel (needed for power toggle fade)
+    preview_panel_controller._parent_controller = led_controller
+
     # ========================================================================
     # ADAPTERS
     # ========================================================================

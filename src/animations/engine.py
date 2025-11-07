@@ -78,23 +78,30 @@ class AnimationEngine:
 
         # Transition service for smooth animation switches
         self.transition_service = TransitionService(strip)
-        # self.animation_service = AnimationService()
+        
         log.info("AnimationEngine initialized", animations=list(self.ANIMATIONS.keys()))
+
+    
+    # ============================================================
+    # Core control methods
+    # ============================================================
 
     async def start(
         self,
         animation_id: AnimationID,
         excluded_zones: Optional[List] = None,
         transition: Optional[TransitionConfig] = None,
+        from_frame: Optional[List] = None,
         **params
     ):
         """
         Start an animation by animation ID with optional transition
 
         Args:
-            name: Animation ID ('BREATHE', 'COLOR_FADE', 'SNAKE')
+            animation_id: Animation ID (AnimationID.BREATHE, AnimationID.SNAKE, etc.)
             excluded_zones: List of zone names to exclude from animation (e.g., ["lamp"])
             transition: Transition configuration for switching (defaults to ANIMATION_SWITCH)
+            from_frame: Optional starting frame for crossfade (if None, captures current strip state)
             **params: Animation-specific parameters (speed, color, etc.)
 
         Raises:
@@ -102,62 +109,96 @@ class AnimationEngine:
 
         Example:
             # Start with default fade transition
-            await engine.start('breathe', speed=50)
-            
-            # Start with instant switch
-            await engine.start('snake', transition=TransitionConfig(TransitionType.NONE))
+            await engine.start(AnimationID.BREATHE, speed=50)
+
+            # Start with crossfade from specific frame
+            await engine.start(AnimationID.SNAKE, from_frame=old_frame)
         """
+        transition = transition or self.transition_service.ANIMATION_SWITCH
         log.info(f"AnimEngine.start(): {animation_id}")
 
-        # If animation is running, apply transition and stop
-        if self.is_running():
-            log.info(f"AnimEngine: Stopping current animation first")
-            transition = transition or self.transition_service.ANIMATION_SWITCH
-            await self.stop(transition)
-        else:
-            # No animation running, just stop (no transition needed)
-            log.info(f"AnimEngine: No animation running, calling stop with NONE transition")
-            await self.stop(TransitionConfig(type=TransitionType.NONE) if transition is None else transition)
+        # Step 1: Wait for any active transitions to complete
+        await self.transition_service.wait_for_idle()
 
-        # Create new animation instance
-        log.info(f"AnimEngine: Creating animation instance: {animation_id}")
-        if animation_id not in self.ANIMATIONS.keys():
-            raise ValueError(f"Unknown animation: {animation_id}. Available: {list(self.ANIMATIONS.keys())}")
+        # Step 2: Determine old frame for crossfade
+        old_frame = from_frame if from_frame is not None else []
+
+        # Step 3: Stop old animation if running (capture frame if not provided)
+        if self.is_running():
+            if not old_frame and hasattr(self.strip, "get_frame"):
+                old_frame = self.strip.get_frame() or []
+
+            # Stop old animation WITHOUT fade (we'll crossfade instead)
+            if self.current_animation:
+                self.current_animation.stop()
+
+            if self.animation_task:
+                self.animation_task.cancel()
+                try:
+                    await self.animation_task
+                except asyncio.CancelledError:
+                    pass
+                self.animation_task = None
+
+            self.current_animation = None
+            self.current_id = None
+            log.debug("AnimEngine: Stopped old animation (no fade, preparing for crossfade)")
+
+        # Step 3: Create animation instance
+        if animation_id not in self.ANIMATIONS:
+            raise ValueError(f"Unknown animation: {animation_id}")
 
         animation_class = self.ANIMATIONS[animation_id]
-        if not animation_class:
-            raise ValueError(f"Unknown animation: {animation_id}")
-        
-        log.debug(f"Creating animation instance: {animation_id.name}")
-        self.current_animation = animation_class(
-            self.zones,
-            excluded_zones=excluded_zones or [],
-            **params,
-        )
+        self.current_animation = animation_class(self.zones, excluded_zones=excluded_zones or [], **params)
         self.current_id = animation_id
 
-        log.info(f"AnimEngine: Caching zone colors")
-        # Cache current zone colors for animations that need them
-        # Note: Brightness is cached by LEDController (has actual 0-100% values)
+        log.info(f"AnimEngine: Created instance: {animation_id}")
+
+        # Step 4: Cache current zone colors
         for zone in self.zones:
-            color = self.strip.get_zone_color(zone.config.id.name)
-            if color and self.current_animation:
+            color = self.strip.get_zone_color(zone.config.tag)
+            if color:
                 self.current_animation.set_zone_color_cache(zone.config.id, *color)
 
-        # Start animation loop
-        log.info(f"AnimEngine: Starting animation loop task")
-        self.animation_task = asyncio.create_task(self._run_loop())
+        # Step 5: Render first frame to buffer (WITHOUT starting loop)
+        log.debug("AnimEngine: Rendering first frame...")
+        first_frame = await self._get_first_frame()
 
+        # Step 6: CROSSFADE from old to new (or fade_in if no old frame)
+        if first_frame:
+            if old_frame and len(old_frame) == len(first_frame):
+                log.debug("AnimEngine: Crossfading from old to new animation...")
+                await self.transition_service.crossfade(old_frame, first_frame, transition)
+            else:
+                # No old frame or size mismatch - just fade in from black
+                log.debug("AnimEngine: Fading in from black...")
+                await self.transition_service.fade_in(first_frame, transition)
+
+        # Step 7: NOW start animation loop (transition complete - no race condition)
+        log.info(f"AnimEngine: Starting loop for {animation_id}")
+        self.animation_task = asyncio.create_task(self._run_loop())
         log.info(f"AnimEngine: Started {animation_id} | params:{params}")
+
         
-    async def stop(self, transition: Optional[TransitionConfig] = None):
+    async def stop(self, transition: Optional[TransitionConfig] = None, skip_fade: bool = False):
+        """
+        Stop animation with optional fade out.
+
+        Args:
+            transition: Transition config for fade out
+            skip_fade: If True, skip fade out (used when caller already faded out)
+        """
         if not self.is_running() or not self.current_animation:
             return
 
         transition = transition or self.transition_service.ANIMATION_SWITCH
+        log.info(f"AnimEngine: Stopping animation {self.current_id} (skip_fade={skip_fade})")
 
-        await self.transition_service.fade_out(transition)
+        # Fade out (fade_out handles its own locking)
+        if not skip_fade:
+            await self.transition_service.fade_out(transition)
 
+        # Stop animation task
         self.current_animation.stop()
 
         if self.animation_task:
@@ -171,7 +212,6 @@ class AnimationEngine:
         log.debug(f"AnimEngine: stopped {self.current_id.name if self.current_id else '?'}")
         self.current_animation = None
         self.current_id = None
-        self.animation_task = None
         
     
     # ------------------------------------------------------------------
@@ -201,10 +241,68 @@ class AnimationEngine:
         """Get name of currently running animation"""
         return self.current_animation if self.is_running() else None
 
-    
+
     # ------------------------------------------------------------------
     # INTERNAL LOOP
     # ------------------------------------------------------------------
+
+    async def _get_first_frame(self) -> Optional[List]:
+        """
+        Render first frame of animation to buffer without starting full loop.
+
+        This allows fade_in to work on a complete first frame before animation starts,
+        eliminating race condition between fade and animation loop.
+
+        Returns:
+            List of RGB tuples (one per pixel) or empty list if failed
+        """
+        if not self.current_animation:
+            return []
+
+        try:
+            # Create async generator
+            gen = self.current_animation.run()
+
+            # Collect yields for first frame (animations yield multiple times per frame)
+            # For zone-based animations: ~10 yields (one per zone)
+            # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
+            max_yields = 50  # Safety limit
+            yields_collected = 0
+
+            async for frame in gen:
+                # Apply to buffer (show=False)
+                if len(frame) == 5:
+                    zone_id, pixel_index, r, g, b = frame
+                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
+                elif len(frame) == 4:
+                    zone_id, r, g, b = frame
+                    self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
+
+                yields_collected += 1
+
+                # Small delay to collect batch of yields for first frame
+                # (most animations yield all zones/pixels quickly, then sleep)
+                await asyncio.sleep(0.01)
+
+                # Break after collecting yields (before animation sleeps for frame delay)
+                if yields_collected >= 10:  # Most animations yield ~10 times per frame
+                    break
+
+                if yields_collected >= max_yields:
+                    log.warn(f"First frame collection exceeded {max_yields} yields")
+                    break
+
+            # Stop the generator
+            await gen.aclose()
+
+            # Return current buffer state
+            frame = self.strip.get_frame() if hasattr(self.strip, 'get_frame') else []
+            log.debug(f"First frame rendered: {yields_collected} yields collected")
+            return frame
+
+        except Exception as e:
+            log.error(f"Failed to get first frame: {e}")
+            return []
 
     async def _run_loop(self):
         """Main loop — consumes frames from the running animation"""
@@ -212,21 +310,15 @@ class AnimationEngine:
 
         try:
             async for frame in self.current_animation.run():
+                # Batch pixel/zone updates without immediate show()
                 if len(frame) == 5:
                     zone_id, pixel_index, r, g, b = frame
-                    log.info(
-                        f"Setting pixel: {zone_id.name} (value={zone_id.value}) index={pixel_index} rgb=({r},{g},{b})"
-                    )
-                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b)
+                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
                 elif len(frame) == 4:
                     zone_id, r, g, b = frame
-                    log.info(f"Setting zone: {zone_id.name} rgb=({r},{g},{b})")
-                    self.strip.set_zone_color(zone_id.name, r, g, b)
+                    self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
 
-                log.info(f"Yield frame: for {zone_id}:  {frame}")
-
-
-                # ✅ flush each frame for now (you can optimize later)
+                # Single show() call per frame (batched rendering)
                 self.strip.show()
 
         except asyncio.CancelledError:

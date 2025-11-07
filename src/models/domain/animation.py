@@ -96,6 +96,12 @@ class AnimationCombined:
             if ParamID.ANIM_INTENSITY in self.parameters:
                 params[ParamID.ANIM_INTENSITY] = self.get_param_value(ParamID.ANIM_INTENSITY)
 
+            # Add color parameter if defined, otherwise use current zone color
+            if ParamID.ANIM_PRIMARY_COLOR_HUE in self.parameters:
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = self.get_param_value(ParamID.ANIM_PRIMARY_COLOR_HUE)
+            elif current_zone:
+                params[ParamID.ANIM_PRIMARY_COLOR_HUE] = current_zone.state.color.to_hue()
+
         elif self.config.id == AnimationID.COLOR_FADE:
             if current_zone:
                 params[ParamID.ANIM_PRIMARY_COLOR_HUE] = current_zone.state.color.to_hue()
