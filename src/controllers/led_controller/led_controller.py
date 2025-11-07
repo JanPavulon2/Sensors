@@ -10,6 +10,7 @@ from models.enums import MainMode, ButtonID, EncoderSource
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
+from engine import FrameManager
 
 from controllers.led_controller.static_mode_controller import StaticModeController
 from controllers.led_controller.animation_mode_controller import AnimationModeController
@@ -57,10 +58,18 @@ class LEDController:
         self.preview_panel_controller = preview_panel_controller
         self.zone_strip_controller = zone_strip_controller
 
+
+        self.frame_manager = FrameManager(fps=60)
+        self.frame_manager.add_strip(self.zone_strip_controller.zone_strip)
+                
+        if self.preview_panel_controller.preview_panel._pixel_strip:
+            self.frame_manager.add_strip(self.preview_panel_controller.preview_panel)
+
         # Create and attach animation engine
         self.animation_engine = AnimationEngine(
             strip=self.zone_strip_controller.zone_strip,
-            zones=self.zone_service.get_all()
+            zones=self.zone_service.get_all(),
+            frame_manager=self.frame_manager
         )
         
         # Load persistent state
@@ -79,6 +88,8 @@ class LEDController:
 
         # Initialize zones based on current mode
         self._enter_mode(self.main_mode)
+
+        # NOTE: FrameManager is started in main_asyncio.py after all initialization
 
         log.info(LogCategory.SYSTEM, "LEDController initialized")
 

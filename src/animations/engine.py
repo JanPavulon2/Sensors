@@ -20,8 +20,11 @@ from animations.color_cycle import ColorCycleAnimation
 from models.domain.zone import ZoneCombined
 from services.transition_service import TransitionService
 from services import AnimationService
+from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
 from models.enums import ParamID, LogCategory
+from models.frame import Frame, ZoneFrame
+from models.enums import ZoneID
 from utils.logger import get_category_logger
 from models.enums import LogCategory, AnimationID
 from components import ZoneStrip
@@ -62,7 +65,7 @@ class AnimationEngine:
     # Registry of available animations - built dynamically from enum
     ANIMATIONS: Dict[AnimationID, Type[BaseAnimation]] = _build_animation_registry()
 
-    def __init__(self, strip, zones: List[ZoneCombined]):
+    def __init__(self, strip, zones: List[ZoneCombined], frame_manager: FrameManager):
         """
         Initialize animation engine
 
@@ -78,6 +81,12 @@ class AnimationEngine:
 
         # Transition service for smooth animation switches
         self.transition_service = TransitionService(strip)
+        self.frame_manager = frame_manager
+        
+        self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
+        self.zone_lengths: dict[ZoneID, int] = {
+            z.config.id: z.config.pixel_count for z in zones
+        }
         
         log.info("AnimationEngine initialized", animations=list(self.ANIMATIONS.keys()))
 
@@ -306,58 +315,84 @@ class AnimationEngine:
 
     async def _run_loop(self):
         """Main loop — consumes frames from the running animation"""
+        
         assert self.current_animation is not None
+        
+        frame_count = 0
+        log.info("AnimationEngine: run_loop started", animation=self.current_id)
 
         try:
+            
             async for frame in self.current_animation.run():
+                frame_count += 1
+                
+                if not frame:
+                    log.warn(f"[Frame {frame_count}] Empty frame received.")
+                    continue
+                
                 # Batch pixel/zone updates without immediate show()
                 if len(frame) == 5:
                     zone_id, pixel_index, r, g, b = frame
-                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
+                    zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
+                    zone_pixels[pixel_index] = (r, g, b)
+                    
+                    log.debug(
+                        f"[Frame {frame_count}] Pixel update: {zone_id.name}[{pixel_index}] = ({r},{g},{b})"
+                    )
+                    
+                    # frame = ZoneFrame(zone_id=zone_id, pixels=[(pixel_index, r, g, b)])
+                    # self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
                 elif len(frame) == 4:
                     zone_id, r, g, b = frame
-                    self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
+                    zone_length = self.zone_lengths.get(zone_id, 0)
+                    pixels = [(r, g, b)] * zone_length
+                    
+                    self.zone_pixel_buffers[zone_id] = {
+                        i: (r, g, b) for i in range(zone_length)
+                    }
+                    
+                    log.debug(
+                        f"[Frame {frame_count}] Zone update: {zone_id.name} len={zone_length}, color=({r},{g},{b})"
+                    )
+                
+                else:
+                    log.warn(f"[Frame {frame_count}] Unexpected frame format: {frame}")
+                    continue
+                
+                    # frame = ZoneFrame(zone_id=zone_id, zone_color=(r, g, b))
+                    # self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
 
-                # Single show() call per frame (batched rendering)
-                self.strip.show()
+                 # === Push to FrameManager ===
+                if not hasattr(self, "frame_manager") or self.frame_manager is None:
+                    log.error("[FrameManager] Missing reference — frame ignored!")
+                    continue
 
+                # co tick wysyłamy gotową ramkę do FrameManagera
+                for zone_id, pix_dict in self.zone_pixel_buffers.items():
+                    pixels_list = [pix_dict[i] for i in sorted(pix_dict.keys())]
+                    try:
+                        self.frame_manager.submit_zone_frame(zone_id, pixels_list)
+                        if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
+                            log.info(
+                                f"[FrameManager] ZoneFrame submitted #{frame_count}: {zone_id.name} ({len(pixels_list)} px)"
+                            )
+                    except Exception as e:
+                        log.error(f"[FrameManager] Failed to submit ZoneFrame: {e}")
+
+                # odroczony yield (można dodać delay jeśli trzeba)
+                await asyncio.sleep(0)
+                
+                # log.debug(f"Yielded frame from {self.current_id.name} for {frame.zone_id}: {frame_data}")
         except asyncio.CancelledError:
             log.debug("Animation loop cancelled gracefully")
         except Exception as e:
             log.error(f"Animation error: {e}", animation=self.current_id)
             raise
-    
-    # async def _run_loop(self):
-    #     """
-    #     Main animation loop
+        finally:
+            log.info(
+                f"AnimationEngine: run_loop stopped after {frame_count} frames ({self.current_id})"
+            )
 
-    #     Consumes frames from current animation and updates strip.
-    #     Supports both zone-level and pixel-level updates.
-    #     """
-        
-    #     assert self.current_animation is not None
-            
-    #     try:
-    #         async for frame_data in self.current_animation.run():
-    #             # Check frame type by tuple length
-    #             # 4-tuple: (zone_name, r, g, b) -> zone-level
-    #             # 5-tuple: (zone_name, pixel_index, r, g, b) -> pixel-level
-    #             if len(frame_data) == 5:
-    #                 zone_id, pixel_index, r, g, b = frame_data
-    #                 self.strip.set_pixel_color(zone_id, pixel_index, r, g, b)
-    #             else:  # len == 4
-    #                 zone_id, r, g, b = frame_data
-    #                 self.strip.set_zone_color(zone_id, r, g, b)
-                    
-    #             log.info(f"Yield frame: for {zone_id}:  {frame_data}")
-
-
-    #     except asyncio.CancelledError:
-    #         # Animation was stopped gracefully
-    #         log.debug("Animation loop cancelled")
-    #     except Exception as e:
-    #         log.error(f"Animation error: {e}", animation=self.current_id)
-    #         raise
         
     def convert_params(self, params: dict) -> dict:
         """

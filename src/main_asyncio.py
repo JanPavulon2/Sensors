@@ -157,6 +157,25 @@ async def main():
         zone_strip_controller=zone_strip_controller
     )
 
+    # ========================================================================
+    # FRAME MANAGER STARTUP
+    # ========================================================================
+
+    # Ensure frame manager exists and start it
+    if hasattr(led_controller, "frame_manager"):
+        frame_manager = led_controller.frame_manager
+    elif hasattr(led_controller, "frame_manager"):
+        frame_manager = led_controller.frame_manager
+    else:
+        frame_manager = None
+
+    if frame_manager:
+        log.system("Starting FrameManager render loop...")
+        await frame_manager.start()
+        log.system("FrameManager running.")
+    else:
+        log.warn(LogCategory.SYSTEM, "⚠ No FrameManager found — animations may not render.")
+        
     # Set parent controller reference for preview panel (needed for power toggle fade)
     preview_panel_controller._parent_controller = led_controller
 

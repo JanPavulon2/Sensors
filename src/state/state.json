@@ -82,8 +82,8 @@
     },
     "right": {
       "color": {
-        "mode": "HUE",
-        "hue": 310
+        "mode": "PRESET",
+        "preset_name": "green"
       },
       "brightness": 100
     }
@@ -94,7 +94,7 @@
   },
   "application": {
     "main_mode": "ANIMATION",
-    "edit_mode_on": true,
+    "edit_mode_on": false,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ANIM_SPEED",
