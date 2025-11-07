@@ -89,8 +89,12 @@
     }
   },
   "current_animation": {
-    "id": null,
-    "parameters": {}
+    "id": "BREATHE",
+    "parameters": {
+      "ANIM_SPEED": 50,
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_INTENSITY": 100
+    }
   },
   "application": {
     "main_mode": "ANIMATION",

@@ -26,7 +26,10 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
 import signal
 import asyncio
 from pathlib import Path
-from utils.logger import get_logger, configure_logger
+
+# from utils.logger import get_logger, configure_logger
+from utils.logger2 import get_logger, configure_logger
+
 from models.enums import LogCategory, LogLevel
 from components import ControlPanel, KeyboardInputAdapter, ZoneStrip
 from infrastructure import GPIOManager
@@ -42,7 +45,7 @@ from services.transition_service import TransitionService
 # ---------------------------------------------------------------------------
 
 configure_logger(LogLevel.DEBUG)
-log = get_logger()
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 # ---------------------------------------------------------------------------
@@ -52,11 +55,11 @@ log = get_logger()
 async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
     """Gracefully shut down all tasks and hardware."""
     if signal_name:
-        log.system(f"Received signal: {signal_name} → initiating graceful shutdown...")
+        log.info(f"Received signal: {signal_name} → initiating graceful shutdown...")
 
     # Cancel all running tasks except current
     tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task(loop)]
-    log.debug(LogCategory.SYSTEM, f"Cancelling {len(tasks)} running tasks...")
+    log.debug(f"Cancelling {len(tasks)} running tasks...")
     for task in tasks:
         task.cancel()
 
@@ -65,7 +68,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
     
     # Allow pending logs to flush
     await asyncio.sleep(0.05)
-    log.info(LogCategory.SYSTEM, "Shutdown complete. Goodbye!")
+    log.info("Shutdown complete. Goodbye!")
     
 
 # ---------------------------------------------------------------------------
@@ -75,32 +78,32 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
 async def main():
     """Main async entry point (dependency injection and event loop startup)."""
 
-    log.info(LogCategory.SYSTEM, "Starting Diuna application...")
+    log.info("Starting Diuna application...")
 
     # ========================================================================
     # INFRASTRUCTURE
     # ========================================================================
 
-    log.system("Loading configuration...")
+    log.info("Loading configuration...")
     config_manager = ConfigManager()
     config_manager.load()
 
-    log.system("Initializing event bus...")
+    log.info("Initializing event bus...")
     event_bus = EventBus()
     event_bus.add_middleware(log_middleware)
 
-    log.system("Initializing GPIO manager...")
+    log.info("Initializing GPIO manager...")
     gpio_manager = GPIOManager()
 
     # ========================================================================
     # REPOSITORY & SERVICES
     # ========================================================================
 
-    log.system("Loading application state...")
+    log.info("Loading application state...")
     state_file = Path(__file__).resolve().parent / "state" / "state.json"
     assembler = DataAssembler(config_manager, state_file)
 
-    log.system("Initializing services...")
+    log.info("Initializing services...")
     zone_service = ZoneService(assembler)
     animation_service = AnimationService(assembler)
     app_state_service = ApplicationStateService(assembler)
@@ -109,14 +112,14 @@ async def main():
     # LAYER 1: HARDWARE
     # ========================================================================
 
-    log.system("Initializing hardware control panel...")
+    log.info("Initializing hardware control panel...")
     control_panel = ControlPanel(
         config_manager.hardware_manager,
         event_bus,
         gpio_manager
     )
 
-    log.system("Initializing LED strip...")
+    log.info("Initializing LED strip...")
     zone_strip = ZoneStrip(
         gpio=config_manager.hardware_manager.get_led_strip("zone_strip")["gpio"],  # type: ignore
         pixel_count=zone_service.get_total_pixel_count(),
@@ -128,7 +131,7 @@ async def main():
     # SERVICES: TRANSITIONS
     # ========================================================================
 
-    log.system("Creating transition services...")
+    log.info("Creating transition services...")
     zone_strip_transition_service = TransitionService(zone_strip)
     preview_panel_transition_service = TransitionService(control_panel.preview_panel)
 
@@ -136,7 +139,7 @@ async def main():
     # LAYER 2: CONTROLLERS
     # ========================================================================
 
-    log.system("Initializing controllers...")
+    log.info("Initializing controllers...")
     zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service)
     preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
     control_panel_controller = ControlPanelController(control_panel, event_bus)
@@ -145,7 +148,7 @@ async def main():
     # LAYER 3: APPLICATION
     # ========================================================================
 
-    log.system("Initializing LED controller...")
+    log.info("Initializing LED controller...")
     led_controller = LEDController(
         config_manager=config_manager,
         event_bus=event_bus,
@@ -170,11 +173,11 @@ async def main():
         frame_manager = None
 
     if frame_manager:
-        log.system("Starting FrameManager render loop...")
+        log.info("Starting FrameManager render loop...")
         await frame_manager.start()
-        log.system("FrameManager running.")
+        log.info("FrameManager running.")
     else:
-        log.warn(LogCategory.SYSTEM, "⚠ No FrameManager found — animations may not render.")
+        log.warn("⚠ No FrameManager found — animations may not render.")
         
     # Set parent controller reference for preview panel (needed for power toggle fade)
     preview_panel_controller._parent_controller = led_controller
@@ -183,7 +186,7 @@ async def main():
     # ADAPTERS
     # ========================================================================
 
-    log.system("Initializing keyboard input...")
+    log.info("Initializing keyboard input...")
     keyboard_adapter = KeyboardInputAdapter(event_bus)
     keyboard_task = asyncio.create_task(keyboard_adapter.run())
 
@@ -191,20 +194,20 @@ async def main():
     # STARTUP TRANSITION
     # ========================================================================
 
-    log.system("Performing startup transition...")
+    log.info("Performing startup transition...")
     await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
 
     # ========================================================================
     # SYSTEM STATUS
     # ========================================================================
 
-    log.system("=" * 60)
-    log.system("Initial state loaded:")
-    log.system(f"  Mode: {led_controller.main_mode.name}")
-    log.system(f"  Edit Mode: {'ON' if led_controller.edit_mode else 'OFF'}")
-    log.system("=" * 60)
-    log.system("System ready. Press Ctrl+C to exit.")
-    log.system("=" * 60)
+    log.info("=" * 60)
+    log.info("Initial state loaded:")
+    log.info(f"  Mode: {led_controller.main_mode.name}")
+    log.info(f"  Edit Mode: {'ON' if led_controller.edit_mode else 'OFF'}")
+    log.info("=" * 60)
+    log.info("System ready. Press Ctrl+C to exit.")
+    log.info("=" * 60)
 
     # ========================================================================
     # RUN LOOPS
@@ -217,7 +220,7 @@ async def main():
                 await control_panel_controller.poll()
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:
-            log.debug(LogCategory.SYSTEM, "Hardware polling loop cancelled.")
+            log.debug("Hardware polling loop cancelled.")
             raise
     
         
@@ -231,10 +234,10 @@ async def main():
     try:
         await asyncio.gather(keyboard_task, polling_task)
     except asyncio.CancelledError:
-        log.debug(LogCategory.SYSTEM, "Main loop cancelled.")
+        log.debug("Main loop cancelled.")
     finally:
         # Graceful cleanup
-        log.system("🧹 Starting cleanup...")
+        log.info("🧹 Starting cleanup...")
 
         if not keyboard_task.done():
             keyboard_task.cancel()
@@ -247,15 +250,15 @@ async def main():
             with contextlib.suppress(asyncio.CancelledError):
                 await polling_task
 
-        log.system("Stopping animations...")
+        log.info("Stopping animations...")
         led_controller.animation_mode_controller.animation_service.stop_all()
         
         
-        log.system("Stopping pulsing...")
+        log.info("Stopping pulsing...")
         led_controller.static_mode_controller._stop_pulse()
         await asyncio.sleep(0.05)
 
-        log.system("Performing shutdown transition...")
+        log.info("Performing shutdown transition...")
         await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
         keyboard_task.cancel()
@@ -265,20 +268,20 @@ async def main():
             pass
 
         # Stop animations safely
-        log.system("Stopping animations...")
+        log.info("Stopping animations...")
         if led_controller.animation_engine and led_controller.animation_engine.is_running():
             await led_controller.animation_engine.stop()
 
         if hasattr(led_controller, "animation_service"):
             led_controller.animation_service.stop_all()
             
-        log.system("Clearing LEDs...")
+        log.info("Clearing LEDs...")
         led_controller.clear_all()
 
-        log.system("Cleaning up GPIO...")
+        log.info("Cleaning up GPIO...")
         gpio_manager.cleanup()
 
-        log.system("Shutdown complete. Goodbye!")
+        log.info("Shutdown complete. Goodbye!")
 
 
 

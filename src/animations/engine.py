@@ -373,7 +373,7 @@ class AnimationEngine:
                     try:
                         self.frame_manager.submit_zone_frame(zone_id, pixels_list)
                         if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
-                            log.info(
+                            log.debug(
                                 f"[FrameManager] ZoneFrame submitted #{frame_count}: {zone_id.name} ({len(pixels_list)} px)"
                             )
                     except Exception as e:
