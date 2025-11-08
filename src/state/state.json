@@ -84,7 +84,7 @@
   },
   "application": {
     "main_mode": "ANIMATION",
-    "edit_mode_on": false,
+    "edit_mode_on": true,
     "lamp_white_mode_on": true,
     "lamp_white_saved_state": {
       "color": {
@@ -93,8 +93,8 @@
       },
       "brightness": 100
     },
-    "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 3,
+    "active_parameter": "ANIM_SPEED",
+    "selected_zone_index": 4,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

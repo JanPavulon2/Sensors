@@ -17,12 +17,17 @@ so other modules continue to work unchanged.
 """
 
 import asyncio
-from typing import Optional, List, Tuple, Callable
+import time
+from typing import Optional, List, Tuple, Callable, Dict
 from models.transition import TransitionType, TransitionConfig
-from models.enums import LogLevel, LogCategory
+from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, ZoneID
+from models.frame import PixelFrame
 from utils.logger import get_category_logger
 
 log = get_category_logger(LogCategory.SYSTEM)
+
+# WS2811 timing constraint: minimum 2.75ms between frames
+MIN_FRAME_TIME_MS = 2.75
 
 
 class TransitionService:
@@ -61,16 +66,19 @@ class TransitionService:
     POWER_TOGGLE = TransitionConfig(type=TransitionType.FADE, duration_ms=400, steps=12)
 
 
-    def __init__(self, strip):
+    def __init__(self, strip, frame_manager=None):
         """
         Initialize transition service
 
         Args:
             strip: ZoneStrip instance with LED control methods
+            frame_manager: FrameManager instance for centralized rendering (optional)
         """
         self.strip = strip
-        
+        self.frame_manager = frame_manager
+
         self._transition_lock = asyncio.Lock()  # Prevent overlapping transitions
+        self.last_show_time = time.perf_counter()  # Track timing for WS2811 constraints
 
         log.info("TransitionService initialized",
             startup_ms=self.STARTUP.duration_ms,
@@ -135,9 +143,29 @@ class TransitionService:
     # Core transition methods
     # ============================================================
 
+    def _get_zone_pixels_dict(self, frame: List[Tuple[int, int, int]]) -> Dict[ZoneID, List[Tuple[int, int, int]]]:
+        """
+        Convert frame to zone-based pixel dictionary.
+
+        Handles both ZoneStrip (has zones) and PreviewPanel (single zone).
+        """
+        if hasattr(self.strip, 'zones') and self.strip.zones:
+            # ZoneStrip: distribute pixels across zones
+            zone_pixels_dict = {}
+            for zone_id, (start, end) in self.strip.zones.items():
+                zone_pixels = frame[start:end]
+                if zone_pixels:
+                    zone_pixels_dict[zone_id] = zone_pixels
+            return zone_pixels_dict
+        else:
+            # PreviewPanel or single-zone strip: use FLOOR as container
+            return {ZoneID.FLOOR: frame}
+
     async def _fade_out_no_lock(self, config: TransitionConfig):
         """
         Internal fade out implementation without lock (for use inside locked context).
+
+        Uses FrameManager if available, falls back to direct strip control.
 
         Args:
             config: Transition configuration
@@ -157,22 +185,53 @@ class TransitionService:
             return
 
         step_delay = config.duration_ms / 1000 / config.steps
-        log.debug(f"Fade out: {config.duration_ms}ms, {config.steps} steps")
+
+        # Enforce WS2811 timing: ensure step_delay >= 2.75ms
+        if step_delay * 1000 < MIN_FRAME_TIME_MS:
+            safe_steps = max(1, int(config.duration_ms / MIN_FRAME_TIME_MS))
+            log.warn(
+                f"Transition too fast: reducing steps {config.steps} → {safe_steps} "
+                f"to maintain WS2811 timing"
+            )
+            step_delay = config.duration_ms / 1000 / safe_steps
+        else:
+            safe_steps = config.steps
+
+        log.debug(f"Fade out: {config.duration_ms}ms, {safe_steps} steps, {step_delay*1000:.2f}ms per step")
 
         # Gradually reduce brightness
-        for step in range(config.steps, -1, -1):
-            progress = step / config.steps
+        for step in range(safe_steps, -1, -1):
+            progress = step / safe_steps
             factor = config.ease_function(progress)
 
-            for i, (r, g, b) in enumerate(current_frame):
-                self.strip.set_pixel_color_absolute(
-                    i,
-                    int(r * factor),
-                    int(g * factor),
-                    int(b * factor),
-                    show=False
-                )
-            self.strip.show()
+            # Enforce WS2811 reset time between frames
+            elapsed = (time.perf_counter() - self.last_show_time) * 1000
+            if elapsed < MIN_FRAME_TIME_MS:
+                await asyncio.sleep((MIN_FRAME_TIME_MS - elapsed) / 1000)
+
+            # Create faded frame
+            faded_frame = [
+                (int(r * factor), int(g * factor), int(b * factor))
+                for r, g, b in current_frame
+            ]
+
+            # Submit to FrameManager (no direct show() calls - prevents race conditions)
+            if self.frame_manager:
+                try:
+                    zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
+                    pixel_frame = PixelFrame(
+                        priority=FramePriority.TRANSITION,
+                        source=FrameSource.TRANSITION,
+                        zone_pixels=zone_pixels_dict
+                    )
+                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                except Exception as e:
+                    log.error(f"Failed to submit transition frame to FrameManager: {e}")
+                    # No fallback to direct show() - prevents race condition with FrameManager
+            else:
+                log.error("TransitionService: No FrameManager - transition cannot render")
+
+            self.last_show_time = time.perf_counter()
             await asyncio.sleep(step_delay)
 
         log.debug("Fade out complete")
@@ -218,32 +277,72 @@ class TransitionService:
         config = config or self.MODE_SWITCH
 
         if config.type == TransitionType.NONE:
-            # Instant set
-            for i, (r, g, b) in enumerate(target_frame):
-                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
-            self.strip.show()
+            # Instant set - submit to FrameManager, no direct show()
+            if self.frame_manager:
+                try:
+                    zone_pixels_dict = self._get_zone_pixels_dict(target_frame)
+                    pixel_frame = PixelFrame(
+                        priority=FramePriority.TRANSITION,
+                        source=FrameSource.TRANSITION,
+                        zone_pixels=zone_pixels_dict
+                    )
+                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                except Exception as e:
+                    log.error(f"Failed to submit instant transition frame: {e}")
+            else:
+                log.error("TransitionService: No FrameManager for instant transition")
             return
 
-        
-        async with self._transition_lock:
-            
-            step_delay = config.duration_ms / 1000 / config.steps
-            log.debug(f"Fade in: {config.duration_ms}ms, {config.steps} steps")
 
-            # Gradually increase brightness
-            for step in range(config.steps + 1):
-                progress = step / config.steps
+        async with self._transition_lock:
+
+            step_delay = config.duration_ms / 1000 / config.steps
+
+            # Enforce WS2811 timing: ensure step_delay >= 2.75ms
+            if step_delay * 1000 < MIN_FRAME_TIME_MS:
+                safe_steps = max(1, int(config.duration_ms / MIN_FRAME_TIME_MS))
+                log.warn(
+                    f"Transition too fast: reducing steps {config.steps} → {safe_steps} "
+                    f"to maintain WS2811 timing"
+                )
+                step_delay = config.duration_ms / 1000 / safe_steps
+            else:
+                safe_steps = config.steps
+
+            log.debug(f"Fade in: {config.duration_ms}ms, {safe_steps} steps, {step_delay*1000:.2f}ms per step")
+
+            # Gradually increase brightness - submit each step to FrameManager
+            for step in range(safe_steps + 1):
+                progress = step / safe_steps
                 factor = config.ease_function(progress)
 
-                for i, (r, g, b) in enumerate(target_frame):
-                    self.strip.set_pixel_color_absolute(
-                        i,
-                        int(r * factor),
-                        int(g * factor),
-                        int(b * factor),
-                        show=False
-                    )
-                self.strip.show()
+                # Enforce WS2811 reset time between frames
+                elapsed = (time.perf_counter() - self.last_show_time) * 1000
+                if elapsed < MIN_FRAME_TIME_MS:
+                    await asyncio.sleep((MIN_FRAME_TIME_MS - elapsed) / 1000)
+
+                # Create faded frame for this step
+                faded_frame = [
+                    (int(r * factor), int(g * factor), int(b * factor))
+                    for r, g, b in target_frame
+                ]
+
+                # Submit to FrameManager (no direct show())
+                if self.frame_manager:
+                    try:
+                        zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
+                        pixel_frame = PixelFrame(
+                            priority=FramePriority.TRANSITION,
+                            source=FrameSource.TRANSITION,
+                            zone_pixels=zone_pixels_dict
+                        )
+                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    except Exception as e:
+                        log.error(f"Failed to submit fade in step {step}: {e}")
+                else:
+                    log.error("TransitionService: No FrameManager for fade in")
+
+                self.last_show_time = time.perf_counter()
                 await asyncio.sleep(step_delay)
 
             log.debug("Fade in complete")
@@ -275,8 +374,10 @@ class TransitionService:
             log.debug("No frame to fade in")
             return
 
-        # Clear to black
-        self.strip.clear()
+        # Clear to black (with timing protection)
+        async with self._transition_lock:
+            self.strip.clear()
+            self.last_show_time = time.perf_counter()
 
         # Fade in to target
         await self.fade_in(target_frame, config)
@@ -345,37 +446,71 @@ class TransitionService:
         config = config or self.MODE_SWITCH
 
         if config.type == TransitionType.NONE:
-            # Instant set to target frame
-            for i, (r, g, b) in enumerate(to_frame):
-                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
-            self.strip.show()
+            # Instant set to target frame - submit via FrameManager only
+            if self.frame_manager:
+                try:
+                    zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
+                    pixel_frame = PixelFrame(
+                        priority=FramePriority.TRANSITION,
+                        source=FrameSource.TRANSITION,
+                        zone_pixels=zone_pixels_dict
+                    )
+                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                except Exception as e:
+                    log.error(f"Failed to submit instant crossfade frame: {e}")
+            else:
+                log.error("TransitionService: No FrameManager for instant crossfade")
             return
 
         if len(from_frame) != len(to_frame):
             log.warn(f"Frame size mismatch: {len(from_frame)} → {len(to_frame)}, using instant switch")
-            for i, (r, g, b) in enumerate(to_frame):
-                self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
-            self.strip.show()
+            # Still submit via FrameManager, not direct show()
+            if self.frame_manager:
+                try:
+                    zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
+                    pixel_frame = PixelFrame(
+                        priority=FramePriority.TRANSITION,
+                        source=FrameSource.TRANSITION,
+                        zone_pixels=zone_pixels_dict
+                    )
+                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                except Exception as e:
+                    log.error(f"Failed to submit size-mismatch frame: {e}")
             return
 
         async with self._transition_lock:
             step_delay = config.duration_ms / 1000 / config.steps
             log.info(f"Transition started: crossfade ({config.duration_ms}ms)")
 
-            # Gradually interpolate between frames
+            # Gradually interpolate between frames - submit each via FrameManager
             for step in range(config.steps + 1):
                 progress = step / config.steps
                 factor = config.ease_function(progress)
 
-                for i, ((r1, g1, b1), (r2, g2, b2)) in enumerate(zip(from_frame, to_frame)):
-                    # Linear interpolation for each color channel
+                # Interpolate between frames
+                interpolated_frame = []
+                for (r1, g1, b1), (r2, g2, b2) in zip(from_frame, to_frame):
                     r = int(r1 + (r2 - r1) * factor)
                     g = int(g1 + (g2 - g1) * factor)
                     b = int(b1 + (b2 - b1) * factor)
+                    interpolated_frame.append((r, g, b))
 
-                    self.strip.set_pixel_color_absolute(i, r, g, b, show=False)
+                # Submit to FrameManager (no direct show())
+                if self.frame_manager:
+                    try:
+                        zone_pixels_dict = self._get_zone_pixels_dict(interpolated_frame)
+                        pixel_frame = PixelFrame(
+                            priority=FramePriority.TRANSITION,
+                            source=FrameSource.TRANSITION,
+                            zone_pixels=zone_pixels_dict
+                        )
+                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    except Exception as e:
+                        log.error(f"Failed to submit crossfade step {step}: {e}")
+                else:
+                    log.error("TransitionService: No FrameManager for crossfade")
 
-                self.strip.show()
+                self.last_show_time = time.perf_counter()
                 await asyncio.sleep(step_delay)
 
             log.info("Transition complete: crossfade")

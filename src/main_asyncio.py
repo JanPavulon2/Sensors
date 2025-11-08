@@ -128,12 +128,20 @@ async def main():
     )
 
     # ========================================================================
+    # FRAME MANAGER
+    # ========================================================================
+
+    log.info("Initializing FrameManager...")
+    from engine.frame_manager import FrameManager
+    frame_manager = FrameManager(fps=60)
+
+    # ========================================================================
     # SERVICES: TRANSITIONS
     # ========================================================================
 
     log.info("Creating transition services...")
-    zone_strip_transition_service = TransitionService(zone_strip)
-    preview_panel_transition_service = TransitionService(control_panel.preview_panel)
+    zone_strip_transition_service = TransitionService(zone_strip, frame_manager)
+    preview_panel_transition_service = TransitionService(control_panel.preview_panel, frame_manager)
 
     # ========================================================================
     # LAYER 2: CONTROLLERS
@@ -157,7 +165,8 @@ async def main():
         animation_service=animation_service,
         app_state_service=app_state_service,
         preview_panel_controller=preview_panel_controller,
-        zone_strip_controller=zone_strip_controller
+        zone_strip_controller=zone_strip_controller,
+        frame_manager=frame_manager
     )
 
     # ========================================================================

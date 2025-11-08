@@ -6,6 +6,7 @@ Uses TransitionService for smooth transitions between animation states.
 """
 
 import asyncio
+import time
 from typing import Optional, Dict, List, Any, Type
 
 from animations.base import BaseAnimation  # ✅ direct import — breaks circular import safely
@@ -78,8 +79,8 @@ class AnimationEngine:
         self.current_id: Optional[AnimationID] = None
 
         # Transition service for smooth animation switches
-        self.transition_service = TransitionService(strip)
         self.frame_manager = frame_manager
+        self.transition_service = TransitionService(strip, frame_manager)
         
         self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
         self.zone_lengths: dict[ZoneID, int] = {
@@ -181,7 +182,10 @@ class AnimationEngine:
                 log.debug("AnimEngine: Fading in from black...")
                 await self.transition_service.fade_in(first_frame, transition)
 
-        # Step 7: NOW start animation loop (transition complete - no race condition)
+        # Step 7: Clear pixel buffers before starting loop (prevents stale frame glitch)
+        self.zone_pixel_buffers.clear()
+
+        # Step 8: NOW start animation loop (transition complete - no race condition)
         log.info(f"AnimEngine: Starting loop for {animation_id}")
         self.animation_task = asyncio.create_task(self._run_loop())
         log.info(f"AnimEngine: Started {animation_id} | params:{params}")
@@ -273,8 +277,9 @@ class AnimationEngine:
             # Collect yields for first frame (animations yield multiple times per frame)
             # For zone-based animations: ~10 yields (one per zone)
             # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
-            max_yields = 50  # Safety limit
+            max_yields = 100  # Safety limit (increased for complex animations)
             yields_collected = 0
+            start_time = time.perf_counter()
 
             async for frame in gen:
                 # Apply to buffer (show=False)
@@ -289,10 +294,11 @@ class AnimationEngine:
 
                 # Small delay to collect batch of yields for first frame
                 # (most animations yield all zones/pixels quickly, then sleep)
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.005)
 
-                # Break after collecting yields (before animation sleeps for frame delay)
-                if yields_collected >= 10:  # Most animations yield ~10 times per frame
+                # Break after collecting adequate yields
+                # Most animations yield ~10 times per frame, but wait for at least 15 to be safe
+                if yields_collected >= 15:
                     break
 
                 if yields_collected >= max_yields:
@@ -304,7 +310,8 @@ class AnimationEngine:
 
             # Return current buffer state
             frame = self.strip.get_frame() if hasattr(self.strip, 'get_frame') else []
-            log.debug(f"First frame rendered: {yields_collected} yields collected")
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            log.debug(f"First frame rendered: {yields_collected} yields in {elapsed_ms:.1f}ms")
             return frame
 
         except Exception as e:
@@ -313,63 +320,60 @@ class AnimationEngine:
 
     async def _run_loop(self):
         """Main loop — consumes frames from the running animation"""
-        
+
         assert self.current_animation is not None
-        
+
         frame_count = 0
         log.info("AnimationEngine: run_loop started", animation=self.current_id)
 
         try:
-            
+
             async for frame in self.current_animation.run():
                 frame_count += 1
-                
+
                 if not frame:
                     log.warn(f"[Frame {frame_count}] Empty frame received.")
                     continue
-                
-                # Batch pixel/zone updates without immediate show()
+
+                # Collect pixel/zone updates for this frame
                 if len(frame) == 5:
                     zone_id, pixel_index, r, g, b = frame
                     zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
                     zone_pixels[pixel_index] = (r, g, b)
-                    
+
                     log.debug(
                         f"[Frame {frame_count}] Pixel update: {zone_id.name}[{pixel_index}] = ({r},{g},{b})"
                     )
-                    
-                    # frame = ZoneFrame(zone_id=zone_id, pixels=[(pixel_index, r, g, b)])
-                    # self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
+
                 elif len(frame) == 4:
                     zone_id, r, g, b = frame
                     zone_length = self.zone_lengths.get(zone_id, 0)
-                    pixels = [(r, g, b)] * zone_length
-                    
+
+                    # Set all pixels in zone to this color
                     self.zone_pixel_buffers[zone_id] = {
                         i: (r, g, b) for i in range(zone_length)
                     }
-                    
+
                     log.debug(
                         f"[Frame {frame_count}] Zone update: {zone_id.name} len={zone_length}, color=({r},{g},{b})"
                     )
-                
+
                 else:
                     log.warn(f"[Frame {frame_count}] Unexpected frame format: {frame}")
                     continue
-                
-                    # frame = ZoneFrame(zone_id=zone_id, zone_color=(r, g, b))
-                    # self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
 
-                 # === Push to FrameManager ===
+                # === Push collected frame to FrameManager ===
                 if not hasattr(self, "frame_manager") or self.frame_manager is None:
                     log.error("[FrameManager] Missing reference — frame ignored!")
                     continue
 
-                # co tick wysyłamy gotową ramkę do FrameManagera
+                # Build frame from buffer (include only pixels that were set this frame)
                 zone_pixels_dict = {}
                 for zone_id, pix_dict in self.zone_pixel_buffers.items():
-                    pixels_list = [pix_dict[i] for i in sorted(pix_dict.keys())]
-                    zone_pixels_dict[zone_id] = pixels_list
+                    if pix_dict:  # Only include zones with pixels
+                        # Include pixels in order (sorted by pixel index)
+                        pixels_list = [pix_dict[i] for i in sorted(pix_dict.keys())]
+                        zone_pixels_dict[zone_id] = pixels_list
 
                 if zone_pixels_dict:
                     try:
@@ -386,7 +390,7 @@ class AnimationEngine:
                     except Exception as e:
                         log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
 
-                # odroczony yield (można dodać delay jeśli trzeba)
+                # Yield to event loop
                 await asyncio.sleep(0)
                 
                 # log.debug(f"Yielded frame from {self.current_id.name} for {frame.zone_id}: {frame_data}")

@@ -47,7 +47,8 @@ class LEDController:
         animation_service: "AnimationService",
         app_state_service: "ApplicationStateService",
         preview_panel_controller: "PreviewPanelController",
-        zone_strip_controller: "ZoneStripController"
+        zone_strip_controller: "ZoneStripController",
+        frame_manager: "FrameManager" = None
     ):
         self.config_manager = config_manager
         self.event_bus = event_bus
@@ -58,8 +59,10 @@ class LEDController:
         self.preview_panel_controller = preview_panel_controller
         self.zone_strip_controller = zone_strip_controller
 
-
-        self.frame_manager = FrameManager(fps=60)
+        # Use provided frame manager or create new one
+        if frame_manager is None:
+            frame_manager = FrameManager(fps=60)
+        self.frame_manager = frame_manager
         self.frame_manager.add_main_strip(self.zone_strip_controller.zone_strip)
 
         if self.preview_panel_controller.preview_panel._pixel_strip:

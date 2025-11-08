@@ -46,3 +46,75 @@ When creating documentation or configuration files:
 - **ALWAYS** use `.claude/context/` for new markdown files
 - **ALWAYS** check if file should be in `.claude/` before creating
 - When asked to "create a document", default to `.claude/context/`
+
+---
+
+## Code Style Requirements
+
+### Import Organization
+
+**CRITICAL**: All imports MUST be at the top of the file, not inline within functions.
+
+❌ WRONG:
+```python
+def some_function():
+    from models.enums import MainMode  # NO - inline import
+    ...
+```
+
+✅ CORRECT:
+```python
+from models.enums import MainMode  # YES - at module level
+
+def some_function():
+    ...
+```
+
+**Rationale**:
+- Clearer code readability - imports visible at a glance
+- Easier to identify dependencies
+- Better static analysis and IDE support
+- Consistent with PEP 8 style guide
+
+### Dependency Injection
+
+**CRITICAL**: Use constructor injection only. Do NOT assign dependencies via property assignment.
+
+❌ WRONG:
+```python
+service.frame_manager = frame_manager  # NO - property injection
+```
+
+✅ CORRECT:
+```python
+def __init__(self, frame_manager):  # YES - constructor injection
+    self.frame_manager = frame_manager
+```
+
+**Rationale**:
+- Clear and explicit dependencies
+- Easier to understand object initialization
+- Type hints work better with constructor params
+- Prevents issues with uninitialized attributes
+
+### Type-Explicit APIs
+
+**CRITICAL**: Use explicit type checks and objects, not string-based type detection.
+
+❌ WRONG:
+```python
+if hasattr(obj, 'get_frame'):  # NO - checking for method existence
+    obj.get_frame()
+```
+
+✅ CORRECT:
+```python
+if isinstance(obj, ZoneStrip):  # YES - explicit type check
+    ...
+```
+
+**Rationale**:
+- Type safety and clarity
+- Prevents accidental duck-typing bugs
+- IDE can provide better autocomplete
+- Easier to refactor
