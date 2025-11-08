@@ -22,56 +22,56 @@
         "mode": "HUE",
         "hue": 40
       },
-      "brightness": 100
+      "brightness": 0
     },
     "left": {
       "color": {
         "mode": "HUE",
         "hue": 330
       },
-      "brightness": 100
+      "brightness": 0
     },
     "top": {
       "color": {
         "mode": "HUE",
         "hue": 260
       },
-      "brightness": 100
+      "brightness": 0
     },
     "right": {
       "color": {
         "mode": "HUE",
         "hue": 240
       },
-      "brightness": 100
+      "brightness": 0
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
         "preset_name": "indigo"
       },
-      "brightness": 100
+      "brightness": 0
     },
     "lamp": {
       "color": {
         "mode": "PRESET",
         "preset_name": "warm_white"
       },
-      "brightness": 100
+      "brightness": 0
     },
     "back": {
       "color": {
         "mode": "HUE",
         "hue": 264
       },
-      "brightness": 100
+      "brightness": 0
     },
     "desk": {
       "color": {
         "mode": "PRESET",
         "preset_name": "white"
       },
-      "brightness": 100
+      "brightness": 0
     }
   },
   "current_animation": {

@@ -82,7 +82,10 @@ class AnimationEngine:
         self.frame_manager = frame_manager
         self.transition_service = TransitionService(strip, frame_manager)
         
+        # Pixel buffer: zone_id -> pixel_index -> (r, g, b) for pixel-level animations
         self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
+        # Zone color buffer: zone_id -> (r, g, b) for zone-level animations
+        self.zone_color_buffers: dict[ZoneID, tuple[int, int, int]] = {}
         self.zone_lengths: dict[ZoneID, int] = {
             z.config.id: z.config.pixel_count for z in zones
         }
@@ -148,6 +151,10 @@ class AnimationEngine:
                     pass
                 self.animation_task = None
 
+            # Clear buffers from old animation before starting new one
+            self.zone_pixel_buffers.clear()
+            self.zone_color_buffers.clear()
+
             self.current_animation = None
             self.current_id = None
             log.debug("AnimEngine: Stopped old animation (no fade, preparing for crossfade)")
@@ -182,8 +189,9 @@ class AnimationEngine:
                 log.debug("AnimEngine: Fading in from black...")
                 await self.transition_service.fade_in(first_frame, transition)
 
-        # Step 7: Clear pixel buffers before starting loop (prevents stale frame glitch)
+        # Step 7: Clear all buffers before starting loop (prevents stale frame glitch)
         self.zone_pixel_buffers.clear()
+        self.zone_color_buffers.clear()
 
         # Step 8: NOW start animation loop (transition complete - no race condition)
         log.info(f"AnimEngine: Starting loop for {animation_id}")
@@ -219,6 +227,10 @@ class AnimationEngine:
             except asyncio.CancelledError:
                 pass
             self.animation_task = None
+
+        # Clear buffers after stopping animation (prevents stale pixels)
+        self.zone_pixel_buffers.clear()
+        self.zone_color_buffers.clear()
 
         log.debug(f"AnimEngine: stopped {self.current_id.name if self.current_id else '?'}")
         self.current_animation = None
@@ -337,6 +349,7 @@ class AnimationEngine:
 
                 # Collect pixel/zone updates for this frame
                 if len(frame) == 5:
+                    # Pixel-level update: (zone_id, pixel_index, r, g, b)
                     zone_id, pixel_index, r, g, b = frame
                     zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
                     zone_pixels[pixel_index] = (r, g, b)
@@ -346,16 +359,13 @@ class AnimationEngine:
                     )
 
                 elif len(frame) == 4:
+                    # Zone-level update: (zone_id, r, g, b) - entire zone gets one color
                     zone_id, r, g, b = frame
-                    zone_length = self.zone_lengths.get(zone_id, 0)
-
-                    # Set all pixels in zone to this color
-                    self.zone_pixel_buffers[zone_id] = {
-                        i: (r, g, b) for i in range(zone_length)
-                    }
+                    # Store in zone color buffer (for zone-level animations like Breathe)
+                    self.zone_color_buffers[zone_id] = (r, g, b)
 
                     log.debug(
-                        f"[Frame {frame_count}] Zone update: {zone_id.name} len={zone_length}, color=({r},{g},{b})"
+                        f"[Frame {frame_count}] Zone update: {zone_id.name} color=({r},{g},{b})"
                     )
 
                 else:
@@ -367,12 +377,32 @@ class AnimationEngine:
                     log.error("[FrameManager] Missing reference — frame ignored!")
                     continue
 
-                # Build frame from buffer (include only pixels that were set this frame)
+                # Build frame from both buffers
                 zone_pixels_dict = {}
+
+                # Process zone-level updates (like Breathe animation)
+                for zone_id, color in self.zone_color_buffers.items():
+                    zone_length = self.zone_lengths.get(zone_id, 0)
+                    # Create pixel list with all pixels set to the zone color
+                    pixels_list = [color] * zone_length
+                    zone_pixels_dict[zone_id] = pixels_list
+
+                # Process pixel-level updates (like Snake animation) - overwrites zone colors if present
                 for zone_id, pix_dict in self.zone_pixel_buffers.items():
                     if pix_dict:  # Only include zones with pixels
-                        # Include pixels in order (sorted by pixel index)
-                        pixels_list = [pix_dict[i] for i in sorted(pix_dict.keys())]
+                        # Build complete pixel list for this zone (all pixels, default to black for unset)
+                        zone_length = self.zone_lengths.get(zone_id, 0)
+                        # If this zone was in zone_color_buffers, start with those colors
+                        if zone_id in zone_pixels_dict:
+                            pixels_list = zone_pixels_dict[zone_id].copy()
+                        else:
+                            # Otherwise start with black
+                            pixels_list = [(0, 0, 0)] * zone_length
+
+                        # Overlay pixel updates
+                        for i in range(zone_length):
+                            if i in pix_dict:
+                                pixels_list[i] = pix_dict[i]
                         zone_pixels_dict[zone_id] = pixels_list
 
                 if zone_pixels_dict:
