@@ -22,11 +22,9 @@ from services.transition_service import TransitionService
 from services import AnimationService
 from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
-from models.enums import ParamID, LogCategory
-from models.frame import Frame, ZoneFrame
-from models.enums import ZoneID
+from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource
+from models.frame import Frame, ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
-from models.enums import LogCategory, AnimationID
 from components import ZoneStrip
 
 log = get_category_logger(LogCategory.ANIMATION)
@@ -368,16 +366,25 @@ class AnimationEngine:
                     continue
 
                 # co tick wysyłamy gotową ramkę do FrameManagera
+                zone_pixels_dict = {}
                 for zone_id, pix_dict in self.zone_pixel_buffers.items():
                     pixels_list = [pix_dict[i] for i in sorted(pix_dict.keys())]
+                    zone_pixels_dict[zone_id] = pixels_list
+
+                if zone_pixels_dict:
                     try:
-                        self.frame_manager.submit_zone_frame(zone_id, pixels_list)
+                        frame = PixelFrame(
+                            priority=FramePriority.ANIMATION,
+                            source=FrameSource.ANIMATION,
+                            zone_pixels=zone_pixels_dict
+                        )
+                        await self.frame_manager.submit_pixel_frame(frame)
                         if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
                             log.debug(
-                                f"[FrameManager] ZoneFrame submitted #{frame_count}: {zone_id.name} ({len(pixels_list)} px)"
+                                f"[FrameManager] PixelFrame submitted #{frame_count}"
                             )
                     except Exception as e:
-                        log.error(f"[FrameManager] Failed to submit ZoneFrame: {e}")
+                        log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
 
                 # odroczony yield (można dodać delay jeśli trzeba)
                 await asyncio.sleep(0)

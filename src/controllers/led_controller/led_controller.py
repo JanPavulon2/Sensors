@@ -60,10 +60,10 @@ class LEDController:
 
 
         self.frame_manager = FrameManager(fps=60)
-        self.frame_manager.add_strip(self.zone_strip_controller.zone_strip)
-                
+        self.frame_manager.add_main_strip(self.zone_strip_controller.zone_strip)
+
         if self.preview_panel_controller.preview_panel._pixel_strip:
-            self.frame_manager.add_strip(self.preview_panel_controller.preview_panel)
+            self.frame_manager.add_preview_strip(self.preview_panel_controller.preview_panel)
 
         # Create and attach animation engine
         self.animation_engine = AnimationEngine(

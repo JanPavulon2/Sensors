@@ -227,3 +227,82 @@ class PreviewPanel:
         for i in range(self.count):
             self._pixel_strip.setPixelColor(i, Color(0, 0, 0))
         self._pixel_strip.show()
+
+    # === High-Level Rendering Methods (Phase 2 Extensions) ===
+
+    def render_solid(self, color: Tuple[int, int, int]) -> None:
+        """
+        Render solid color (all pixels same color).
+
+        Shorthand for fill_with_color(), kept for API consistency with refactoring plan.
+
+        Args:
+            color: RGB tuple (r, g, b), each value 0-255
+
+        Example:
+            >>> preview.render_solid((255, 0, 0))  # All red
+        """
+        self.fill_with_color(color)
+
+    def render_gradient(
+        self, color: Tuple[int, int, int], intensity: float
+    ) -> None:
+        """
+        Render color with intensity modulation (0.0-1.0).
+
+        Scales RGB values by intensity factor. Useful for previewing brightness changes.
+
+        Args:
+            color: Base RGB color (r, g, b), each value 0-255
+            intensity: Brightness multiplier, 0.0 (black) to 1.0 (full color)
+
+        Example:
+            >>> preview.render_gradient((255, 100, 0), 0.5)  # 50% brightness
+            >>> preview.render_gradient((0, 255, 0), 0.75)   # 75% brightness
+        """
+        intensity = max(0.0, min(1.0, intensity))  # Clamp to 0.0-1.0
+        r, g, b = color
+        scaled_r = int(r * intensity)
+        scaled_g = int(g * intensity)
+        scaled_b = int(b * intensity)
+        self.fill_with_color((scaled_r, scaled_g, scaled_b))
+
+    def render_multi_color(self, colors: List[Tuple[int, int, int]]) -> None:
+        """
+        Render multiple colors (one per pixel, usually for zone preview).
+
+        Each LED gets assigned a different color from the colors list.
+        Useful for showing zone colors or multi-zone previews.
+
+        Args:
+            colors: List of RGB tuples, should be length 8 (truncated or padded as needed)
+
+        Example:
+            >>> zone_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+            >>> preview.render_multi_color(zone_colors)  # Partial fill, rest black
+        """
+        for i in range(self.count):
+            if i < len(colors):
+                r, g, b = colors[i]
+                physical_index = self._reverse_index(i)
+                self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
+            else:
+                physical_index = self._reverse_index(i)
+                self._pixel_strip.setPixelColor(physical_index, Color(0, 0, 0))
+        self._pixel_strip.show()
+
+    def render_pattern(self, pattern: List[Tuple[int, int, int]]) -> None:
+        """
+        Render custom pattern (alias for show_frame for API clarity).
+
+        Useful for custom animations or complex patterns.
+        Pattern is truncated or padded to 8 pixels.
+
+        Args:
+            pattern: List of RGB tuples representing desired pattern
+
+        Example:
+            >>> chase = [(255, 0, 0), (0, 0, 0), (255, 0, 0), (0, 0, 0), ...]
+            >>> preview.render_pattern(chase)
+        """
+        self.show_frame(pattern)

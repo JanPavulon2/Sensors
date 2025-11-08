@@ -140,5 +140,35 @@ class LogCategory(Enum):
     SYSTEM = auto()      # Startup, shutdown, errors
     TRANSITION = auto()  # LED state transitions
     EVENT = auto()       # Event bus events and handling
-    
+
     RENDER_ENGINE = auto()
+
+
+class FramePriority(Enum):
+    """
+    Frame priority levels (higher value = higher priority)
+
+    Used by FrameManager to select which frame to render when multiple
+    sources provide frames simultaneously.
+    """
+    IDLE = 0           # No active source (black screen fallback)
+    MANUAL = 10        # Manual static color settings
+    PULSE = 20         # Edit mode pulsing indicator
+    ANIMATION = 30     # Running animations
+    TRANSITION = 40    # Crossfades, mode switches (highest)
+    DEBUG = 50         # Debug overlays (for future use)
+
+
+class FrameSource(Enum):
+    """
+    Frame source identifiers for debugging and priority resolution
+
+    Helps identify which subsystem generated a frame.
+    """
+    IDLE = auto()           # No source (idle state)
+    STATIC = auto()         # Static color controller
+    PULSE = auto()          # Pulsing animation (edit mode)
+    ANIMATION = auto()      # AnimationEngine
+    TRANSITION = auto()     # TransitionService
+    PREVIEW = auto()        # Preview panel controller
+    DEBUG = auto()          # Debug overlay

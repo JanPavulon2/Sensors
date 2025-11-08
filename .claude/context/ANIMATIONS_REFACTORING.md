@@ -136,7 +136,7 @@ Hardware shows synchronized output
 
 ### 2.4 Dual Strip Rendering
 
-**Main Strip** (45 pixels):
+**Main Strip** (89 pixels):
 - Renders full animation/static frames
 - Separate queues per priority
 
