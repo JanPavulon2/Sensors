@@ -169,6 +169,7 @@ except Exception as e:
 # 1. XxxConfig (frozen dataclass) - from YAML
 # 2. XxxState (mutable dataclass) - from JSON
 # 3. XxxCombined (class) - combines config + state + operations
+# (Xxx here is placeholder for particular entity name, for example ZoneConfig + ZoneState = ZoneCombined)
 ```
 
 ✓ **Use Services for Business Logic**

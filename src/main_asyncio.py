@@ -40,6 +40,8 @@ from services import EventBus, DataAssembler, ZoneService, AnimationService, App
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
 
+from models.enums import AnimationID
+
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
 # ---------------------------------------------------------------------------
@@ -203,6 +205,16 @@ async def main():
     # STARTUP TRANSITION
     # ========================================================================
 
+    
+    # test manual frame-by-frame
+    # await led_controller.frame_playback_controller.preload_animation(AnimationID.SNAKE, speed=50, length=5)
+    # await led_controller.frame_playback_controller.show_current()
+    # await asyncio.sleep(1)
+    # await led_controller.frame_playback_controller.next_frame()
+    # await asyncio.sleep(1)
+    # await led_controller.frame_playback_controller.play(fps=10)
+    
+    
     log.info("Performing startup transition...")
     await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
 
