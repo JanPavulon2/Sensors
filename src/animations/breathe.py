@@ -7,10 +7,10 @@ Smooth fade in/out effect (breathing) for all zones synchronously.
 import asyncio
 import math
 import time
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, AsyncIterator
 from animations.base import BaseAnimation
 from models.domain.zone import ZoneCombined
-from typing import AsyncIterator, Tuple
+from models.enums import ZoneID
 
 class BreatheAnimation(BaseAnimation):
     """
@@ -42,24 +42,25 @@ class BreatheAnimation(BaseAnimation):
         self.color = color
         self.intensity = max(1, min(100, intensity))
 
-    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
+    async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
         """
         Run breathe animation
 
-        Yields (zone_name, r, g, b) for each zone on each frame.
+        Yields (zone_id, r, g, b) for each zone on each frame.
         """
         self.running = True
         start_time = time.time()
 
         while self.running:
-            # Recalculate parameters each iteration for live speed updates
-            frame_delay = self._calculate_frame_delay()
-
             # Calculate cycle duration based on speed
             # Speed 100 = 1s cycle, Speed 1 = 5s cycle
             min_cycle = 1.0
             max_cycle = 5.0
             cycle_duration = max_cycle - (self.speed / 100) * (max_cycle - min_cycle)
+
+            # Calculate frame delay for smooth animation (60 steps per cycle)
+            target_steps = 60
+            frame_delay = cycle_duration / target_steps
 
             elapsed = time.time() - start_time
 
@@ -104,13 +105,14 @@ class BreatheAnimation(BaseAnimation):
         start_time = time.time()
 
         while self.running:
-            # Recalculate parameters each iteration for live speed updates
-            frame_delay = self._calculate_frame_delay()
-
             # Calculate cycle duration based on speed
             min_cycle = 1.0
             max_cycle = 5.0
             cycle_duration = max_cycle - (self.speed / 100) * (max_cycle - min_cycle)
+
+            # Calculate frame delay for smooth animation (60 steps per cycle)
+            target_steps = 60
+            frame_delay = cycle_duration / target_steps
 
             elapsed = time.time() - start_time
 

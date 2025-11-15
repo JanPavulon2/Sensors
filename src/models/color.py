@@ -5,14 +5,13 @@ Handles color in multiple formats (HUE, PRESET, RGB) and automatic conversions.
 Uses ColorManager for preset data and utils.colors for conversion functions.
 """
 
-from enum import Enum, auto
 from .enums import ColorMode
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 from utils.colors import hue_to_rgb, rgb_to_hue, find_closest_preset_name
 
-
-
+if TYPE_CHECKING:
+    from managers import ColorManager
 
 @dataclass
 class Color:
@@ -68,7 +67,7 @@ class Color:
         return cls(_hue=hue % 360, mode=ColorMode.HUE)
 
     @classmethod
-    def from_preset(cls, preset_name: str, color_manager) -> 'Color':
+    def from_preset(cls, preset_name: str, color_manager: 'ColorManager') -> 'Color':
         """
         Create from preset name
 
@@ -158,7 +157,7 @@ class Color:
         new_hue = (current_hue + delta) % 360
         return Color.from_hue(new_hue)
 
-    def next_preset(self, delta: int, color_manager) -> 'Color':
+    def next_preset(self, delta: int, color_manager: 'ColorManager') -> 'Color':
         """
         Cycle to next/previous preset
 
@@ -182,7 +181,7 @@ class Color:
 
     # === MODE CONVERSIONS ===
 
-    def to_preset_mode(self, color_manager) -> 'Color':
+    def to_preset_mode(self, color_manager: 'ColorManager') -> 'Color':
         """
         Convert to closest preset
 
@@ -228,11 +227,11 @@ class Color:
         else:  # RGB
             return {
                 "mode": "RGB",
-                "rgb": list(self._rgb)
+                "rgb": self._rgb
             }
 
     @classmethod
-    def from_dict(cls, data: dict, color_manager) -> 'Color':
+    def from_dict(cls, data: dict, color_manager: 'ColorManager') -> 'Color':
         """
         Deserialize from state.json
 
@@ -251,6 +250,32 @@ class Color:
             return cls.from_preset(data["preset_name"], color_manager)
         else:  # RGB
             return cls.from_rgb(*data["rgb"])
+
+    # === BRIGHTNESS SCALING ===
+
+    @staticmethod
+    def apply_brightness(r: int, g: int, b: int, brightness: int) -> Tuple[int, int, int]:
+        """
+        Apply brightness scaling to RGB values.
+
+        Clamps brightness to 0-100 range and scales RGB values proportionally.
+
+        Args:
+            r, g, b: Color values (0-255)
+            brightness: Brightness percentage (0-100, will be clamped)
+
+        Returns:
+            (r, g, b) tuple scaled by brightness
+
+        Example:
+            r, g, b = Color.apply_brightness(255, 100, 0, 80)  # 80% brightness
+        """
+        brightness = max(0, min(100, brightness))
+        return (
+            int(r * brightness / 100),
+            int(g * brightness / 100),
+            int(b * brightness / 100),
+        )
 
     # === STRING REPRESENTATION ===
 

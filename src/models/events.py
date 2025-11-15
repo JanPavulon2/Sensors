@@ -7,9 +7,9 @@ All hardware inputs (encoders, buttons) are published as events.
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Generic, TypeVar
 import time
-from models.enums import EncoderSource, ButtonID
+from models.enums import EncoderSource, ButtonID, KeyboardSource
 
 
 class EventType(Enum):
@@ -18,6 +18,7 @@ class EventType(Enum):
     ENCODER_ROTATE = auto()
     ENCODER_CLICK = auto()
     BUTTON_PRESS = auto()
+    
     # Keyboard eventss
     KEYBOARD_KEYPRESS = auto() 
     
@@ -26,9 +27,10 @@ class EventType(Enum):
     MQTT_COMMAND = auto()
     SYSTEM_EVENT = auto()
 
+TSource = TypeVar("TSource", bound=Enum)
 
 @dataclass
-class Event:
+class Event(Generic[TSource]):
     """
     Base event class
 
@@ -39,13 +41,12 @@ class Event:
     - timestamp: float (when it happened)
     """
     type: EventType
-    source: Optional[Enum]  # EncoderSource or ButtonID
+    source: TSource | None  # EncoderSource or ButtonID
     data: Dict[str, Any]
     timestamp: float
 
-
 @dataclass
-class EncoderRotateEvent(Event):
+class EncoderRotateEvent(Event[EncoderSource]):
     """Encoder rotation event"""
 
     def __init__(self, source: EncoderSource, delta: int):
@@ -66,9 +67,8 @@ class EncoderRotateEvent(Event):
         """Rotation direction (-1 or +1)"""
         return self.data["delta"]
 
-
 @dataclass
-class EncoderClickEvent(Event):
+class EncoderClickEvent(Event[EncoderSource]):
     """Encoder button click event"""
 
     def __init__(self, source: EncoderSource):
@@ -83,34 +83,34 @@ class EncoderClickEvent(Event):
             timestamp=time.time()
         )
 
-
 @dataclass
-class ButtonPressEvent(Event):
+class ButtonPressEvent(Event[ButtonID]):
     """Button press event"""
 
-    def __init__(self, button_id: ButtonID):
+    def __init__(self, source: ButtonID):
         """
         Args:
             button_id: ButtonID.BTN1, ButtonID.BTN2, ButtonID.BTN3, or ButtonID.BTN4
         """
         super().__init__(
             type=EventType.BUTTON_PRESS,
-            source=button_id,
+            source=source,
             data={},
             timestamp=time.time()
         )
 
-class KeyboardKeyPressEvent(Event):
+@dataclass
+class KeyboardKeyPressEvent(Event[KeyboardSource]):
     """Keyboard key press event"""
 
-    def __init__(self, key: str, modifiers: Optional[List[str]] = None):
+    def __init__(self, key: str, modifiers: Optional[List[str]] = None, source: KeyboardSource = KeyboardSource.STDIN):
         """
         Args:
             key: The key that was pressed (e.g., 'a', 'Enter', etc.)
         """
         super().__init__(
             type=EventType.KEYBOARD_KEYPRESS,
-            source=None,
+            source=source,
             data={"key": key, "modifiers": modifiers or []},
             timestamp=time.time()
         )

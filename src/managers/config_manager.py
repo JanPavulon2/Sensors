@@ -8,11 +8,17 @@ Loads modular YAML files and initializes sub-managers.
 import yaml
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, TYPE_CHECKING
 from utils.logger import get_logger, get_category_logger, LogLevel, LogCategory
 from models.enums import ZoneID
 from models.domain.zone import ZoneConfig
 from utils.enum_helper import EnumHelper
+
+if TYPE_CHECKING:
+    from managers.hardware_manager import HardwareManager
+    from managers.animation_manager import AnimationManager
+    from managers.color_manager import ColorManager
+    from managers.parameter_manager import ParameterManager
 
 log = get_category_logger(LogCategory.CONFIG)
 
@@ -51,11 +57,12 @@ class ConfigManager:
         self.factory_defaults_path = Path(defaults_path)
         self.data = {}
 
-        # Sub-managers (initialized in load())
-        self.hardware_manager = None
-        self.animation_manager = None
-        self.color_manager = None
-        self.parameter_manager = None
+        # Sub-managers (initialized in load() with guaranteed non-None values)
+        # Type hints declare non-Optional - load() MUST initialize these
+        self.hardware_manager: 'HardwareManager'
+        self.animation_manager: 'AnimationManager'
+        self.color_manager: 'ColorManager'
+        self.parameter_manager: 'ParameterManager'
 
     def load(self):
         """
@@ -151,13 +158,10 @@ class ConfigManager:
         from managers.color_manager import ColorManager
         from managers.parameter_manager import ParameterManager
 
-        # HardwareManager - inject merged config data
-        try:
-            self.hardware_manager = HardwareManager()
-            self.hardware_manager.data = self.data
-            self.hardware_manager.print_summary()
-        except Exception as ex:
-            log("Failed to initialize HardwareManager", LogLevel.WARN, error=str(ex))
+        # HardwareManager - always initialize (required)
+        self.hardware_manager = HardwareManager()
+        self.hardware_manager.data = self.data
+        self.hardware_manager.print_summary()
 
         # Verify zones exist in config
         zones_config = self.data.get("zones", [])
@@ -166,14 +170,15 @@ class ConfigManager:
         else:
             log(f"Loaded {len(zones_config)} zone definitions from config")
 
-        # AnimationManager - inject merged config data (no file loading)
+        # AnimationManager - always initialize with fallback to empty
         try:
             self.animation_manager = AnimationManager(self.data)
             self.animation_manager.print_summary()
         except Exception as ex:
-            log("Failed to initialize AnimationManager", LogLevel.WARN, error=str(ex))
+            log("Failed to initialize AnimationManager, using empty", LogLevel.WARN, error=str(ex))
+            self.animation_manager = AnimationManager({})
 
-        # ColorManager - inject merged config data (no file loading)
+        # ColorManager - always initialize with fallback to empty
         try:
             color_data = {
                 'presets': self.data.get('presets', {}),
@@ -181,14 +186,16 @@ class ConfigManager:
             }
             self.color_manager = ColorManager(color_data)
         except Exception as ex:
-            log("Failed to initialize ColorManager", LogLevel.WARN, error=str(ex))
+            log("Failed to initialize ColorManager, using empty", LogLevel.WARN, error=str(ex))
+            self.color_manager = ColorManager({})
 
-        # ParameterManager - inject merged config data (no file loading)
+        # ParameterManager - always initialize with fallback to empty
         try:
             self.parameter_manager = ParameterManager(self.data)
             self.parameter_manager.print_summary()
         except Exception as ex:
-            log("Failed to initialize ParameterManager", LogLevel.WARN, error=str(ex))
+            log("Failed to initialize ParameterManager, using empty", LogLevel.WARN, error=str(ex))
+            self.parameter_manager = ParameterManager({})
 
     # ===== Zone Access API =====
 

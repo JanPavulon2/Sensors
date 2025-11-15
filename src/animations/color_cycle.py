@@ -36,6 +36,7 @@ class ColorCycleAnimation(BaseAnimation):
             (0, 0, 255),    # Blue
         ]
         self.current_index = 0
+        self._first_frame_rendered = False  # Track if we've completed first full frame
 
         log.debug("ColorCycleAnimation initialized (RGB test)")
 
@@ -49,15 +50,20 @@ class ColorCycleAnimation(BaseAnimation):
 
             log.debug(f"Cycle color {self.current_index + 1}/3: RGB({r},{g},{b})")
 
-            # Set all zones
+            # Set all zones for this frame
             for zone in self.active_zones:
                 yield (zone, r, g, b)
 
-            # Next color (wrap)
-            self.current_index = (self.current_index + 1) % len(self.colors)
+            # Fixed 3 second delay (skip on first frame for _get_first_frame())
+            if self._first_frame_rendered:
+                await asyncio.sleep(3.0)
+            else:
+                # First frame: short delay to allow engine to collect yields, then advance
+                await asyncio.sleep(0.05)
+                self._first_frame_rendered = True
 
-            # Fixed 3 second delay
-            await asyncio.sleep(3.0)
+            # Advance to next color AFTER sleep (so first frame stays on index 0)
+            self.current_index = (self.current_index + 1) % len(self.colors)
 
     async def run_preview(self, pixel_count: int = 8):
         """Preview panel - shows same color as main strip"""

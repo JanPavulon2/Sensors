@@ -57,11 +57,6 @@ class ColorSnakeAnimation(BaseAnimation):
         self.total_pixels = sum(self.zone_pixel_counts.values())
         self.current_position = 0
 
-        for name, start, end in zone_items:
-            pixel_count = end - start + 1
-            self.zone_pixel_counts[name] = pixel_count
-            self.total_pixels += pixel_count
-
         # Track previous lit pixels
         self.previous_pixels: List[Tuple[str, int]] = []
         
