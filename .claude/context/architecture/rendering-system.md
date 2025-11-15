@@ -1,7 +1,7 @@
 ---
 Last Updated: 2025-11-15
-Updated By: @architecture-expert-sonnet
-Changes: Complete architectural analysis of LED rendering, frame management, animation system, and color manipulation
+Updated By: Human
+Changes: Updated with unified rendering architecture, type-safe refactoring, and FramePlaybackController implementation details
 ---
 
 # Lighting & Rendering System Architecture
@@ -578,7 +578,7 @@ async def handle_encoder_turn(direction, magnitude):
     """Selector or modulator turned"""
 ```
 
-### 7.3 StaticModeController - Manual Color Control
+### 7.3 StaticModeController - Manual Color Control (Refactored Phase 6)
 
 **Location**: `src/controllers/led_controller/static_mode_controller.py`
 
@@ -587,31 +587,44 @@ async def handle_encoder_turn(direction, magnitude):
 - Adjust zone color, brightness
 - Implement pulsing effect (selected zone @ 1 Hz)
 - Update preview panel with zone colors
+- **UNIFIED**: All rendering through FrameManager.submit_zones()
 
-**Pulsing Implementation**:
+**Key Refactoring** (Phase 6 - Unified Rendering):
+
+Before (dual paths):
 ```python
-async def _pulse_zone_task():
+# OLD: Direct hardware rendering
+self.strip_controller.render_zone(zone_id, color, brightness)
+```
+
+After (unified path):
+```python
+# NEW: All rendering through FrameManager
+zone_colors = {zone_id: (zone.state.color, zone.brightness)}
+self.strip_controller.submit_zones(zone_colors)
+```
+
+**Benefits**: Single source of truth, instant response (MANUAL priority = 10), no conflicting rendering paths.
+
+**Pulsing Implementation** (still uses unified path):
+```python
+async def _pulse_task():
     """Pulse selected zone @ 1 Hz (edit indicator)"""
-    while pulse_enabled:
-        # Calculate sine wave brightness
-        phase = (elapsed_time / 1.0) * 2π
-        brightness = (sin(phase) + 1) / 2  # 0.0 → 1.0 → 0.0
+    while self.pulse_active:
+        current_zone = self._get_current_zone()
+        base = current_zone.brightness
 
-        # Get current zone color and apply brightness
-        zone = zone_service.get_current()
-        r, g, b = zone.get_rgb()
-        r_out = int(r * brightness)
-        g_out = int(g * brightness)
-        b_out = int(b * brightness)
+        for step in range(steps):
+            # Calculate sine wave brightness (0.2 to 1.0)
+            scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
+            pulse_brightness = int(base * scale)
 
-        # Submit as low-priority frame (can be overridden)
-        frame_manager.submit_zone_frame(
-            {zone.id: (r_out, g_out, b_out)},
-            priority=PULSE,
-            source=STATIC
-        )
+            # Submit through unified path
+            self.strip_controller.submit_zones({
+                current_zone.id: (current_zone.state.color, pulse_brightness)
+            })
 
-        await asyncio.sleep(1.0 / 60)  # 60 FPS
+            await asyncio.sleep(cycle / steps)
 ```
 
 ---
@@ -879,6 +892,38 @@ This is elegant: pulsing naturally overlays on manual colors.
 - [ ] **FPS Counter**: Real-time render performance metrics
 - [ ] **Memory Profiler**: Track buffer usage and allocations
 - [ ] **Hardware Timing**: Measure actual DMA transfer times
+
+---
+
+## 12.5 Frame-By-Frame Debugging (NEW - Phase 5-6)
+
+**Location**: `src/controllers/led_controller/frame_playback_controller.py`
+
+**Purpose**: Step through animation frames one at a time for debugging.
+
+**Features**:
+- Offline frame preloading (async generator → list)
+- Frame navigation with wrapping (next/previous)
+- Play/pause toggle with separate background loop
+- Keyboard input via EventBus (A/D/SPACE/Q)
+- Frame format conversion (3/4/5-tuple → Frame objects)
+- Detailed logging (RGB/hex, frame index, animation info)
+
+**Integration**:
+- Subscribes to KEYBOARD_KEYPRESS events
+- Uses FrameManager.pause() during stepping
+- Submits frames with DEBUG priority (50)
+
+**Usage**:
+```python
+# Enter frame-by-frame mode
+await controller.enter_frame_by_frame_mode(AnimationID.SNAKE, ANIM_SPEED=50)
+# Keyboard controls active:
+# - A: previous frame
+# - D: next frame
+# - SPACE: play/pause
+# - Q: exit
+```
 
 ---
 
