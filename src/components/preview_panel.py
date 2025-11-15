@@ -1,12 +1,15 @@
 """
-Preview Panel Component
+Preview Panel Component - Hardware Abstraction Layer (Layer 1)
 
 CJMCU-2812-8 module - 8 RGB LEDs for previewing colors and animations.
 Hardware abstraction layer for WS2811 strip (GPIO 19, GRB color order).
+
+Registers WS281x GPIO pin via GPIOManager for conflict detection.
 """
 
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
+from infrastructure import GPIOManager
 
 
 class PreviewPanel:
@@ -24,18 +27,27 @@ class PreviewPanel:
 
     Args:
         gpio: GPIO pin number
+        gpio_manager: GPIOManager instance for pin registration
         count: Number of LEDs (default 8)
         color_order: Color order constant from ws module (default GRB)
         brightness: Global hardware brightness 0-255 (default 32)
 
     Example:
-        >>> preview = PreviewPanel(gpio=19)
+        >>> gpio_manager = GPIOManager()
+        >>> preview = PreviewPanel(gpio=19, gpio_manager=gpio_manager)
         >>> preview.show_color((255, 0, 0))  # All LEDs red
         >>> preview.show_bar(75, 100, (0, 255, 0))  # 6 LEDs green (75% of 8)
         >>> preview.clear()
     """
 
-    def __init__(self, gpio: int, count: int = 8, color_order=None, brightness: int = 32):
+    def __init__(
+        self,
+        gpio: int,
+        gpio_manager: GPIOManager,
+        count: int = 8,
+        color_order=None,
+        brightness: int = 32
+    ):
         from rpi_ws281x import ws
 
         if color_order is None:
@@ -44,11 +56,17 @@ class PreviewPanel:
         self.count = count
         self.brightness = brightness
 
+        # Register WS281x pin via GPIOManager (tracking only, no setup needed)
+        gpio_manager.register_ws281x(
+            pin=gpio,
+            component=f"PreviewPanel(GPIO{gpio},{count}px)"
+        )
+
         # Private WS2811 strip - use public methods instead of direct access
-        self._strip = PixelStrip(
+        self._pixel_strip = PixelStrip(
             count, gpio, 800000, 10, False, brightness, 1, color_order
         )
-        self._strip.begin()
+        self._pixel_strip.begin()
 
     def _reverse_index(self, index: int) -> int:
         """
@@ -78,7 +96,28 @@ class PreviewPanel:
         """
         if 0 <= index < self.count:
             physical_index = self._reverse_index(index)
-            self._strip.setPixelColor(physical_index, Color(r, g, b))
+            self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
+
+    def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
+        """
+        Set color for a pixel by absolute strip index (used by TransitionService).
+
+        Args:
+            pixel_index: Absolute pixel index (0 to pixel_count-1)
+            r: Red value (0-255)
+            g: Green value (0-255)
+            b: Blue value (0-255)
+            show: If True, immediately update strip
+
+        Note:
+            This is a low-level method for TransitionService.
+            For zone-based control, use set_zone_color() or set_pixel_color().
+        """
+        if 0 <= pixel_index < self.count:
+            color = Color(r, g, b)
+            self._pixel_strip.setPixelColor(pixel_index, color)
+            if show:
+                self._pixel_strip.show()
 
     def show(self) -> None:
         """
@@ -86,7 +125,7 @@ class PreviewPanel:
 
         Call this after setting individual pixels to make them visible.
         """
-        self._strip.show()
+        self._pixel_strip.show()
 
     def show_frame(self, frame: List[Tuple[int, int, int]]) -> None:
         """
@@ -105,8 +144,8 @@ class PreviewPanel:
         """
         for i, (r, g, b) in enumerate(frame[:self.count]):
             physical_index = self._reverse_index(i)
-            self._strip.setPixelColor(physical_index, Color(r, g, b))
-        self._strip.show()
+            self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
+        self._pixel_strip.show()
 
     def fill_with_color(self, rgb: Tuple[int, int, int]) -> None:
         """
@@ -120,8 +159,8 @@ class PreviewPanel:
         """
         r, g, b = rgb
         for i in range(self.count):
-            self._strip.setPixelColor(i, Color(r, g, b))
-        self._strip.show()
+            self._pixel_strip.setPixelColor(i, Color(r, g, b))
+        self._pixel_strip.show()
 
     def show_bar(self, value: int, max_value: int = 100,
                  color: Tuple[int, int, int] = (255, 255, 255)) -> None:
@@ -147,10 +186,10 @@ class PreviewPanel:
         for i in range(self.count):
             physical_index = self._reverse_index(i)
             if i < filled:
-                self._strip.setPixelColor(physical_index, Color(*color))
+                self._pixel_strip.setPixelColor(physical_index, Color(*color))
             else:
-                self._strip.setPixelColor(physical_index, Color(0, 0, 0))
-        self._strip.show()
+                self._pixel_strip.setPixelColor(physical_index, Color(0, 0, 0))
+        self._pixel_strip.show()
 
     def get_frame(self) -> List[Tuple[int, int, int]]:
         """
@@ -169,7 +208,7 @@ class PreviewPanel:
         frame = []
         for i in range(self.count):
             physical_index = self._reverse_index(i)
-            color_int = self._strip.getPixelColor(physical_index)
+            color_int = self._pixel_strip.getPixelColor(physical_index)
             # Extract RGB from 32-bit color value (format: 0x00RRGGBB for RGB or varies by order)
             # For GRB order, getPixelColor returns packed GRB but we need RGB
             # rpi_ws281x uses internal 32-bit format, need to unpack correctly
@@ -186,5 +225,84 @@ class PreviewPanel:
         Sets all LEDs to black (0, 0, 0) and displays.
         """
         for i in range(self.count):
-            self._strip.setPixelColor(i, Color(0, 0, 0))
-        self._strip.show()
+            self._pixel_strip.setPixelColor(i, Color(0, 0, 0))
+        self._pixel_strip.show()
+
+    # === High-Level Rendering Methods (Phase 2 Extensions) ===
+
+    def render_solid(self, color: Tuple[int, int, int]) -> None:
+        """
+        Render solid color (all pixels same color).
+
+        Shorthand for fill_with_color(), kept for API consistency with refactoring plan.
+
+        Args:
+            color: RGB tuple (r, g, b), each value 0-255
+
+        Example:
+            >>> preview.render_solid((255, 0, 0))  # All red
+        """
+        self.fill_with_color(color)
+
+    def render_gradient(
+        self, color: Tuple[int, int, int], intensity: float
+    ) -> None:
+        """
+        Render color with intensity modulation (0.0-1.0).
+
+        Scales RGB values by intensity factor. Useful for previewing brightness changes.
+
+        Args:
+            color: Base RGB color (r, g, b), each value 0-255
+            intensity: Brightness multiplier, 0.0 (black) to 1.0 (full color)
+
+        Example:
+            >>> preview.render_gradient((255, 100, 0), 0.5)  # 50% brightness
+            >>> preview.render_gradient((0, 255, 0), 0.75)   # 75% brightness
+        """
+        intensity = max(0.0, min(1.0, intensity))  # Clamp to 0.0-1.0
+        r, g, b = color
+        scaled_r = int(r * intensity)
+        scaled_g = int(g * intensity)
+        scaled_b = int(b * intensity)
+        self.fill_with_color((scaled_r, scaled_g, scaled_b))
+
+    def render_multi_color(self, colors: List[Tuple[int, int, int]]) -> None:
+        """
+        Render multiple colors (one per pixel, usually for zone preview).
+
+        Each LED gets assigned a different color from the colors list.
+        Useful for showing zone colors or multi-zone previews.
+
+        Args:
+            colors: List of RGB tuples, should be length 8 (truncated or padded as needed)
+
+        Example:
+            >>> zone_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+            >>> preview.render_multi_color(zone_colors)  # Partial fill, rest black
+        """
+        for i in range(self.count):
+            if i < len(colors):
+                r, g, b = colors[i]
+                physical_index = self._reverse_index(i)
+                self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
+            else:
+                physical_index = self._reverse_index(i)
+                self._pixel_strip.setPixelColor(physical_index, Color(0, 0, 0))
+        self._pixel_strip.show()
+
+    def render_pattern(self, pattern: List[Tuple[int, int, int]]) -> None:
+        """
+        Render custom pattern (alias for show_frame for API clarity).
+
+        Useful for custom animations or complex patterns.
+        Pattern is truncated or padded to 8 pixels.
+
+        Args:
+            pattern: List of RGB tuples representing desired pattern
+
+        Example:
+            >>> chase = [(255, 0, 0), (0, 0, 0), (255, 0, 0), (0, 0, 0), ...]
+            >>> preview.render_pattern(chase)
+        """
+        self.show_frame(pattern)

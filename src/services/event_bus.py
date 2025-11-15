@@ -8,20 +8,22 @@ Implements pub-sub pattern:
 """
 
 import asyncio
-from typing import Callable, List, Dict, Optional
+from typing import Callable, List, Dict, Optional, TypeVar, Any
 from dataclasses import dataclass
 from models.events import Event, EventType
-from utils.logger import get_logger, LogCategory, LogLevel
+from utils.logger2 import get_logger, LogCategory
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.EVENT)
+
+TEvent = TypeVar('TEvent', bound=Event)
 
 
 @dataclass
 class EventHandler:
     """Event handler registration"""
-    handler: Callable[[Event], None]
+    handler: Callable[[Any], None]  # Stored as Any - type erasure is necessary
     priority: int
-    filter_fn: Optional[Callable[[Event], bool]]
+    filter_fn: Optional[Callable[[Any], bool]]  # Type erasure necessary here too
 
 
 class EventBus:
@@ -65,9 +67,9 @@ class EventBus:
     def subscribe(
         self,
         event_type: EventType,
-        handler: Callable[[Event], None],
+        handler: Callable[[TEvent], None],
         priority: int = 0,
-        filter_fn: Optional[Callable[[Event], bool]] = None
+        filter_fn: Optional[Callable[[TEvent], bool]] = None
     ) -> None:
         """
         Subscribe to event type
@@ -75,10 +77,15 @@ class EventBus:
         Args:
             event_type: Which events to listen for
             handler: Function to call (can be async or sync)
+                     Can be strongly typed to specific event type (e.g., KeyboardKeyPressEvent)
             priority: Execution priority (higher = called first, default: 0)
             filter_fn: Optional filter (return True = handle, False = skip)
 
         Example:
+            # Strongly typed handler
+            def _on_keyboard(event: KeyboardKeyPressEvent) -> None:
+                print(f"Key: {event.key}")
+
             # Only handle selector rotations when edit mode is ON
             bus.subscribe(
                 EventType.ENCODER_ROTATE,
@@ -96,8 +103,7 @@ class EventBus:
         # Sort by priority (descending - highest first)
         self._handlers[event_type].sort(key=lambda h: h.priority, reverse=True)
 
-        log.debug(
-            LogCategory.SYSTEM,
+        log.info(
             "Event handler subscribed",
             event_type=event_type.name,
             handler=handler.__name__,
@@ -126,8 +132,7 @@ class EventBus:
             bus.add_middleware(log_middleware)
         """
         self._middleware.append(middleware)
-        log.debug(
-            LogCategory.SYSTEM,
+        log.info(
             "Middleware registered",
             middleware=middleware.__name__
         )
@@ -152,6 +157,11 @@ class EventBus:
             event = EncoderRotateEvent("selector", 1)
             await bus.publish(event)
         """
+        log.info(
+            "Event: ",
+            event_type=event.type.name
+        )
+        
         # Apply middleware pipeline
         for middleware in self._middleware:
             processed_event = middleware(event)
@@ -168,11 +178,10 @@ class EventBus:
         # Get handlers for this event type
         handlers = self._handlers.get(event.type, [])
         if not handlers:
-            log.debug(
-                LogCategory.SYSTEM,
+            log.info(
                 "No handlers for event",
                 event_type=event.type.name,
-                level=LogLevel.DEBUG
+                event_data=event.data
             )
             return
 
@@ -190,7 +199,6 @@ class EventBus:
                     handler_entry.handler(event)
             except Exception as e:
                 log.error(
-                    LogCategory.SYSTEM,
                     f"Event handler failed: {handler_entry.handler.__name__} for {event.type.name}",
                     exception=e
                 )

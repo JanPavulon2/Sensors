@@ -1,11 +1,13 @@
 """
-Button Component
+Button Component - Hardware Abstraction Layer (Layer 1)
 
-Simple button with debouncing.
+Simple button with debouncing. Registers GPIO pins via GPIOManager.
 """
 
 import RPi.GPIO as GPIO
 import time
+from infrastructure import GPIOManager
+from models.enums import GPIOPullMode
 
 
 class Button:
@@ -13,29 +15,35 @@ class Button:
     Single button with debouncing
 
     Args:
-        pin: GPIO pin number
-        debounce_time: Debounce time (seconds)
+        pin: BCM GPIO pin number
+        gpio_manager: GPIOManager instance for pin registration
+        debounce_time: Debounce time (seconds, default 0.3s)
 
     Example:
-        btn = Button(pin=24)
+        gpio_manager = GPIOManager()
+        btn = Button(pin=24, gpio_manager=gpio_manager)
 
         while True:
             if btn.is_pressed():
                 print("Button pressed!")
     """
 
-    def __init__(self, pin, debounce_time=0.3):
+    def __init__(self, pin: int, gpio_manager: GPIOManager, debounce_time: float = 0.3):
         self.pin = pin
         self.debounce_time = debounce_time
 
-        # Setup GPIO
-        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Register GPIO pin via manager (pull-up for buttons)
+        gpio_manager.register_input(
+            pin=pin,
+            component=f"Button({pin})",
+            pull_mode=GPIOPullMode.PULL_UP
+        )
 
         # State tracking
         self._last_state = GPIO.HIGH
         self._last_press_time = 0
 
-    def is_pressed(self):
+    def is_pressed(self) -> bool:
         """
         Check if button was pressed (with debouncing)
 

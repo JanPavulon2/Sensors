@@ -49,6 +49,7 @@ CATEGORY_COLORS = {
     LogCategory.ANIMATION: Colors.BRIGHT_YELLOW,
     LogCategory.ZONE: Colors.BRIGHT_GREEN,
     LogCategory.SYSTEM: Colors.BRIGHT_WHITE,
+    LogCategory.TRANSITION: Colors.MAGENTA,
 }
 
 # Level symbols
@@ -229,6 +230,10 @@ class Logger:
     def warning(self, category: LogCategory, message: str, **kwargs):
         """Log warning """
         self.log(category, message, LogLevel.WARN, **kwargs)
+    
+    def warn(self, category: LogCategory, message: str, **kwargs):
+        """Log warning """
+        self.log(category, message, LogLevel.WARN, **kwargs)
 
     def info(self, log_category: LogCategory, message: str, **kwargs):
         """Log info """
@@ -247,16 +252,16 @@ def get_logger() -> Logger:
     return _logger
 
 
-def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
-    """
-    Reconfigure global logger
+# def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
+#     """
+#     Reconfigure global logger
 
-    Args:
-        min_level: Minimum log level to display
-        use_colors: Enable ANSI color codes
-    """
-    global _logger
-    _logger = Logger(min_level=min_level, use_colors=use_colors)
+#     Args:
+#         min_level: Minimum log level to display
+#         use_colors: Enable ANSI color codes
+#     """
+#     global _logger
+#     _logger = Logger(min_level=min_level, use_colors=use_colors)
 
 class CategoryLogger:
     """Logger bound to a specific category with level methods"""

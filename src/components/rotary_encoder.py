@@ -1,13 +1,17 @@
 
 """
-Rotary Encoder Component
+Rotary Encoder Component - Hardware Abstraction Layer (Layer 1)
 
 Handles reading rotary encoder (CLK/DT pins) and button (SW pin).
 Provides simple interface: read() returns -1/0/1, is_pressed() returns bool.
+
+Registers all GPIO pins via GPIOManager.
 """
 
 import RPi.GPIO as GPIO
 import time
+from infrastructure import GPIOManager
+from models.enums import GPIOPullMode
 
 
 class RotaryEncoder:
@@ -15,13 +19,15 @@ class RotaryEncoder:
     Rotary encoder with built-in button
 
     Args:
-        clk: CLK pin (GPIO number)
-        dt: DT pin (GPIO number)
-        sw: SW pin (GPIO number) - button
-        debounce_time: Debounce time for button (seconds)
+        clk: CLK pin (BCM GPIO number)
+        dt: DT pin (BCM GPIO number)
+        sw: SW pin (BCM GPIO number) - button
+        gpio_manager: GPIOManager instance for pin registration
+        debounce_time: Debounce time for button (seconds, default 0.3s)
 
     Example:
-        encoder = RotaryEncoder(clk=5, dt=6, sw=13)
+        gpio_manager = GPIOManager()
+        encoder = RotaryEncoder(clk=5, dt=6, sw=13, gpio_manager=gpio_manager)
 
         while True:
             delta = encoder.read()
@@ -32,23 +38,42 @@ class RotaryEncoder:
                 print("Button pressed!")
     """
 
-    def __init__(self, clk, dt, sw, debounce_time=0.3):
+    def __init__(
+        self,
+        clk: int,
+        dt: int,
+        sw: int,
+        gpio_manager: GPIOManager,
+        debounce_time: float = 0.3
+    ):
         self.clk_pin = clk
         self.dt_pin = dt
         self.sw_pin = sw
         self.debounce_time = debounce_time
 
-        # Setup GPIO
-        GPIO.setup(clk, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(dt, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(sw, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Register GPIO pins via manager (pull-up for all encoder pins)
+        gpio_manager.register_input(
+            pin=clk,
+            component=f"RotaryEncoder({clk},{dt},{sw}).CLK",
+            pull_mode=GPIOPullMode.PULL_UP
+        )
+        gpio_manager.register_input(
+            pin=dt,
+            component=f"RotaryEncoder({clk},{dt},{sw}).DT",
+            pull_mode=GPIOPullMode.PULL_UP
+        )
+        gpio_manager.register_input(
+            pin=sw,
+            component=f"RotaryEncoder({clk},{dt},{sw}).SW",
+            pull_mode=GPIOPullMode.PULL_UP
+        )
 
         # State tracking
         self._last_clk = GPIO.input(clk)
         self._last_button_state = GPIO.HIGH
         self._last_button_time = 0
 
-    def read(self):
+    def read(self) -> int:
         """
         Read encoder rotation
 
@@ -69,12 +94,12 @@ class RotaryEncoder:
 
         return 0
 
-    def is_pressed(self):
+    def is_pressed(self) -> bool:
         """
         Check if button is pressed (with debouncing)
 
         Returns:
-            True if button was pressed (rising edge with debounce)
+            True if button was pressed (falling edge with debounce)
             False otherwise
         """
         current_state = GPIO.input(self.sw_pin)

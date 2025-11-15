@@ -1,6 +1,6 @@
 {
   "animations": {
-    "snake": {
+    "SNAKE": {
       "enabled": false,
       "parameters": {
         "ANIM_SPEED": 80,
@@ -8,7 +8,7 @@
         "ANIM_LENGTH": 5
       }
     },
-    "breathe": {
+    "BREATHE": {
       "enabled": false,
       "parameters": {
         "ANIM_SPEED": 50,
@@ -20,73 +20,72 @@
     "floor": {
       "color": {
         "mode": "HUE",
-        "hue": 120
+        "hue": 90
       },
       "brightness": 100
     },
     "left": {
       "color": {
         "mode": "HUE",
-        "hue": 330
+        "hue": 0
       },
       "brightness": 100
     },
     "top": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "magenta"
+        "mode": "HUE",
+        "hue": 320
       },
-      "brightness": 100
+      "brightness": 12.5
     },
     "right": {
       "color": {
-        "mode": "HUE",
-        "hue": 140
+        "mode": "PRESET",
+        "preset_name": "white"
       },
-      "brightness": 40
+      "brightness": 37.5
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "green"
+        "preset_name": "indigo"
       },
-      "brightness": 100
+      "brightness": 25.0
     },
     "lamp": {
       "color": {
         "mode": "HUE",
-        "hue": 180
+        "hue": 190
       },
-      "brightness": 100
+      "brightness": 12.5
     },
     "back": {
       "color": {
         "mode": "HUE",
         "hue": 264
       },
-      "brightness": 100
+      "brightness": 0
     },
     "desk": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "white"
       },
-      "brightness": 100
+      "brightness": 0
     }
   },
   "current_animation": {
-    "id": "COLOR_CYCLE",
-    "parameters": {
-      "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0
-    }
+    "id": null,
+    "parameters": {}
   },
-  "ui_session": {
+  "application": {
     "main_mode": "ANIMATION",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 6
+    "active_parameter": "ZONE_BRIGHTNESS",
+    "selected_zone_index": 5,
+    "frame_by_frame_mode": false,
+    "save_on_change": true
   }
 }

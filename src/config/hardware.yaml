@@ -20,6 +20,6 @@ leds:
     count: 8
     color_order: GRB
 
-  strip:
+  zone_strip:
     gpio: 18
     color_order: BRG

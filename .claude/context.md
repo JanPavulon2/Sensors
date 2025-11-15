@@ -65,7 +65,7 @@ src/
 
 ### 4. **Event-Driven Architecture (NEW - Pub-Sub Pattern)**
    - **EventBus** - Central event routing with pub-sub pattern
-   - Hardware events → `ControlModule` → `EventBus` (middleware) → `LEDController` (subscriber)
+   - Hardware events → `ControlPanel` → `EventBus` (middleware) → `LEDController` (subscriber)
    - Features:
      - Priority-based handler execution
      - Per-handler filtering
@@ -155,7 +155,7 @@ animation_service.adjust_parameter(AnimationID.SNAKE, ParamID.ANIM_SPEED, delta=
 
 2. **Event-Driven Architecture** (✅ Complete - October 2024)
    - ✅ EventBus infrastructure created (events.py, event_bus.py, middleware.py)
-   - ✅ ControlModule refactored (callbacks → events)
+   - ✅ ControlPanel refactored (callbacks → events)
    - ✅ LEDController integrated with event handlers
    - ✅ Hardware config updated (zone_selector → selector)
    - ✅ Comprehensive test suite (test_event_bus.py)

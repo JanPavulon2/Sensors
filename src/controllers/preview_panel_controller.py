@@ -10,6 +10,8 @@ from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
 from models import Color
+from models.enums import AnimationID
+from services.transition_service import TransitionService
 
 if TYPE_CHECKING:
     from animations.base import BaseAnimation
@@ -17,7 +19,7 @@ if TYPE_CHECKING:
 log = get_logger()
 
 
-class PreviewController:
+class PreviewPanelController:
     """
     Preview panel orchestration controller
 
@@ -41,16 +43,17 @@ class PreviewController:
         >>> controller.stop_animation_preview()
     """
 
-    def __init__(self, preview_panel: PreviewPanel):
+    def __init__(self, preview_panel: PreviewPanel, transition_service: TransitionService, parent_controller=None):
         self.preview_panel = preview_panel
+        self.transition_service = transition_service
+        self._parent_controller = parent_controller  # Parent LEDController reference for mode checking
         self._animation_task: Optional[asyncio.Task] = None
         self._current_animation: Optional['BaseAnimation'] = None
         self._animation_running = False
-        self._current_animation_id: Optional[str] = None  # Track which animation is running
+        self._current_animation_id: Optional[AnimationID] = None  # Track which animation is running
 
     # ===== STATIC DISPLAY METHODS =====
 
-    
     def fill_with_color(self, color: Color) -> None:
         if self._animation_running:
             # Stop synchronously without crossfade
@@ -124,7 +127,7 @@ class PreviewController:
 
     def _create_animation_instance(
         self,
-        animation_id: str,
+        animation_id: AnimationID,
         speed: int,
         **params
     ) -> Optional['BaseAnimation']:
@@ -153,7 +156,7 @@ class PreviewController:
         empty_zones = []
 
         # Animation factory mapping
-        if animation_id == "snake":
+        if animation_id == AnimationID.SNAKE:
             return SnakeAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -162,7 +165,7 @@ class PreviewController:
                 color=params.get('color')  # Backwards compat
             )
 
-        elif animation_id == "breathe":
+        elif animation_id == AnimationID.BREATHE:
             # For breathe preview, check if zone_colors provided (per-zone preview)
             zone_colors = params.get('zone_colors')
 
@@ -185,14 +188,14 @@ class PreviewController:
                 zone_colors=zone_colors  # Pass zone colors for per-zone preview
             )
 
-        elif animation_id == "color_fade":
+        elif animation_id == AnimationID.COLOR_FADE:
             return ColorFadeAnimation(
                 zones=empty_zones,
                 speed=speed,
                 start_hue=params.get('start_hue', 0)
             )
 
-        elif animation_id == "color_snake":
+        elif animation_id == AnimationID.COLOR_SNAKE:
             return ColorSnakeAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -201,16 +204,16 @@ class PreviewController:
                 hue_offset=params.get('hue_offset', 30)
             )
 
-        elif animation_id == "matrix":
-            return MatrixAnimation(
-                zones=empty_zones,
-                speed=speed,
-                hue=params.get('hue', 120),  # Default green
-                length=params.get('length', 5),
-                intensity=params.get('intensity', 100)
-            )
+        # elif animation_id == "matrix":
+        #     return MatrixAnimation(
+        #         zones=empty_zones,
+        #         speed=speed,
+        #         hue=params.get('hue', 120),  # Default green
+        #         length=params.get('length', 5),
+        #         intensity=params.get('intensity', 100)
+        #     )
         
-        elif animation_id == "color_cycle":
+        elif animation_id == AnimationID.COLOR_CYCLE:
             return ColorCycleAnimation(
                 zones=empty_zones,
                 speed=speed,
@@ -221,7 +224,7 @@ class PreviewController:
             # Unknown animation
             return None
 
-    def start_animation_preview(self, animation_id: str, speed: int = 50, use_crossfade: bool = True, **params) -> None:
+    def start_animation_preview(self, animation_id: AnimationID, speed: int = 50, use_crossfade: bool = True, **params) -> None:
         """
         Start animation preview using animation's run_preview() method
 
@@ -259,7 +262,7 @@ class PreviewController:
 
         self._start_animation_preview_internal(animation_id, speed, params)
 
-    async def _crossfade_to_new_animation(self, animation_id: str, speed: int, params: dict) -> None:
+    async def _crossfade_to_new_animation(self, animation_id: AnimationID, speed: int, params: dict) -> None:
         """
         Crossfade from current animation to new animation
 
@@ -309,7 +312,7 @@ class PreviewController:
 
         self._current_animation = None
 
-    def _start_animation_preview_internal(self, animation_id: str, speed: int, params: dict) -> None:
+    def _start_animation_preview_internal(self, animation_id: AnimationID, speed: int, params: dict) -> None:
         """Internal method to start animation preview (assumes no animation is running)"""
         self._current_animation_id = animation_id
 
@@ -466,3 +469,97 @@ class PreviewController:
                 self._current_animation = None
                 if self._animation_running:
                     self.preview_panel.clear()
+
+    def clear(self) -> None:
+        """Clear preview panel immediately"""
+        # if self._animation_running:
+        #     # Stop synchronously without crossfade
+        #     asyncio.create_task(self._stop_animation_without_crossfade())
+
+        self.preview_panel.clear()
+
+    # ===== POWER TOGGLE FADE SUPPORT =====
+
+    async def fade_out_for_power_off(self, duration_ms: int = 500, steps: int = 20):
+        """
+        Fade out preview panel to black (for power toggle).
+
+        Preview panel doesn't have TransitionService, so we do manual fade.
+        This is called by PowerToggleController during power off.
+
+        Args:
+            duration_ms: Total fade duration in milliseconds
+            steps: Number of fade steps
+        """
+        try:
+            current_frame = self.preview_panel.get_frame()
+            step_delay = duration_ms / 1000 / steps
+
+            for step in range(steps, -1, -1):
+                factor = step / steps
+                faded_frame = [
+                    (int(r * factor), int(g * factor), int(b * factor))
+                    for r, g, b in current_frame
+                ]
+                self.preview_panel.show_frame(faded_frame)
+                await asyncio.sleep(step_delay)
+
+            self.preview_panel.clear()
+            log.debug(LogCategory.TRANSITION, "Preview panel faded out")
+
+        except Exception as e:
+            log.log(LogCategory.TRANSITION, "Preview fade-out failed",
+                   level=LogLevel.WARN, error=str(e))
+
+    async def fade_in_for_power_on(self, duration_ms: int = 500, steps: int = 20):
+        """
+        Fade in preview panel from black to current state (for power toggle).
+
+        Builds target frame from current zone/animation state.
+        This is called by PowerToggleController during power on.
+
+        Args:
+            duration_ms: Total fade duration in milliseconds
+            steps: Number of fade steps
+        """
+        try:
+            # Import here to avoid circular dependency
+            from models.enums import MainMode
+
+            # Build target frame based on current mode
+            if hasattr(self, '_parent_controller'):
+                # If we have parent reference
+                parent = self._parent_controller
+                if parent.main_mode == MainMode.STATIC:
+                    # Static mode: show current zone color
+                    current_zone = parent.static_mode_controller._get_current_zone()
+                    r, g, b = current_zone.state.color.to_rgb()
+                    brightness = current_zone.brightness
+                    r = int(r * brightness / 100)
+                    g = int(g * brightness / 100)
+                    b = int(b * brightness / 100)
+                    target_frame = [(r, g, b)] * self.preview_panel.count
+                else:
+                    # Animation mode: get current preview frame
+                    target_frame = self.preview_panel.get_frame()
+            else:
+                # Fallback: use current frame (if animation is running)
+                target_frame = self.preview_panel.get_frame()
+
+            # Fade in from black to target
+            step_delay = duration_ms / 1000 / steps
+
+            for step in range(steps + 1):
+                factor = step / steps
+                faded_frame = [
+                    (int(r * factor), int(g * factor), int(b * factor))
+                    for r, g, b in target_frame
+                ]
+                self.preview_panel.show_frame(faded_frame)
+                await asyncio.sleep(step_delay)
+
+            log.debug(LogCategory.TRANSITION, "Preview panel faded in")
+
+        except Exception as e:
+            log.log(LogCategory.TRANSITION, "Preview fade-in failed",
+                   level=LogLevel.WARN, error=str(e))

@@ -10,6 +10,8 @@ from animations.base import BaseAnimation
 from utils.colors import hue_to_rgb
 from models.domain.zone import ZoneCombined
 from utils.logger import get_category_logger, LogCategory
+from models.domain import ZoneCombined
+from models.enums import ZoneID
 
 log = get_category_logger(LogCategory.ANIMATION)
 
@@ -52,23 +54,31 @@ class SnakeAnimation(BaseAnimation):
 
         # Build zone pixel map for navigation
         # Sort active zones by physical position (start index) not alphabetically
-        zone_items = [(name, start, end) for name, (start, end) in self.active_zones.items()]
+        # zone_items = [(zone_id, start, end) for zone_id, (start, end) in self.active_zones.items()]
+        zone_items = [(z.config.id, z.config.start_index, z.config.end_index) for z in zones]
         zone_items.sort(key=lambda x: x[1])
-        
-        self.zone_order = [name for name, _, _ in zone_items]
-        self.zone_pixel_counts = {name: (end - start + 1) for name, start, end in zone_items}
+
+        self.zone_order = [zone_id for zone_id, _, _ in zone_items]
+        self.zone_pixel_counts = {zone_id: (end - start + 1) for zone_id, start, end in zone_items}
         self.total_pixels = sum(self.zone_pixel_counts.values())
+
+        if self.total_pixels == 0:
+            raise ValueError(
+                f"SnakeAnimation requires at least one zone with pixels. "
+                f"Got {len(zones)} zones with total {self.total_pixels} pixels."
+            )
+
         self.current_position = 0
 
         # Track currently lit pixels to know which to turn off next frame
-        self.previous_pixels: List[Tuple[str, int]] = []
+        self.previous_pixels: List[Tuple[ZoneID, int]] = []
 
         log.debug(f"SnakeAnimation initialized",
             length=self.length,
             total_pixels=self.total_pixels,
             zones=len(self.zone_order))
         
-    def _get_pixel_location(self, absolute_position: int) -> Tuple[str, int]:
+    def _get_pixel_location(self, absolute_position: int) -> Tuple[ZoneID, int]:
         """
         Convert absolute pixel position to (zone_name, pixel_index_in_zone)
 
@@ -79,10 +89,10 @@ class SnakeAnimation(BaseAnimation):
             Tuple of (zone_name, pixel_index_within_zone)
         """
         accumulated = 0
-        for zone_name in self.zone_order:
-            zone_size = self.zone_pixel_counts[zone_name]
+        for zone_id in self.zone_order:
+            zone_size = self.zone_pixel_counts[zone_id]
             if absolute_position < accumulated + zone_size:
-                return zone_name, absolute_position - accumulated
+                return zone_id, absolute_position - accumulated
             accumulated += zone_size
         return self.zone_order[0], 0
 
@@ -100,7 +110,7 @@ class SnakeAnimation(BaseAnimation):
             # Use base class default behavior
             super().update_param(param, value)
 
-    async def run(self) -> AsyncIterator[Tuple[str, int, int, int] | Tuple[str, int, int, int, int]]:
+    async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int, int] | Tuple[str, int, int, int, int]]:
         """
         Run snake animation with smooth continuous motion
 
@@ -120,16 +130,16 @@ class SnakeAnimation(BaseAnimation):
             move_delay = max_delay - (self.speed / 100) * (max_delay - min_delay)
 
             # Determine which pixels should be on this frame
-            snake_pixels: List[Tuple[str, int, int, int, int]] = []
+            snake_pixels: List[Tuple[ZoneID, int, int, int, int]] = []
 
             for i in range(self.length):
                 pos = (self.current_position - i) % self.total_pixels
-                zone_name, pixel_index = self._get_pixel_location(pos)
+                zone_id, pixel_index = self._get_pixel_location(pos)
                 brightness_factor = max(0.0, 1.0 - i * 0.2)
                 r = int(self.color[0] * brightness_factor)
                 g = int(self.color[1] * brightness_factor)
                 b = int(self.color[2] * brightness_factor)
-                snake_pixels.append((zone_name, pixel_index, r, g, b))
+                snake_pixels.append((zone_id, pixel_index, r, g, b))
              
             
             # Determine which pixels to turn off (tail only)

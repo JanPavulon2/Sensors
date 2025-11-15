@@ -41,21 +41,21 @@ class TransitionConfig:
         ease_function: Optional easing function (t: 0.0-1.0) → (factor: 0.0-1.0)
 
     Examples:
-        >>> # Slow fade-in for app startup
-        >>> startup = TransitionConfig(
-        ...     type=TransitionType.FADE,
-        ...     duration_ms=1000,
-        ...     steps=20
-        ... )
-        >>>
-        >>> # Quick cut for animation switch
-        >>> anim_switch = TransitionConfig(
-        ...     type=TransitionType.CUT,
-        ...     duration_ms=100
-        ... )
-        >>>
-        >>> # Instant (no transition)
-        >>> instant = TransitionConfig(type=TransitionType.NONE)
+        # Slow fade-in for app startup
+        startup = TransitionConfig(
+            type=TransitionType.FADE,
+            duration_ms=1000,
+            steps=20
+        )
+        
+        # Quick cut for animation switch
+        anim_switch = TransitionConfig(
+            type=TransitionType.CUT,
+            duration_ms=100
+        )
+        
+        # Instant (no transition)
+        instant = TransitionConfig(type=TransitionType.NONE)
     """
 
     def __init__(
