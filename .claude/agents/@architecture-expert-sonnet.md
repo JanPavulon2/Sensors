@@ -1,7 +1,7 @@
 ---
 name: architecture-expert
 description: Elite software architecture advisor and code reviewer. Use PROACTIVELY for architectural decisions, code structure design, system organization, design patterns, and code reviews. Expert in Python async systems and LED control architecture.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Write, Edit
 model: sonnet
 ---
 
