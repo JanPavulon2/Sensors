@@ -60,7 +60,7 @@ class StaticModeController:
                 zone.config.id: (zone.state.color, zone.brightness)
                 for zone in self.zone_service.get_all()
             }
-            self.strip_controller.submit_zones(zone_colors)
+            self.strip_controller.render_zones(zone_colors)
             log.debug(LogCategory.SYSTEM, "STATIC: Rendering complete")
         else:
             log.debug(LogCategory.SYSTEM, "STATIC: Skipping render (first enter)")
@@ -111,7 +111,7 @@ class StaticModeController:
             zone = self.zone_service.get_zone(zone_id)
             # Only render if NOT pulsing (pulse task handles rendering)
             if not self.pulse_active:
-                self.strip_controller.submit_zones({zone_id: (zone.state.color, zone.brightness)})
+                self.strip_controller.render_zones({zone_id: (zone.state.color, zone.brightness)})
             log.zone("Adjusted brightness", zone=zone.config.display_name, brightness=zone.brightness)
 
         elif self.current_param == ParamID.ZONE_COLOR_HUE:
