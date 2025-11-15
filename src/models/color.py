@@ -227,7 +227,7 @@ class Color:
         else:  # RGB
             return {
                 "mode": "RGB",
-                "rgb": list(self._rgb)
+                "rgb": self._rgb
             }
 
     @classmethod

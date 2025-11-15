@@ -26,14 +26,14 @@ from models import Color
 from models.domain import ZoneCombined
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.frame import ZoneFrame
-from utils.logger import get_logger, LogCategory
+from utils.logger2 import get_logger, LogCategory
 from utils.enum_helper import EnumHelper
 from services.transition_service import TransitionService
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.ZONE)
 
 
 class ZoneStripController:
@@ -67,7 +67,7 @@ class ZoneStripController:
         self.zone_strip = zone_strip
         self.transition_service = transition_service
         self.frame_manager = frame_manager
-        log.info(LogCategory.SYSTEM, "ZoneStripController initialized")
+        log.info("ZoneStripController initialized")
 
     # -----------------------------------------------------------------------
     # Rendering
@@ -95,6 +95,7 @@ class ZoneStripController:
             source=FrameSource.STATIC,
             ttl=1.0
         )
+        
         await self.frame_manager.submit_zone_frame(frame)
 
     def render_zone(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
@@ -119,7 +120,7 @@ class ZoneStripController:
 
         zone_id_str = zone_id.name
         self.zone_strip.set_zone_color(zone_id_str, r, g, b)
-        log.debug(LogCategory.SYSTEM, f"Rendered zone {zone_id_str}: RGB({r},{g},{b}) @ {brightness}%")
+        log.debug(f"Rendered zone {zone_id_str}: RGB({r},{g},{b}) @ {brightness}%")
 
     def render_zone_combined(self, zone: ZoneCombined) -> None:
         """
@@ -161,7 +162,7 @@ class ZoneStripController:
 
         # Set all zones at once (efficient - single show() call)
         self.zone_strip.set_multiple_zones(colors_dict)
-        log.debug(LogCategory.ZONE, f"Rendered {len(zone_states)} zones (batch)")
+        log.debug(f"Rendered {len(zone_states)} zones (batch)")
 
     # -----------------------------------------------------------------------
     # Power & Clear
@@ -172,7 +173,7 @@ class ZoneStripController:
         Turn off all LEDs (set all to black)
         """
         self.zone_strip.clear()
-        log.debug(LogCategory.ZONE, "Cleared all zones")
+        log.debug("Cleared all zones")
 
     def power_on(self, zone_states: Dict[ZoneID, Tuple[Color, int]]) -> None:
         """
@@ -185,7 +186,7 @@ class ZoneStripController:
             zone_states: Dict mapping ZoneID to (Color, brightness) tuples
         """
         self.render_all_zones(zone_states)
-        log.info(LogCategory.ZONE, "Power ON - restored all zones")
+        log.info("Power ON - restored all zones")
 
     def power_off(self) -> None:
         """
@@ -195,7 +196,7 @@ class ZoneStripController:
         entering power-off state.
         """
         self.clear_all()
-        log.info(LogCategory.ZONE, "Power OFF - cleared all zones")
+        log.info("Power OFF - cleared all zones")
 
     # -----------------------------------------------------------------------
     # Brightness-only updates
@@ -229,7 +230,7 @@ class ZoneStripController:
         
         #await self.transition_service.fade_out(current_frame, config)
         await self.transition_service.fade_out(config)
-        log.info(LogCategory.TRANSITION, f"Faded out all zones ({config.duration_ms}ms)")
+        log.info(f"Faded out all zones ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)
 
     async def fade_in_all(self, target_frame, config) -> None:
         """
@@ -240,7 +241,7 @@ class ZoneStripController:
             config: TransitionConfig
         """
         await self.transition_service.fade_in(target_frame, config)
-        log.info(LogCategory.TRANSITION, f"Faded in all zones ({config.duration_ms}ms)")
+        log.info(f"Faded in all zones ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)
 
     async def startup_fade_in(self, zone_service, config) -> None:
         """
@@ -264,4 +265,4 @@ class ZoneStripController:
 
         # Fade in from black
         await self.transition_service.fade_in(target_frame, config)
-        log.info(LogCategory.TRANSITION, f"Startup fade-in complete ({config.duration_ms}ms)")
+        log.info(f"Startup fade-in complete ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)

@@ -24,7 +24,7 @@ from services import AnimationService
 from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
 from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource
-from models.frame import Frame, ZoneFrame, PixelFrame
+from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
 from components import ZoneStrip
 
@@ -434,6 +434,25 @@ class AnimationEngine:
                 f"AnimationEngine: run_loop stopped after {frame_count} frames ({self.current_id})"
             )
 
+    def create_animation_instance(self, animation_id: AnimationID, **params):
+        """
+        Create (but do not start) an animation instance.
+        Used for offline preview or frame-by-frame playback.
+        """
+        if animation_id not in self.ANIMATIONS:
+            raise ValueError(f"Unknown animation ID: {animation_id}")
+
+        anim_class = self.ANIMATIONS[animation_id]
+
+        # Convert enum keys to str if needed
+        safe_params = self.convert_params(params)
+
+        anim = anim_class(
+            zones=self.zones,
+            excluded_zones=[],
+            **safe_params
+        )
+        return anim
         
     def convert_params(self, params: dict) -> dict:
         """

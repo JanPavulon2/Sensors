@@ -6,9 +6,9 @@ Coordinates between static, animation, and lamp/power modes.
 import asyncio
 from typing import TYPE_CHECKING
 from animations.engine import AnimationEngine
-from models.enums import MainMode, ButtonID, EncoderSource
+from models.enums import MainMode, ButtonID, EncoderSource, AnimationID
 from models.events import EventType
-from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
+from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
 from engine import FrameManager
 
@@ -16,6 +16,7 @@ from controllers.led_controller.static_mode_controller import StaticModeControll
 from controllers.led_controller.animation_mode_controller import AnimationModeController
 from controllers.led_controller.lamp_white_mode_controller import LampWhiteModeController
 from controllers.led_controller.power_toggle_controller import PowerToggleController
+from controllers.led_controller.frame_playback_controller import FramePlaybackController
 
 if TYPE_CHECKING:
     from controllers.preview_panel_controller import PreviewPanelController
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
     from managers import ConfigManager
     from infrastructure import GPIOManager
     from services.event_bus import EventBus
+    from engine.frame_manager import FrameManager
     
 log = get_logger()
 
@@ -48,7 +50,7 @@ class LEDController:
         app_state_service: "ApplicationStateService",
         preview_panel_controller: "PreviewPanelController",
         zone_strip_controller: "ZoneStripController",
-        frame_manager: "FrameManager" = None
+        frame_manager: "FrameManager"
     ):
         self.config_manager = config_manager
         self.event_bus = event_bus
@@ -59,9 +61,6 @@ class LEDController:
         self.preview_panel_controller = preview_panel_controller
         self.zone_strip_controller = zone_strip_controller
 
-        # Use provided frame manager or create new one
-        if frame_manager is None:
-            frame_manager = FrameManager(fps=60)
         self.frame_manager = frame_manager
         self.frame_manager.add_main_strip(self.zone_strip_controller.zone_strip)
 
@@ -85,6 +84,11 @@ class LEDController:
         self.animation_mode_controller = AnimationModeController(self)
         self.lamp_white_mode = LampWhiteModeController(self)
         self.power_toggle = PowerToggleController(self)
+        self.frame_playback_controller = FramePlaybackController(
+            frame_manager=self.frame_manager,
+            animation_engine=self.animation_engine,
+            event_bus=self.event_bus
+        )
         
         # Register event handlers
         self._register_events()
@@ -92,7 +96,6 @@ class LEDController:
         # Initialize zones based on current mode
         self._enter_mode(self.main_mode)
 
-        # NOTE: FrameManager is started in main_asyncio.py after all initialization
 
         log.info(LogCategory.SYSTEM, "LEDController initialized")
 
@@ -107,6 +110,45 @@ class LEDController:
         else:
             self.animation_mode_controller.enter_mode()
 
+    async def start_frame_by_frame_debugging(self, animation_id: AnimationID = None, **params):
+        """
+        Start frame-by-frame debugging mode for animation.
+
+        Allows stepping through animation frames one at a time using keyboard:
+        - A: Previous frame
+        - D: Next frame
+        - SPACE: Play/Pause animation playback
+        - Q: Exit frame-by-frame mode
+
+        Args:
+            animation_id: AnimationID to debug (defaults to current animation)
+            **params: Animation parameters to override (e.g., ANIM_SPEED=50)
+
+        Returns:
+            When user presses Q to exit frame-by-frame mode
+
+        Example:
+            await led_controller.start_frame_by_frame_debugging(
+                AnimationID.SNAKE,
+                ANIM_SPEED=50
+            )
+        """
+        log.info(
+            LogCategory.SYSTEM,
+            f"Starting frame-by-frame debugging mode"
+        )
+
+        # Use current animation if not specified
+        if animation_id is None:
+            current_anim = self.animation_service.get_current()
+            if not current_anim:
+                log.warn(LogCategory.SYSTEM, "No animation selected for frame-by-frame debugging")
+                return
+            animation_id = current_anim.config.id
+
+        # Enter frame-by-frame mode (blocks until user presses Q)
+        await self.frame_playback_controller.enter_frame_by_frame_mode(animation_id, **params)
+
     # ------------------------------------------------------------------
     # EVENT BUS SUBSCRIPTIONS
     # ------------------------------------------------------------------
@@ -118,6 +160,8 @@ class LEDController:
         self.event_bus.subscribe(EventType.ENCODER_CLICK, self._handle_encoder_click)
 
         self.event_bus.subscribe(EventType.BUTTON_PRESS, self._handle_button)
+
+        self.event_bus.subscribe(EventType.KEYBOARD_KEYPRESS, self._handle_keyboard_keypress)
 
         log.info(LogCategory.SYSTEM, "LEDController subscribed to EventBus")
         
@@ -147,7 +191,18 @@ class LEDController:
             asyncio.create_task(self.power_toggle.toggle())
         elif btn == ButtonID.BTN4:
             asyncio.create_task(self._toggle_main_mode())
-            
+
+    def _handle_keyboard_keypress(self, e: KeyboardKeyPressEvent):
+        """Handle keyboard key presses for debug features."""
+        key = e.key.upper()
+        if key == 'F':
+            log.info(LogCategory.SYSTEM, "Entering frame-by-frame mode (F pressed)")
+            asyncio.create_task(self._enter_frame_by_frame_mode_async())
+
+    async def _enter_frame_by_frame_mode_async(self):
+        """Async wrapper to enter frame-by-frame mode."""
+        await self.start_frame_by_frame_debugging()
+
     # ------------------------------------------------------------------
     # ACTIONS (DISPATCH)
     # ------------------------------------------------------------------

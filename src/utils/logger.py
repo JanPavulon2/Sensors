@@ -252,16 +252,16 @@ def get_logger() -> Logger:
     return _logger
 
 
-def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
-    """
-    Reconfigure global logger
+# def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
+#     """
+#     Reconfigure global logger
 
-    Args:
-        min_level: Minimum log level to display
-        use_colors: Enable ANSI color codes
-    """
-    global _logger
-    _logger = Logger(min_level=min_level, use_colors=use_colors)
+#     Args:
+#         min_level: Minimum log level to display
+#         use_colors: Enable ANSI color codes
+#     """
+#     global _logger
+#     _logger = Logger(min_level=min_level, use_colors=use_colors)
 
 class CategoryLogger:
     """Logger bound to a specific category with level methods"""

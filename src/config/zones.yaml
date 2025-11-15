@@ -46,19 +46,19 @@ zones:
     enabled: true
     order: 6
 
-  - id: DESK
-    name: Desk
-    tag: desk
-    pixel_count: 26      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-    enabled: true
-    order: 7
-    reversed: false
+  # - id: DESK
+  #   name: Desk
+  #   tag: desk
+  #   pixel_count: 26      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+  #   enabled: true
+  #   order: 7
+  #   reversed: false
 
-  - id: BACK
-    name: Back
-    tag: back
-    pixel_count: 12      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-    enabled: true
-    order: 8
-    reversed: true
+  # - id: BACK
+  #   name: Back
+  #   tag: back
+  #   pixel_count: 12      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+  #   enabled: true
+  #   order: 8
+  #   reversed: true
 

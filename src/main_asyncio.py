@@ -27,7 +27,6 @@ import signal
 import asyncio
 from pathlib import Path
 
-# from utils.logger import get_logger, configure_logger
 from utils.logger2 import get_logger, configure_logger
 
 from models.enums import LogCategory, LogLevel
@@ -46,10 +45,10 @@ from models.enums import AnimationID
 # LOGGER SETUP
 # ---------------------------------------------------------------------------
 
-configure_logger(LogLevel.DEBUG)
 log = get_logger().for_category(LogCategory.SYSTEM)
 
 
+configure_logger(LogLevel.DEBUG)
 # ---------------------------------------------------------------------------
 # SHUTDOWN HANDLER
 # ---------------------------------------------------------------------------
@@ -150,7 +149,7 @@ async def main():
     # ========================================================================
 
     log.info("Initializing controllers...")
-    zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service)
+    zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service, frame_manager)
     preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
     control_panel_controller = ControlPanelController(control_panel, event_bus)
 
@@ -185,7 +184,7 @@ async def main():
 
     if frame_manager:
         log.info("Starting FrameManager render loop...")
-        await frame_manager.start()
+        asyncio.create_task(frame_manager.start())
         log.info("FrameManager running.")
     else:
         log.warn("⚠ No FrameManager found — animations may not render.")
@@ -204,16 +203,6 @@ async def main():
     # ========================================================================
     # STARTUP TRANSITION
     # ========================================================================
-
-    
-    # test manual frame-by-frame
-    # await led_controller.frame_playback_controller.preload_animation(AnimationID.SNAKE, speed=50, length=5)
-    # await led_controller.frame_playback_controller.show_current()
-    # await asyncio.sleep(1)
-    # await led_controller.frame_playback_controller.next_frame()
-    # await asyncio.sleep(1)
-    # await led_controller.frame_playback_controller.play(fps=10)
-    
     
     log.info("Performing startup transition...")
     await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)

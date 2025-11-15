@@ -85,11 +85,3 @@ class PreviewFrame(BaseFrame):
 # Type aliases for clarity
 MainStripFrame = FullStripFrame | ZoneFrame | PixelFrame
 AnyFrame = MainStripFrame | PreviewFrame
-
-# Backward compatibility: legacy Frame class (simple zone frame)
-@dataclass
-class Frame:
-    """Legacy frame class (zone_id + pixels). Use ZoneFrame for new code."""
-
-    zone_id: ZoneID
-    pixels: List[Tuple[int, int, int]]  # (r, g, b)

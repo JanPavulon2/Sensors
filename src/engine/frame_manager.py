@@ -17,11 +17,11 @@ rendering automatically falls back to lower priorities.
 
 import asyncio
 import time
-from typing import Dict, List, Optional, Tuple, Deque
+from typing import Dict, List, Optional, Deque
 from collections import deque
 
 from utils.logger2 import get_logger
-from models.enums import LogCategory, ZoneID, FramePriority, FrameSource
+from models.enums import LogCategory, FramePriority
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame, AnyFrame
@@ -112,7 +112,7 @@ class FrameManager:
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
 
-        log.debug(
+        log.info(
             "FrameManager initialized",
             fps=self.fps,
             timing=f"min={WS2811Timing.MIN_FRAME_TIME_MS:.2f}ms",
@@ -278,10 +278,8 @@ class FrameManager:
 
             # Select and render frames
             try:
-                main_frame = await self._select_highest_priority_frame(self.main_queues)
-                preview_frame = await self._select_highest_priority_frame(
-                    self.preview_queues
-                )
+                main_frame = await self._select_main_frame_by_priority()
+                preview_frame = await self._select_preview_frame_by_priority()
 
                 # Render atomically
                 if main_frame or preview_frame:
@@ -301,21 +299,40 @@ class FrameManager:
 
     # === Frame Selection ===
 
-    async def _select_highest_priority_frame(
-        self, queues: Dict[int, Deque[AnyFrame]]
-    ) -> Optional[AnyFrame]:
+    async def _select_main_frame_by_priority(self) -> Optional[MainStripFrame]:
         """
-        Select highest-priority non-expired frame from queues.
+        Select highest-priority non-expired frame from main queues.
 
         Priority order: DEBUG > TRANSITION > ANIMATION > PULSE > MANUAL > IDLE
 
         Returns:
-            Frame with highest priority, or None if all expired/empty
+            MainStripFrame with highest priority, or None if all expired/empty
         """
         async with self._lock:
             # Iterate from highest to lowest priority
-            for priority_value in sorted(queues.keys(), reverse=True):
-                queue = queues[priority_value]
+            for priority_value in sorted(self.main_queues.keys(), reverse=True):
+                queue = self.main_queues[priority_value]
+                while queue:
+                    frame = queue.popleft()
+                    if not frame.is_expired():
+                        return frame
+                    # Expired frame discarded, try next
+
+        return None
+
+    async def _select_preview_frame_by_priority(self) -> Optional[PreviewFrame]:
+        """
+        Select highest-priority non-expired frame from preview queues.
+
+        Priority order: DEBUG > TRANSITION > ANIMATION > PULSE > MANUAL > IDLE
+
+        Returns:
+            PreviewFrame with highest priority, or None if all expired/empty
+        """
+        async with self._lock:
+            # Iterate from highest to lowest priority
+            for priority_value in sorted(self.preview_queues.keys(), reverse=True):
+                queue = self.preview_queues[priority_value]
                 while queue:
                     frame = queue.popleft()
                     if not frame.is_expired():

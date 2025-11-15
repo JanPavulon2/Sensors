@@ -42,6 +42,10 @@ class EncoderSource(Enum):
     SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)
     MODULATOR = auto()  # Parameter value modulator encoder
 
+class KeyboardSource(Enum):
+    EVDEV = auto(),
+    STDIN = auto()
+    
 class ButtonID(Enum):
     """Button identifiers"""
     BTN1 = auto()  # Toggle edit mode

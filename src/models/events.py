@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Generic, TypeVar
 import time
-from models.enums import EncoderSource, ButtonID
+from models.enums import EncoderSource, ButtonID, KeyboardSource
 
 
 class EventType(Enum):
@@ -100,17 +100,17 @@ class ButtonPressEvent(Event[ButtonID]):
         )
 
 @dataclass
-class KeyboardKeyPressEvent(Event):
+class KeyboardKeyPressEvent(Event[KeyboardSource]):
     """Keyboard key press event"""
 
-    def __init__(self, key: str, modifiers: Optional[List[str]] = None):
+    def __init__(self, key: str, modifiers: Optional[List[str]] = None, source: KeyboardSource = KeyboardSource.STDIN):
         """
         Args:
             key: The key that was pressed (e.g., 'a', 'Enter', etc.)
         """
         super().__init__(
             type=EventType.KEYBOARD_KEYPRESS,
-            source=None,
+            source=source,
             data={"key": key, "modifiers": modifiers or []},
             timestamp=time.time()
         )
