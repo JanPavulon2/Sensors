@@ -1,17 +1,132 @@
 ---
 Last Updated: 2025-11-15
-Updated By: @architecture-expert-sonnet
-Changes: Complete project status, known issues, and roadmap
+Updated By: Human
+Changes: Updated to reflect unified rendering refactor, type safety improvements, and FramePlaybackController implementation completion
 ---
 
 # Diuna Project - Tasks & Status
+
+## Phase 6 - Type Safety & Unified Rendering (Just Completed ‚úÖ)
+
+### Major Accomplishments
+
+#### 1. Circular Import Resolution
+**Status**: ‚úÖ COMPLETED
+**File**: [src/models/color.py](src/models/color.py)
+
+Changed from problematic import chain to TYPE_CHECKING pattern:
+```python
+# Before: from managers import ColorManager  # ‚Üê circular!
+# After:
+if TYPE_CHECKING:
+    from managers import ColorManager
+
+# Updated all type hints to use string literals:
+def from_preset(cls, preset_name: str, color_manager: 'ColorManager') -> 'Color':
+```
+
+Benefits: Breaks circular dependency, maintains full type safety
+
+---
+
+#### 2. Unified Rendering Architecture
+**Status**: ‚úÖ COMPLETED
+**Files Modified**: [src/controllers/zone_strip_controller.py](src/controllers/zone_strip_controller.py), [src/controllers/led_controller/static_mode_controller.py](src/controllers/led_controller/static_mode_controller.py)
+
+Eliminated dual rendering paths:
+- Added `submit_zones()` method to ZoneStripController
+- Refactored StaticModeController to use submit_zones() instead of render_zone()
+- All zone colors now submitted to FrameManager with MANUAL priority (10)
+- Single unified rendering path ensures 60 FPS response time
+
+Key changes:
+```python
+# StaticModeController.enter_mode() - OLD
+self.strip_controller.render_zone(zone_id, color, brightness)
+
+# NEW - Goes through FrameManager
+zone_colors = {zone.config.id: (zone.state.color, zone.brightness) for zone in ...}
+self.strip_controller.submit_zones(zone_colors)
+```
+
+Benefits: Single source of truth for rendering, instant user response, no conflicting paths
+
+---
+
+#### 3. FrameManager Type Refactoring
+**Status**: ‚úÖ COMPLETED
+**File**: [src/engine/frame_manager.py](src/engine/frame_manager.py)
+
+Separated generic frame selection into type-specific methods:
+
+**Before** (type-unsafe):
+```python
+async def _select_highest_priority_frame(self, queues: Mapping[int, Deque[AnyFrame]]) -> Optional[AnyFrame]:
+```
+
+**After** (type-safe):
+```python
+async def _select_main_frame(self) -> Optional[MainStripFrame]:
+async def _select_preview_frame(self) -> Optional[PreviewFrame]:
+```
+
+Benefits: Zero type errors, improved clarity, proper return type tracking
+
+---
+
+#### 4. Event Bus Type Safety
+**Status**: ‚úÖ COMPLETED
+**File**: [src/services/event_bus.py](src/services/event_bus.py)
+
+Implemented type-erased EventHandler with TEvent TypeVar in subscribe signature:
+
+```python
+from typing import TypeVar, Callable, Any
+
+TEvent = TypeVar('TEvent', bound=Event)
+
+class EventHandler(dataclass):
+    handler: Callable[[Any], None]  # Type erasure for storage
+    filter_fn: Optional[Callable[[Any], bool]]
+
+def subscribe(self, event_type: type[TEvent], handler: Callable[[TEvent], None]) -> None:
+    # Caller gets type safety, storage uses Any for contravariance
+```
+
+Benefits: Type-safe at call site, contravariance handled correctly, no API complexity
+
+---
+
+#### 5. FramePlaybackController Implementation
+**Status**: ‚úÖ COMPLETED
+**File**: [src/controllers/led_controller/frame_playback_controller.py](src/controllers/led_controller/frame_playback_controller.py)
+
+Complete implementation with EventBus integration:
+- Offline frame preloading with progress logging
+- Frame navigation (next/previous) with wrapping
+- Play/pause toggle with background loop
+- Keyboard input (A/D/SPACE/Q) via EventBus
+- Frame conversion (3-tuple, 4-tuple, 5-tuple formats)
+- Detailed frame logging with RGB/hex output
+
+Key methods:
+- `_load_animation_frames()` - Capture frames from animation
+- `show_current_frame()` - Display frame with logging
+- `next_frame()`, `previous_frame()` - Navigate with wrapping
+- `play()`, `stop()`, `_toggle_play_pause()` - Playback control
+- `_handle_keyboard_event()` - EventBus keyboard handler
+- `enter_frame_by_frame_mode()` - Full interactive session
+
+Benefits: Non-intrusive, uses existing FrameManager pause, EventBus integrated
+
+---
 
 ## Phase 5 - Frame-By-Frame Mode (Current)
 
 ### Active Tasks
 
 #### 1. Fix SnakeAnimation Zero Division Error
-**Status**: =4 BLOCKING
+**Status**: üî¥ BLOCKING
 **Severity**: CRITICAL
 **Affected File**: `src/animations/snake.py:63`
 
@@ -20,12 +135,12 @@ Changes: Complete project status, known issues, and roadmap
 self.total_pixels = sum(self.zone_pixel_counts.values())
 # If zones list is empty: total_pixels = 0
 # Line 130: pos = (self.current_position - i) % self.total_pixels
-# í ZeroDivisionError!
+# ÔøΩ ZeroDivisionError!
 ```
 
 **Root Cause**: `anim_test.py` line 40 passes empty zones list
 ```python
-zones = []  # ê EMPTY!
+zones = []  # ÔøΩ EMPTY!
 ```
 
 **Fix Options**:
@@ -40,8 +155,10 @@ zones = []  # ê EMPTY!
 
 ---
 
-#### 2. Implement FrameByFrameController
-**Status**: =· PENDING
+#### 2. Implement FrameByFrameController (DEPRECATED)
+**Status**: ‚úÖ COMPLETED AS FramePlaybackController
+
+Note: Implemented as FramePlaybackController instead. Full implementation complete with EventBus integration. Ready for keyboard event testing.
 **Severity**: HIGH
 **Complexity**: MEDIUM (2-3 hours)
 **Files to Create**: `src/controllers/led_controller/frame_by_frame_controller.py`
@@ -57,10 +174,10 @@ zones = []  # ê EMPTY!
 **Design**:
 - Constructor: `__init__(frame_manager, animation_engine, zone_service, logger)`
 - Methods:
-  - `load_animation(animation_id, **params) í int` - Returns frame count
-  - `show_current_frame() í bool` - Render + log
-  - `next_frame() í bool`
-  - `previous_frame() í bool`
+  - `load_animation(animation_id, **params) ÔøΩ int` - Returns frame count
+  - `show_current_frame() ÔøΩ bool` - Render + log
+  - `next_frame() ÔøΩ bool`
+  - `previous_frame() ÔøΩ bool`
   - `play(fps=30)`
   - `pause()`
   - `toggle_play()`
@@ -79,7 +196,7 @@ zones = []  # ê EMPTY!
 ---
 
 #### 3. Fix FramePlaybackController API Mismatch
-**Status**: =· PENDING
+**Status**: ‚úÖ FIXED
 **Severity**: MEDIUM
 **Affected File**: `src/controllers/led_controller/frame_playback_controller.py:56`
 
@@ -87,7 +204,7 @@ zones = []  # ê EMPTY!
 ```python
 self.frame_manager.submit_zone_frame(frame.zone_id, frame.pixels)
 # Expected: submit_zone_frame(zone_colors: Dict[ZoneID, (r,g,b)], priority, source)
-# Actual:   submit_zone_frame(zone_id, pixels)  ê API mismatch!
+# Actual:   submit_zone_frame(zone_id, pixels)  ÔøΩ API mismatch!
 ```
 
 **Fix**: Update to correct FrameManager API:
@@ -109,7 +226,7 @@ async def show_current(self):
 ---
 
 #### 4. Test Frame-By-Frame Implementation
-**Status**: =· PENDING
+**Status**: üî¥ PENDING
 **Severity**: HIGH
 **Complexity**: MEDIUM (1-2 hours)
 
@@ -118,7 +235,7 @@ async def show_current(self):
 - [ ] Step forward (A key)
 - [ ] Step backward (D key)
 - [ ] Play/pause toggle (SPACE)
-- [ ] Frame wrapping (previous at frame 0 í last frame)
+- [ ] Frame wrapping (previous at frame 0 ÔøΩ last frame)
 - [ ] Frame information logging
 - [ ] Performance metrics (frame load time, avg render time)
 
@@ -178,7 +295,7 @@ async def show_current(self):
 
 **3. Stale Pixels After Mode Switch**
 - Severity: MEDIUM
-- When: Switching STATIC î ANIMATION
+- When: Switching STATIC ÔøΩ ANIMATION
 - Effect: Some pixels stay lit momentarily
 - Hypothesis: Animation frames still submitting during transition
 
@@ -227,33 +344,33 @@ async def show_current(self):
 ## Backlog - Priority Issues
 
 ### Critical (Must Fix)
-1. SnakeAnimation zero division í Blocks frame-by-frame testing
-2. Animation ghost pixels í Affects user experience
-3. Stale pixels on mode switch í Affects user experience
+1. SnakeAnimation zero division ÔøΩ Blocks frame-by-frame testing
+2. Animation ghost pixels ÔøΩ Affects user experience
+3. Stale pixels on mode switch ÔøΩ Affects user experience
 
 ### High (Should Fix Soon)
-1. Frame-by-frame mode í Enables debugging
-2. Animation cycling artifacts í Investigate root cause
-3. MatrixAnimation re-enable í Feature parity
+1. Frame-by-frame mode ÔøΩ Enables debugging
+2. Animation cycling artifacts ÔøΩ Investigate root cause
+3. MatrixAnimation re-enable ÔøΩ Feature parity
 
 ### Medium (Nice to Have)
-1. FPS counter í Performance monitoring
-2. Memory profiler í Resource usage tracking
-3. Animation recording í Capture and playback
-4. WebSocket streaming í Remote viewing
+1. FPS counter ÔøΩ Performance monitoring
+2. Memory profiler ÔøΩ Resource usage tracking
+3. Animation recording ÔøΩ Capture and playback
+4. WebSocket streaming ÔøΩ Remote viewing
 
 ### Low (Future Enhancement)
-1. Game mode í Interactive snake game
-2. Music reactive mode í Audio-synchronized effects
-3. Custom animation upload í User-defined effects
-4. LED matrix support í New hardware capability
+1. Game mode ÔøΩ Interactive snake game
+2. Music reactive mode ÔøΩ Audio-synchronized effects
+3. Custom animation upload ÔøΩ User-defined effects
+4. LED matrix support ÔøΩ New hardware capability
 
 ---
 
 ## Bugs & Issues Tracker
 
 ### Bug #1: SnakeAnimation Zero Division
-**Status**: =4 OPEN
+**Status**: üî¥ OPEN
 **Priority**: CRITICAL
 **Component**: Animation
 **File**: `src/animations/snake.py:130`
@@ -269,7 +386,7 @@ async def show_current(self):
 ---
 
 ### Bug #2: Animation Ghost Pixels
-**Status**: =· INVESTIGATING
+**Status**: üìã INVESTIGATING
 **Priority**: HIGH
 **Component**: Animation Lifecycle
 **File**: `src/animations/engine.py`
@@ -292,7 +409,7 @@ async def show_current(self):
 ---
 
 ### Bug #3: Stale Pixels on Power Off
-**Status**: =· INVESTIGATING
+**Status**: üìã INVESTIGATING
 **Priority**: MEDIUM
 **Component**: Transition Service
 **File**: `src/services/transition_service.py`
@@ -322,7 +439,7 @@ async def show_current(self):
 ---
 
 ### Bug #4: FramePlaybackController API Mismatch
-**Status**: =· NEEDS FIX
+**Status**: ‚úÖ FIXED
 **Priority**: MEDIUM
 **Component**: Controller
 **File**: `src/controllers/led_controller/frame_playback_controller.py:56`
@@ -337,17 +454,17 @@ async def show_current(self):
 
 ## Documentation Status
 
-### Recently Created =›
+### Recently Created =ÔøΩ
 -  `architecture/rendering-system.md` - Complete rendering system architecture
 -  `project/frame-by-frame-implementation.md` - Frame-by-frame mode specification
 
-### Needs Update =À
+### Needs Update =ÔøΩ
 - [ ] `domain/animations.md` - Add new animation types (if any)
 - [ ] `domain/zones.md` - Verify zone configuration current
 - [ ] `technical/hardware.md` - Update thermal notes
 - [ ] `development/coding-standards.md` - Add frame-by-frame patterns
 
-### Needs Creation =›
+### Needs Creation =ÔøΩ
 - [ ] `project/changelog.md` - Version history and release notes
 - [ ] `project/debugging.md` - Debug mode features and how to use them
 - [ ] `development/testing.md` - Testing strategy and examples
@@ -370,7 +487,7 @@ async def show_current(self):
 - Total footprint: ~500 KB
 - FrameManager queues: ~50 KB
 - Animation instances: ~50 KB per active
-- Frame buffers: ~27 KB (10 frames ◊ 90 pixels)
+- Frame buffers: ~27 KB (10 frames ÔøΩ 90 pixels)
 
 **Hardware**:
 - Main strip: 90 pixels (WS2811, 12V)
@@ -406,11 +523,11 @@ async def show_current(self):
 ## Next Steps (Recommended)
 
 ### Immediate (This Session)
-1.  Document rendering system architecture í DONE
-2.  Create frame-by-frame spec í DONE
-3. í Implement FrameByFrameController
-4. í Fix SnakeAnimation zero division
-5. í Test frame-by-frame with real zones
+1.  Document rendering system architecture ÔøΩ DONE
+2.  Create frame-by-frame spec ÔøΩ DONE
+3. ÔøΩ Implement FrameByFrameController
+4. ÔøΩ Fix SnakeAnimation zero division
+5. ÔøΩ Test frame-by-frame with real zones
 
 ### Short Term (Next Week)
 1. Complete frame-by-frame testing
@@ -436,11 +553,11 @@ async def show_current(self):
 
 **Finding Issues**:
 - Use Ctrl+F to search for component name or bug ID
-- Check Status column for =4 OPEN / =· INVESTIGATING /  COMPLETED
+- Check Status column for =4 OPEN / =ÔøΩ INVESTIGATING /  COMPLETED
 
 **Adding New Tasks**:
 1. Copy template from relevant section
-2. Add status emoji: =4 OPEN, =· IN_PROGRESS,  COMPLETED
+2. Add status emoji: =4 OPEN, =ÔøΩ IN_PROGRESS,  COMPLETED
 3. Include severity/complexity where relevant
 4. Link to related files or issues
 

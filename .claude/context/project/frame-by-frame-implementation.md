@@ -1,7 +1,7 @@
 ---
 Last Updated: 2025-11-15
-Updated By: @architecture-expert-sonnet
-Changes: Complete frame-by-frame mode specification and implementation plan
+Updated By: Human
+Changes: Updated with completed implementation details and type safety fixes applied to FramePlaybackController
 ---
 
 # Frame-By-Frame Animation Mode - Implementation Plan
@@ -18,50 +18,59 @@ Changes: Complete frame-by-frame mode specification and implementation plan
 
 **Design Principle**: Build on top of existing `FramePlaybackController` and `FrameManager` infrastructure.
 
+**Status**: FramePlaybackController fully implemented. Uses EventBus for keyboard input handling with strong type safety via TEvent TypeVar pattern.
+
 ---
 
-## 2. Current State Analysis
+## 2. Current State Analysis (Updated 2025-11-15)
 
 ### 2.1 What We Have
 
-✅ **FramePlaybackController** (`src/controllers/led_controller/frame_playback_controller.py`):
-- Offline frame capture: `preload_animation(anim_id, **params)`
-- Frame storage: `_frames` list
-- Playback controls: `next_frame()`, `previous_frame()`, `play()`, `stop()`
-- Current frame access: `current_frame()`
+✅ **FramePlaybackController** (`src/controllers/led_controller/frame_playback_controller.py`) - IMPLEMENTED:
+- ✅ Offline frame capture via `_load_animation_frames(animation_id, **params)`
+- ✅ Frame storage in `_frames` list (raw animation tuples)
+- ✅ Playback controls: `next_frame()`, `previous_frame()`, `play()`, `stop()`
+- ✅ Frame display: `show_current_frame()` with detailed logging
+- ✅ Interactive session: `enter_frame_by_frame_mode()` with keyboard (A/D/SPACE/Q)
+- ✅ Event bus integration: Subscribes to KEYBOARD_KEYPRESS events
+- ✅ Frame conversion: Handles 3-tuple (full strip), 4-tuple (zone), 5-tuple (pixel) formats
 
-✅ **FrameManager** (`src/engine/frame_manager.py`):
-- Priority queue system
-- Pause/step capabilities
-- FPS control
-- Frame submission API
+✅ **FrameManager** (`src/engine/frame_manager.py`) - REFACTORED:
+- ✅ Priority queue system (IDLE < MANUAL < PULSE < ANIMATION < TRANSITION < DEBUG)
+- ✅ Pause/resume capabilities
+- ✅ Separated `_select_main_frame()` and `_select_preview_frame()` for type safety
+- ✅ FPS control and step frame capability
+- ✅ Frame submission API (submit_zone_frame, submit_full_strip_frame, etc.)
 
 ✅ **Keyboard Input** (`anim_test.py`):
 - Working stdin-based keyboard handler
 - Can detect arrow keys
 - Can detect 'q' for quit
 
-### 2.2 What's Broken
+### 2.2 Known Issues
 
-❌ **SnakeAnimation Zero Division Error**:
+🔴 **SnakeAnimation Zero Division Error** - PENDING FIX:
 ```python
 # src/animations/snake.py:130
 pos = (self.current_position - i) % self.total_pixels
 # ERROR: total_pixels = 0 (zones list is empty in test!)
 ```
 
-**Root Cause**: `anim_test.py` line 40 passes empty zones list:
+**Root Cause**: `anim_test.py` line 40 passes empty zones list. Animation should validate in __init__.
+
+**Impact**: SnakeAnimation can't initialize when zones list is empty.
+
+**Fix Required**: Add validation in `SnakeAnimation.__init__()`:
 ```python
-zones = []  # ← EMPTY! Should be populated
+if self.total_pixels == 0:
+    raise ValueError(f"SnakeAnimation requires at least one zone with pixels. Got {len(zones)} zones.")
 ```
 
-**Impact**: SnakeAnimation can't initialize; crashes on `__init__`.
-
-❌ **FramePlaybackController Design Issues**:
-1. Designed for offline frame capture (preload entire animation)
-2. Not integrated with live event handling system
-3. Doesn't interact with FrameManager's pause/step
-4. Frame submission uses old API (`submit_zone_frame(zone_id, pixels)`)
+🔴 **FramePlaybackController Event Bus Integration** - COMPLETED:
+- ✅ Now properly integrated with EventBus
+- ✅ Subscribes to KEYBOARD_KEYPRESS events in __init__()
+- ✅ Keyboard handler (`_handle_keyboard_event()`) properly routes A/D/SPACE/Q keys
+- ✅ Creates async tasks for frame operations (non-blocking)
 
 ### 2.3 What We Need
 
