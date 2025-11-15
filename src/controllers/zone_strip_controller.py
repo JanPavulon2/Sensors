@@ -73,15 +73,15 @@ class ZoneStripController:
     # Rendering
     # -----------------------------------------------------------------------
 
-    def submit_zones(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+    def submit_all_zones_frame(self, zones_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
         """
-        Submit zone colors to FrameManager.
+        Submit zones colors to FrameManager.
 
         Each zone gets (Color, brightness) and is converted to RGB with brightness applied.
         """
-        asyncio.create_task(self._submit_zones_frame(zone_colors))
+        asyncio.create_task(self._submit_all_zones_frame(zones_colors))
 
-    async def _submit_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+    async def _submit_all_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
         """Convert zones to RGB frame and submit to FrameManager."""
         rgb_colors = {}
         for zone_id, (color, brightness) in zone_colors.items():
@@ -185,7 +185,7 @@ class ZoneStripController:
         Args:
             zone_states: Dict mapping ZoneID to (Color, brightness) tuples
         """
-        self.render_all_zones(zone_states)
+        # self.render_all_zones(zone_states)
         log.info("Power ON - restored all zones")
 
     def power_off(self) -> None:
