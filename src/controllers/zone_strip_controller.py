@@ -3,6 +3,7 @@ Zone Strip Controller - Layer 2
 
 Orchestrates rendering operations on the main LED strip.
 Provides high-level interface for zone rendering using domain types (ZoneID, Color).
+Now unified: submits ZoneFrames to FrameManager instead of directly updating hardware.
 
 Responsibilities:
     - Render individual zones with color and brightness
@@ -10,6 +11,7 @@ Responsibilities:
     - Power on/off all zones
     - Clear all LEDs
     - Translate domain types (ZoneID) to hardware types (string tags)
+    - Submit zone state to FrameManager as ZoneFrames
 
 Does NOT:
     - Decide WHICH zone to show (that's LEDController L3)
@@ -17,14 +19,19 @@ Does NOT:
     - Handle user input (that's ControlPanelController L2)
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, TYPE_CHECKING
+import asyncio
 from components import ZoneStrip
 from models import Color
 from models.domain import ZoneCombined
-from models.enums import ZoneID
+from models.enums import ZoneID, FramePriority, FrameSource
+from models.frame import ZoneFrame
 from utils.logger import get_logger, LogCategory
 from utils.enum_helper import EnumHelper
 from services.transition_service import TransitionService
+
+if TYPE_CHECKING:
+    from engine.frame_manager import FrameManager
 
 log = get_logger()
 
@@ -43,21 +50,52 @@ class ZoneStripController:
         zone_strip: ZoneStrip hardware component (L1)
     """
 
-    def __init__(self, zone_strip: ZoneStrip, transition_service: TransitionService):
+    def __init__(
+        self,
+        zone_strip: ZoneStrip,
+        transition_service: TransitionService,
+        frame_manager: 'FrameManager'
+    ):
         """
         Initialize ZoneStripController
 
         Args:
-            zone_strip: ZoneStrip hardware component (injected from main)
+            zone_strip: ZoneStrip hardware component (L1)
             transition_service: TransitionService instance for this strip
+            frame_manager: FrameManager for unified rendering engine
         """
         self.zone_strip = zone_strip
         self.transition_service = transition_service
+        self.frame_manager = frame_manager
         log.info(LogCategory.SYSTEM, "ZoneStripController initialized")
 
     # -----------------------------------------------------------------------
     # Rendering
     # -----------------------------------------------------------------------
+
+    def submit_zones(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+        """
+        Submit zone colors to FrameManager.
+
+        Each zone gets (Color, brightness) and is converted to RGB with brightness applied.
+        """
+        asyncio.create_task(self._submit_zones_frame(zone_colors))
+
+    async def _submit_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+        """Convert zones to RGB frame and submit to FrameManager."""
+        rgb_colors = {}
+        for zone_id, (color, brightness) in zone_colors.items():
+            r, g, b = color.to_rgb()
+            r, g, b = Color.apply_brightness(r, g, b, brightness)
+            rgb_colors[zone_id] = (r, g, b)
+
+        frame = ZoneFrame(
+            zone_colors=rgb_colors,
+            priority=FramePriority.MANUAL,
+            source=FrameSource.STATIC,
+            ttl=1.0
+        )
+        await self.frame_manager.submit_zone_frame(frame)
 
     def render_zone(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
         """
@@ -79,7 +117,7 @@ class ZoneStripController:
         g = int(g * brightness / 100)
         b = int(b * brightness / 100)
 
-        zone_id_str = EnumHelper.to_string(zone_id)
+        zone_id_str = zone_id.name
         self.zone_strip.set_zone_color(zone_id_str, r, g, b)
         log.debug(LogCategory.SYSTEM, f"Rendered zone {zone_id_str}: RGB({r},{g},{b}) @ {brightness}%")
 
