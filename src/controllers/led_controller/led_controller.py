@@ -208,6 +208,10 @@ class LEDController:
     # ------------------------------------------------------------------
 
     def _handle_selector_rotation(self, delta: int):
+        if not self.edit_mode:
+            log.info(LogCategory.SYSTEM, "Selector rotation ignored when not in edit mode")
+            return
+        
         if self.main_mode == MainMode.STATIC:
             self.static_mode_controller.change_zone(delta)
         else:
@@ -223,6 +227,7 @@ class LEDController:
         if not self.edit_mode:
             log.info(LogCategory.SYSTEM, "Modulator rotation ignored when not in edit mode")
             return
+        
         if self.main_mode == MainMode.STATIC:
             self.static_mode_controller.adjust_param(delta)
         else:
@@ -230,7 +235,9 @@ class LEDController:
         
     def _handle_modulator_click(self):
         if not self.edit_mode:
+            log.info(LogCategory.SYSTEM, "Modulator click ignored when not in edit mode")
             return
+        
         if self.main_mode == MainMode.STATIC:
             self.static_mode_controller.cycle_parameter()
         else: 
