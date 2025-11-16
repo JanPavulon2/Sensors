@@ -223,7 +223,17 @@ class FramePlaybackController:
         Create empty full-frame state for all zones.
         Uses ZoneStrip.zone_indices which maps zone_name → list of pixel indices."""
         state = {}
-        strip = self.frame_manager.main_strips[0]
+
+        # Find first ZoneStrip (skip PreviewPanel and other strip types)
+        strip = None
+        for s in self.frame_manager.main_strips:
+            if hasattr(s, 'zone_indices'):
+                strip = s
+                break
+
+        if not strip:
+            log.error("No ZoneStrip found in main_strips")
+            return {}
 
         # strip.zone_indices = { "TOP": [0,1,2], "LAMP": [3,4,5,...] }
         for zone_name, physical_indices in strip.zone_indices.items():

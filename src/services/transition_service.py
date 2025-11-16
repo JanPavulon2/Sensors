@@ -147,15 +147,15 @@ class TransitionService:
         """
         Convert frame to zone-based pixel dictionary.
 
-        Handles both ZoneStrip (has zones) and PreviewPanel (single zone).
+        Handles both ZoneStrip (has zone_indices) and PreviewPanel (single zone).
         """
-        if hasattr(self.strip, 'zones') and self.strip.zones:
-            # ZoneStrip: distribute pixels across zones
+        if hasattr(self.strip, 'zone_indices') and self.strip.zone_indices:
+            # ZoneStrip: distribute pixels using zone_indices mapping
             zone_pixels_dict = {}
-            for zone_id, (start, end) in self.strip.zones.items():
-                zone_pixels = frame[start:end]
+            for zone_name, pixel_indices in self.strip.zone_indices.items():
+                zone_pixels = [frame[idx] if idx < len(frame) else (0, 0, 0) for idx in pixel_indices]
                 if zone_pixels:
-                    zone_pixels_dict[zone_id] = zone_pixels
+                    zone_pixels_dict[zone_name] = zone_pixels
             return zone_pixels_dict
         else:
             # PreviewPanel or single-zone strip: use FLOOR as container

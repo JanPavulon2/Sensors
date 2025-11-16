@@ -420,21 +420,28 @@ class FrameManager:
 
         try:
             cleaned = {}
-            
+
+            # Use zone_indices if available (ZoneStrip), otherwise skip validation
+            zone_map = getattr(strip, 'zone_indices', {})
+
             for zone_id, pixels in frame.zone_pixels.items():
                 zone_name = zone_id if isinstance(zone_id, str) else zone_id.name
 
-                if zone_name not in strip.zones:
+                # If we have zone mapping, validate; otherwise accept as-is
+                if zone_map and zone_name not in zone_map:
                     continue
 
-                expected_len = len(strip.zones[zone_name])
+                if zone_map:
+                    expected_len = len(zone_map[zone_name])
 
-                # extend or trim
-                if len(pixels) != expected_len:
-                    fixed = list(pixels[:expected_len])
-                    if len(fixed) < expected_len:
-                        fixed += [(0, 0, 0)] * (expected_len - len(fixed))
-                    cleaned[zone_name] = fixed
+                    # extend or trim
+                    if len(pixels) != expected_len:
+                        fixed = list(pixels[:expected_len])
+                        if len(fixed) < expected_len:
+                            fixed += [(0, 0, 0)] * (expected_len - len(fixed))
+                        cleaned[zone_name] = fixed
+                    else:
+                        cleaned[zone_name] = list(pixels)
                 else:
                     cleaned[zone_name] = list(pixels)
 
