@@ -17,7 +17,7 @@ rendering automatically falls back to lower priorities.
 
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque
+from typing import Dict, List, Optional, Deque, Callable
 from collections import deque
 
 from utils.logger2 import get_logger
@@ -96,7 +96,7 @@ class FrameManager:
         # Registered render targets
         self.main_strips: List = []  # ZoneStrip instances
         self.preview_strips: List = []  # PreviewPanel instances
-
+        
         # Runtime state
         self.running = False
         self.paused = False
@@ -414,21 +414,35 @@ class FrameManager:
 
     def _render_pixel_frame(self, frame: PixelFrame, strip) -> None:
         """
-        Render per-pixel colors.
-
-        Args:
-            frame: PixelFrame with zone_pixels dict
-            strip: ZoneStrip instance
+        Render per-pixel colors using full-buffer overwrite.
+        Ensures correct clearing when stepping backward in animations.
         """
-        for zone_id, pixels in frame.zone_pixels.items():
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
-            try:
-                for pixel_idx, (r, g, b) in enumerate(pixels):
-                    strip.set_pixel_color(zone_name, pixel_idx, r, g, b, show=False)
-            except Exception as e:
-                log.error(f"Error setting pixel in zone {zone_name}: {e}")
-        strip.show()
 
+        try:
+            cleaned = {}
+            
+            for zone_id, pixels in frame.zone_pixels.items():
+                zone_name = zone_id if isinstance(zone_id, str) else zone_id.name
+
+                if zone_name not in strip.zones:
+                    continue
+
+                expected_len = len(strip.zones[zone_name])
+
+                # extend or trim
+                if len(pixels) != expected_len:
+                    fixed = list(pixels[:expected_len])
+                    if len(fixed) < expected_len:
+                        fixed += [(0, 0, 0)] * (expected_len - len(fixed))
+                    cleaned[zone_name] = fixed
+                else:
+                    cleaned[zone_name] = list(pixels)
+
+            strip.show_full_pixel_frame(cleaned)
+
+        except Exception as e:
+            log.error(f"Error rendering pixel frame to {strip}: {e}")
+    
     # === Cleanup ===
 
     def clear_all(self) -> None:
@@ -438,6 +452,32 @@ class FrameManager:
         for queue in self.preview_queues.values():
             queue.clear()
         log.info("FrameManager queues cleared")
+
+    def clear_below_priority(self, min_priority: FramePriority) -> None:
+        """
+        Clear all frames below a specified priority level.
+
+        Used by frame-by-frame debugging to remove animation frames
+        before entering debug mode, preventing animation flicker.
+
+        Args:
+            min_priority: Frames below this priority are cleared
+        """
+        min_value = min_priority.value if isinstance(min_priority.value, int) else 0
+
+        cleared_count = 0
+        for priority_value, queue in list(self.main_queues.items()):
+            if priority_value < min_value:
+                cleared_count += len(queue)
+                queue.clear()
+
+        for priority_value, queue in list(self.preview_queues.items()):
+            if priority_value < min_value:
+                cleared_count += len(queue)
+                queue.clear()
+
+        if cleared_count > 0:
+            log.debug(f"Cleared {cleared_count} frames below priority {min_priority.name}")
 
     def __repr__(self) -> str:
         metrics = self.get_metrics()

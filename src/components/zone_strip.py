@@ -1,16 +1,8 @@
-"""
-Zone Strip Component - Hardware abstraction for WS281x LED strips
+# components/zone_strip.py  (replace existing ZoneStrip class with this)
 
-Manages LED strip divided into addressable zones with independent colors.
-Each zone is addressed by string identifiers (e.g. "LAMP", "TOP").
-
-Handles only low-level pixel operations and caching.
-"""
-
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
-from services.transition_service import TransitionService
 from infrastructure import GPIOManager
 from utils.enum_helper import EnumHelper
 
@@ -19,25 +11,13 @@ class ZoneStrip:
     """
     Hardware abstraction for WS281x LED strip with zone-based control.
 
-    Provides direct hardware operations:
-      - Set color for zones or individual pixels
-      - Apply batches efficiently
-      - Clear or restore LED state
+    Maintains:
+      - zone_range: mapping zone_key -> (start_index, end_index)
+      - zone_indices: mapping zone_key -> [abs_index0, abs_index1, ...]
+      - zone_reversed: mapping zone_key -> bool
+      - zone_colors cache
 
-    Accepts string zone identifiers (e.g. "LAMP"), not enums.
-
-    Does NOT handle:
-      - Brightness scaling
-      - Color model conversions
-      - Any domain logic
-
-    Args:
-        gpio: GPIO pin number (18=PWM0, 19=PCM)
-        pixel_count: Total number of addressable pixels
-        zones: List of ZoneConfig objects
-        gpio_manager: GPIOManager for pin registration
-        color_order: WS281x color constant (default RGB)
-        brightness: Global hardware brightness (0–255)
+    All public APIs accept either ZoneID enum or string zone identifier.
     """
 
     def __init__(
@@ -62,17 +42,26 @@ class ZoneStrip:
             component=f"ZoneStrip(GPIO{gpio},{pixel_count}px)"
         )
 
-        # Build internal mapping: "LAMP" → [start_index, end_index]
-        self.zones: Dict[str, List[int]] = {
-            EnumHelper.to_string(zone.id): [zone.start_index, zone.end_index]
-            for zone in zones
-        }
+        # Build both representations: range and explicit indices
+        self.zone_range: Dict[str, Tuple[int, int]] = {}
+        self.zone_indices: Dict[str, List[int]] = {}
+        self.zone_reversed: Dict[str, bool] = {}
 
-        # Reversed zones (for inverted physical layout)
-        self.zone_reversed: Dict[str, bool] = {
-            EnumHelper.to_string(zone.id): zone.reversed
-            for zone in zones
-        }
+        for zone in zones:
+            key = EnumHelper.to_string(zone.id)  # e.g. "FLOOR"
+            start = zone.start_index
+            end = zone.end_index
+            # Normalize range (ensure start <= end)
+            if start <= end:
+                rng = (start, end)
+                indices = list(range(start, end + 1))
+            else:
+                # Inverted config — still produce indices in physical order
+                rng = (end, start)
+                indices = list(range(end, start + 1))
+            self.zone_range[key] = rng
+            self.zone_indices[key] = indices
+            self.zone_reversed[key] = bool(zone.reversed)
 
         # Cached colors (initialized to black)
         self.zone_colors: Dict[str, Tuple[int, int, int]] = {
@@ -80,15 +69,7 @@ class ZoneStrip:
             for zone in zones
         }
 
-        # PixelStrip constructor parameters:
-        # - num: number of pixels
-        # - pin: GPIO pin number (18 = PWM0)
-        # - freq_hz: signal frequency in Hz (800000 = 800kHz for WS2811)
-        # - dma: DMA channel (10 is safe default, 0-14 available)
-        # - invert: False = normal signal, True = inverted (for level shifters)
-        # - brightness: global brightness 0-255
-        # - channel: PWM channel (0 or 1)
-        # - strip_type: color order constant (ws.WS2811_STRIP_BRG for your hardware)
+        # PixelStrip constructor
         self.pixel_strip: PixelStrip = PixelStrip(
             pixel_count,    # num: total LED count
             gpio,           # pin: GPIO number
@@ -97,247 +78,181 @@ class ZoneStrip:
             False,          # invert: normal signal (not inverted)
             brightness,     # brightness: 0-255 global brightness
             0,              # channel: PWM channel 0
-            color_order     # strip_type: ws.WS2811_STRIP_BRG
+            color_order     # strip_type
         )
-        
         self.pixel_strip.begin()
 
-        # Initialize transition service for smooth state changes
-        # self.transition_service = TransitionService(self)
-
     # -----------------------------------------------------------------------
-    # Internal helpers
+    # Helpers
     # -----------------------------------------------------------------------
-
-    def _resolve_zone(self, zone):
-        """Accept either ZoneID enum or string tag."""
+    def _zone_key(self, zone: Any) -> Optional[str]:
+        """Normalize zone input (ZoneID or str) to internal key (str)."""
         from models.enums import ZoneID
         if isinstance(zone, ZoneID):
-            return zone.name  # use tag-like string internally
-        return zone
+            return zone.name
+        if isinstance(zone, str):
+            return zone
+        return None
 
-    def _validate_zone(self, zone_id: str) -> bool:
+    def _validate_zone(self, zone_key: str) -> bool:
+        return zone_key in self.zone_indices
+
+    def _get_physical_pixel_index(self, zone_key: str, logical_index: int) -> int:
         """
-        Validate if zone exists.
-
-        Args:
-            zone_id: Zone identifier string
-
-        Returns:
-            True if zone exists, False otherwise
+        Convert logical pixel index (0..N-1 within zone) to absolute physical index.
+        Accounts for reversed zones by mapping using zone_indices.
         """
-        return zone_id in self.zones
+        indices = self.zone_indices.get(zone_key)
+        if indices is None:
+            raise KeyError(f"Unknown zone: {zone_key}")
 
-    def _get_physical_pixel_index(self, zone_id: str, logical_index: int) -> int:
-        """
-        Convert logical pixel index to physical pixel index, accounting for reversed zones.
+        zone_len = len(indices)
+        if logical_index < 0 or logical_index >= zone_len:
+            raise IndexError("logical_index out of range")
 
-        Args:
-            zone_id: Zone identifier string
-            logical_index: Logical pixel index within zone (0 = first pixel)
-
-        Returns:
-            Physical pixel index on the strip
-        """
-        start, end = self.zones[zone_id]
-
-        if self.zone_reversed.get(zone_id, False):
-            # Reversed: logical 0 maps to physical end, logical max maps to physical start
-            return end - logical_index
-        
-        # Normal: logical 0 maps to physical start
-        return start + logical_index
+        # If zone is flagged reversed, logical 0 corresponds to last index in indices
+        if self.zone_reversed.get(zone_key, False):
+            return indices[-1 - logical_index]
+        else:
+            return indices[logical_index]
 
     # -----------------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------------
-
-    def set_zone_color(self, zone_id: str, r: int, g: int, b: int, show: bool = True) -> None:
+    def show_full_pixel_frame(self, zone_pixels_dict: Dict[Any, List[Tuple[int, int, int]]]) -> None:
         """
-        Set uniform color for an entire zone.
-
-        Args:
-            zone_id: Zone identifier string (e.g., "LAMP", "TOP")
-            r: Red value (0-255)
-            g: Green value (0-255)
-            b: Blue value (0-255)
-            show: If True, immediately update LEDs. If False, buffer only.
-
-        Note:
-            By default calls strip.show() immediately. For batch updates,
-            set show=False and call show() manually after all updates.
-            For setting multiple zones, use set_multiple_zones() for better performance.
+        Render full absolute frame to hardware.
+        zone_pixels_dict: { ZoneID|str: [(r,g,b), ...], ... }
+        Expectation: provided lists are per-zone logical arrays (length == zone length or shorter).
         """
-        if not self._validate_zone(zone_id):
+        # Build full buffer
+        full_buffer = [(0, 0, 0)] * self.pixel_count
+
+        for zone_in, pixels in zone_pixels_dict.items():
+            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            if zone_key not in self.zone_indices:
+                # unknown zone skip
+                continue
+
+            indices = self.zone_indices[zone_key]
+            # When zone is reversed we still map logical 0..N-1 to physical indices accordingly
+            if self.zone_reversed.get(zone_key, False):
+                # map logical i -> indices[-1 - i]
+                for i, color in enumerate(pixels):
+                    if i < len(indices):
+                        phys_idx = indices[-1 - i]
+                        full_buffer[phys_idx] = color
+            else:
+                for i, color in enumerate(pixels):
+                    if i < len(indices):
+                        phys_idx = indices[i]
+                        full_buffer[phys_idx] = color
+
+        # Push buffer to hardware
+        for idx, (r, g, b) in enumerate(full_buffer):
+            # rpi_ws281x Color/PixelStrip expects Color or setPixelColorRGB depending on binding
+            try:
+                # Prefer setPixelColorRGB if available
+                if hasattr(self.pixel_strip, "setPixelColorRGB"):
+                    self.pixel_strip.setPixelColorRGB(idx, r, g, b)
+                else:
+                    self.pixel_strip.setPixelColor(idx, Color(r, g, b))
+            except Exception:
+                # Fallback to Color wrapper
+                self.pixel_strip.setPixelColor(idx, Color(r, g, b))
+
+        self.pixel_strip.show()
+
+    def set_zone_color(self, zone: Any, r: int, g: int, b: int, show: bool = True) -> None:
+        zone_key = self._zone_key(zone)
+        if zone_key is None or not self._validate_zone(zone_key):
             return
 
-        # Cache color
-        self.zone_colors[zone_id] = (r, g, b)
+        self.zone_colors[zone_key] = (r, g, b)
 
-        # Apply to all pixels in zone
-        start, end = self.zones[zone_id]
+        indices = self.zone_indices[zone_key]
         color = Color(r, g, b)
 
-        for i in range(start, end + 1):
-            if i < self.pixel_count:
-                self.pixel_strip.setPixelColor(i, color)
+        for phys in indices:
+            if 0 <= phys < self.pixel_count:
+                self.pixel_strip.setPixelColor(phys, color)
 
-        # Update hardware if requested
         if show:
             self.pixel_strip.show()
 
-    def set_multiple_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> None:
-        """
-        Set colors for multiple zones at once (efficient - single strip.show()).
-
-        Recommended for batch updates to avoid flickering from multiple show() calls.
-
-        Args:
-            zone_colors: Dict mapping zone_id to (r, g, b) tuple
-        
-        Example: {"LAMP": (255, 0, 0), "TOP": (0, 255, 0)}
-
-        Note:
-            Invalid zone IDs are silently skipped.
-        """
-        for zone_id, (r, g, b) in zone_colors.items():
-            if not self._validate_zone(zone_id):
+    def set_multiple_zones(self, zone_colors: Dict[Any, Tuple[int, int, int]]) -> None:
+        for zone_in, (r, g, b) in zone_colors.items():
+            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            if not self._validate_zone(zone_key):
                 continue
-
-            # Cache color
-            self.zone_colors[zone_id] = (r, g, b)
-
-            # Apply to all pixels in zone
-            start, end = self.zones[zone_id]
+            self.zone_colors[zone_key] = (r, g, b)
+            indices = self.zone_indices[zone_key]
             color = Color(r, g, b)
-            for i in range(start, end + 1):
-                if i < self.pixel_count:
-                    self.pixel_strip.setPixelColor(i, color)
-
-        # Single hardware update for all zones
+            for phys in indices:
+                if 0 <= phys < self.pixel_count:
+                    self.pixel_strip.setPixelColor(phys, color)
         self.pixel_strip.show()
 
-    def set_pixel_color(self, zone_id: str, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
-        """
-        Set color of a specific pixel inside a zone.
-
-        Args:
-            zone_id: Zone identifier string
-            pixel_index: Logical pixel index within zone (0-based, 0 = first pixel regardless of reversal)
-            r: Red value (0-255)
-            g: Green value (0-255)
-            b: Blue value (0-255)
-            show: If True, immediately update strip (default). If False, wait for manual show() call.
-
-        Note:
-            Respects the zone's reversed flag. If reversed=True, logical index 0
-            maps to the last physical pixel in the zone.
-            Set show=False when updating many pixels, then call show() once after all updates.
-        """
-        if not self._validate_zone(zone_id):
+    def set_pixel_color(self, zone: Any, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
+        zone_key = self._zone_key(zone)
+        if zone_key is None or not self._validate_zone(zone_key):
             return
 
-        start, end = self.zones[zone_id]
-        zone_length = end - start + 1
-
-        # Validate pixel index
-        if pixel_index < 0 or pixel_index >= zone_length:
+        try:
+            phys = self._get_physical_pixel_index(zone_key, pixel_index)
+        except (KeyError, IndexError):
             return
 
-        # Calculate physical pixel position, accounting for reversal
-        physical_position = self._get_physical_pixel_index(zone_id, pixel_index)
-        if physical_position >= self.pixel_count:
-            return
-
-        self.pixel_strip.setPixelColor(physical_position, Color(r, g, b))
+        self.pixel_strip.setPixelColor(phys, Color(r, g, b))
 
         if show:
             self.pixel_strip.show()
 
     def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
-        """
-        Set color for a pixel by absolute strip index (used by TransitionService).
-
-        Args:
-            pixel_index: Absolute pixel index (0 to pixel_count-1)
-            r: Red value (0-255)
-            g: Green value (0-255)
-            b: Blue value (0-255)
-            show: If True, immediately update strip
-
-        Note:
-            This is a low-level method for TransitionService.
-            For zone-based control, use set_zone_color() or set_pixel_color().
-        """
         if 0 <= pixel_index < self.pixel_count:
-            color = Color(r, g, b)
-            self.pixel_strip.setPixelColor(pixel_index, color)
+            self.pixel_strip.setPixelColor(pixel_index, Color(r, g, b))
             if show:
                 self.pixel_strip.show()
 
     def show(self) -> None:
-        """
-        Update strip hardware - call after batch of set_pixel_color(show=False) calls
-        """
         self.pixel_strip.show()
 
     def clear(self) -> None:
-        """
-        Turn off all LEDs and reset zone color cache.
-
-        Sets all pixels to black (0, 0, 0) and updates hardware immediately.
-        """
         for i in range(self.pixel_count):
             self.pixel_strip.setPixelColor(i, Color(0, 0, 0))
         self.pixel_strip.show()
-
-        # Reset color cache
-        self.zone_colors = {zone_id: (0, 0, 0) for zone_id in self.zones}
+        # Reset cache
+        for k in self.zone_colors.keys():
+            self.zone_colors[k] = (0, 0, 0)
 
     # -----------------------------------------------------------------------
-    # TransitionService Support Methods
+    # TransitionService helpers
     # -----------------------------------------------------------------------
-
     def get_frame(self) -> List[Tuple[int, int, int]]:
-        """
-        Capture current LED state as list of RGB tuples.
-
-        Used by TransitionService for smooth transitions.
-
-        Returns:
-            List of (r, g, b) tuples for each pixel (index 0 to pixel_count-1)
-        """
         frame = []
         for i in range(self.pixel_count):
-            color: int = int(self.pixel_strip.getPixelColor(i)) # type: ignore
-            # Extract RGB from 32-bit color value (format: 0xRRGGBB for RGB order)
+            color: int = int(self.pixel_strip.getPixelColor(i))  # type: ignore
             r = (color >> 16) & 0xFF
             g = (color >> 8) & 0xFF
             b = color & 0xFF
             frame.append((r, g, b))
-            
         return frame
 
-    def get_zone_color(self, zone_id: str) -> Optional[Tuple[int, int, int]]:
-        """
-        Get current cached color of zone.
+    def get_zone_color(self, zone: Any) -> Optional[Tuple[int, int, int]]:
+        zone_key = self._zone_key(zone)
+        if zone_key is None:
+            return None
+        return self.zone_colors.get(zone_key)
 
-        Args:
-            zone_id: Zone identifier string
-
-        Returns:
-            (r, g, b) tuple or None if zone doesn't exist
-        """
-        return self.zone_colors.get(zone_id)
-
-    def build_frame_from_zones(self, zone_colors: Dict[str, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+    def build_frame_from_zones(self, zone_colors: Dict[Any, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
         """Build pixel-level frame from given zone colors (for transitions)."""
         frame = [(0, 0, 0)] * self.pixel_count
-        for zone_id, (r, g, b) in zone_colors.items():
-            if zone_id not in self.zones:
+        for zone_in, (r, g, b) in zone_colors.items():
+            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            if zone_key not in self.zone_indices:
                 continue
-            start, end = self.zones[zone_id]
-            for i in range(start, end + 1):
-                if i < self.pixel_count:
-                    frame[i] = (r, g, b)
+            indices = self.zone_indices[zone_key]
+            for phys in indices:
+                if 0 <= phys < self.pixel_count:
+                    frame[phys] = (r, g, b)
         return frame

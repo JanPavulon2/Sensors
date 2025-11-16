@@ -110,7 +110,7 @@ class LEDController:
         else:
             self.animation_mode_controller.enter_mode()
 
-    async def start_frame_by_frame_debugging(self, animation_id: AnimationID = None, **params):
+    async def start_frame_by_frame_debugging(self, animation_id: AnimationID, **params):
         """
         Start frame-by-frame debugging mode for animation.
 
@@ -201,7 +201,7 @@ class LEDController:
 
     async def _enter_frame_by_frame_mode_async(self):
         """Async wrapper to enter frame-by-frame mode."""
-        await self.start_frame_by_frame_debugging()
+        await self.start_frame_by_frame_debugging(AnimationID.BREATHE)
 
     # ------------------------------------------------------------------
     # ACTIONS (DISPATCH)

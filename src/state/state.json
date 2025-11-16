@@ -19,45 +19,45 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "HUE",
-        "hue": 90
+        "mode": "PRESET",
+        "preset_name": "sky_blue"
       },
       "brightness": 100
     },
     "left": {
       "color": {
-        "mode": "HUE",
-        "hue": 0
+        "mode": "PRESET",
+        "preset_name": "cool_white"
       },
       "brightness": 100
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 320
+        "mode": "PRESET",
+        "preset_name": "ocean"
       },
-      "brightness": 12.5
+      "brightness": 100
     },
     "right": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "white"
+        "mode": "HUE",
+        "hue": 240
       },
-      "brightness": 37.5
+      "brightness": 100
     },
     "bottom": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "indigo"
+        "mode": "HUE",
+        "hue": 267
       },
-      "brightness": 25.0
+      "brightness": 100
     },
     "lamp": {
       "color": {
         "mode": "HUE",
-        "hue": 190
+        "hue": 30
       },
-      "brightness": 12.5
+      "brightness": 100
     },
     "back": {
       "color": {
@@ -68,23 +68,55 @@
     },
     "desk": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "white"
+        "mode": "HUE",
+        "hue": 207
       },
-      "brightness": 0
+      "brightness": 100
+    },
+    "desk2": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "hot_pink"
+      },
+      "brightness": 100
+    },
+    "desk3": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "violet"
+      },
+      "brightness": 100
+    },
+    "desk4": {
+      "color": {
+        "mode": "HUE",
+        "hue": 180
+      },
+      "brightness": 100
+    },
+    "desk5": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "purple"
+      },
+      "brightness": 100
     }
   },
   "current_animation": {
-    "id": null,
-    "parameters": {}
+    "id": "BREATHE",
+    "parameters": {
+      "ANIM_SPEED": 50,
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_INTENSITY": 100
+    }
   },
   "application": {
     "main_mode": "ANIMATION",
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 5,
+    "active_parameter": "ANIM_SPEED",
+    "selected_zone_index": 0,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

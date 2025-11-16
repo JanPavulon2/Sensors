@@ -60,7 +60,7 @@ class StaticModeController:
                 zone.config.id: (zone.state.color, zone.brightness)
                 for zone in self.zone_service.get_all()
             }
-            self.strip_controller.render_zones(zone_colors)
+            self.strip_controller.submit_all_zones_frame(zone_colors)
             log.debug(LogCategory.SYSTEM, "STATIC: Rendering complete")
         else:
             log.debug(LogCategory.SYSTEM, "STATIC: Skipping render (first enter)")
@@ -111,7 +111,7 @@ class StaticModeController:
             zone = self.zone_service.get_zone(zone_id)
             # Only render if NOT pulsing (pulse task handles rendering)
             if not self.pulse_active:
-                self.strip_controller.render_zones({zone_id: (zone.state.color, zone.brightness)})
+                self.strip_controller.submit_all_zones_frame({zone_id: (zone.state.color, zone.brightness)})
             log.zone("Adjusted brightness", zone=zone.config.display_name, brightness=zone.brightness)
 
         elif self.current_param == ParamID.ZONE_COLOR_HUE:
@@ -119,7 +119,7 @@ class StaticModeController:
             self.zone_service.set_color(zone_id, new_color)
             # Only render if NOT pulsing
             if not self.pulse_active:
-                self.strip_controller.submit_zones({zone_id: (new_color, zone.brightness)})
+                self.strip_controller.submit_all_zones_frame({zone_id: (new_color, zone.brightness)})
             log.zone("Adjusted hue", zone=zone.config.display_name, delta=delta)
 
         elif self.current_param == ParamID.ZONE_COLOR_PRESET:
@@ -128,7 +128,7 @@ class StaticModeController:
             self.zone_service.set_color(zone_id, new_color)
             # Only render if NOT pulsing
             if not self.pulse_active:
-                self.strip_controller.submit_zones({zone_id: (new_color, zone.brightness)})
+                self.strip_controller.submit_all_zones_frame({zone_id: (new_color, zone.brightness)})
             log.zone("Changed preset", zone=zone.config.display_name, preset=new_color._preset_name)
 
         self._sync_preview()
@@ -174,7 +174,7 @@ class StaticModeController:
 
         # Restore current zone to correct brightness (not pulse state)
         current_zone = self._get_current_zone()
-        self.strip_controller.submit_zones({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
+        self.strip_controller.submit_all_zones_frame({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
           
     
     async def _pulse_task(self):
@@ -191,7 +191,7 @@ class StaticModeController:
                 # Calculate brightness factor (0.5 to 1.0)
                 scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
                 pulse_brightness = int(base * scale)
-                self.strip_controller.submit_zones({current_zone.id: (current_zone.state.color, pulse_brightness)})
+                self.strip_controller.submit_all_zones_frame({current_zone.id: (current_zone.state.color, pulse_brightness)})
 
                 await asyncio.sleep(cycle / steps)  
                 

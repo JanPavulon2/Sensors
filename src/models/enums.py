@@ -56,14 +56,19 @@ class ButtonID(Enum):
 
 class ZoneID(Enum):
     """Zone identifiers"""
-    FLOOR = auto()
+    FLOOR = auto() 
     LEFT = auto()
     TOP = auto()
-    RIGHT = auto()
+    RIGHT = auto() 
     BOTTOM = auto()
     LAMP = auto()
     BACK = auto()
     DESK = auto()
+    DESK2 = auto()
+    DESK3 = auto()
+    DESK4 = auto()
+    DESK5 = auto()
+    DESK6 = auto()
 
 class AnimationID(Enum):
     """Animation identifiers"""
