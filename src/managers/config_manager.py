@@ -201,13 +201,18 @@ class ConfigManager:
 
     def get_all_zones(self) -> List[ZoneConfig]:
         """
-        Get ALL zones (enabled + disabled) with calculated indices
+        Get ALL zones (enabled + disabled) with calculated indices and GPIO assignments
 
         IMPORTANT: Disabled zones preserve their pixel indices to prevent physical LED shifting.
         Domain layer (ZoneCombined.get_rgb()) renders disabled zones as black (0,0,0).
 
+        GPIO assignment:
+        - Reads hardware.yaml led_strips configuration for GPIO-to-zones mapping
+        - Each zone is assigned to its GPIO based on the mapping
+        - Default GPIO: 18 (main zone strip)
+
         Returns:
-            List of ZoneConfig objects (immutable, with indices calculated)
+            List of ZoneConfig objects (immutable, with indices and GPIO assignments calculated)
         """
         zones_raw = self.data.get("zones", [])
         if not zones_raw:
@@ -217,18 +222,35 @@ class ConfigManager:
         # Sort by order (ALL zones, not just enabled)
         zones_raw.sort(key=lambda z: z.get("order", 0))
 
-        # Calculate indices for ALL zones (disabled zones preserve their pixel space)
-        prev_end = -1
+        # Build GPIO-to-zones mapping from hardware.yaml
+        gpio_mapping = {}  # zone_id_str -> gpio
+        for strip_cfg in self.hardware_manager.get_gpio_to_zones_mapping():
+            gpio_pin = strip_cfg.get("gpio", 18)
+            zone_list = strip_cfg.get("zones", [])
+            for zone_name in zone_list:
+                gpio_mapping[zone_name.upper()] = gpio_pin
+
+        # Build zone configs with GPIO assignment
+        # Pixel indices are calculated per-GPIO (each GPIO's zones start from index 0)
+        prev_end_by_gpio = {}  # gpio -> last_end_index
         zone_configs = []
 
         for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
-            start_index = prev_end + 1
-            end_index = start_index + pixel_count - 1
-            prev_end = end_index
-
-            # Build ZoneConfig object (preserve enabled flag)
             zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
+            zone_id_str = zone_dict.get("id", "UNKNOWN").upper()
+
+            # Assign GPIO from hardware mapping, default to 18
+            gpio_pin = gpio_mapping.get(zone_id_str, 18)
+
+            # Calculate start/end indices for this GPIO's sequence
+            if gpio_pin not in prev_end_by_gpio:
+                prev_end_by_gpio[gpio_pin] = -1
+
+            start_index = prev_end_by_gpio[gpio_pin] + 1
+            end_index = start_index + pixel_count - 1
+            prev_end_by_gpio[gpio_pin] = end_index
+
             zone_config = ZoneConfig(
                 id=zone_id,
                 display_name=zone_dict.get("name", "Unknown"),
@@ -237,7 +259,8 @@ class ConfigManager:
                 reversed=zone_dict.get("reversed", False),
                 order=zone_dict.get("order", 0),
                 start_index=start_index,
-                end_index=end_index
+                end_index=end_index,
+                gpio=gpio_pin  # Assign GPIO from hardware mapping
             )
             zone_configs.append(zone_config)
 

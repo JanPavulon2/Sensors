@@ -71,12 +71,14 @@ class ButtonID(Enum):
 
 class ZoneID(Enum):
     """Zone identifiers"""
-    FLOOR = auto() 
+    FLOOR = auto()
     LEFT = auto()
     TOP = auto()
-    RIGHT = auto() 
+    RIGHT = auto()
     BOTTOM = auto()
     LAMP = auto()
+    PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
+    PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
     BACK = auto()
     DESK = auto()
     DESK2 = auto()

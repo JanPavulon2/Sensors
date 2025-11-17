@@ -167,21 +167,52 @@ async def main():
         gpio_manager
     )
 
-    log.info("Initializing LED strip...")
-    zone_strip = ZoneStrip(
-        gpio=config_manager.hardware_manager.get_led_strip("zone_strip")["gpio"],  # type: ignore
-        pixel_count=zone_service.get_total_pixel_count(),
-        zones=[z.config for z in zone_service.get_all()],
-        gpio_manager=gpio_manager
-    )
+    log.info("Initializing LED strips...")
+    from engine.frame_manager import FrameManager
+
+    # Create ZoneStrips for each GPIO
+    # Each strip gets only the zones assigned to its GPIO, with pixel indices reset to 0
+    zone_strips = {}  # gpio -> ZoneStrip
+    all_zones = zone_service.get_all()
+
+    # Group zones by GPIO
+    zones_by_gpio = {}
+    for zone in all_zones:
+        gpio = zone.config.gpio
+        if gpio not in zones_by_gpio:
+            zones_by_gpio[gpio] = []
+        zones_by_gpio[gpio].append(zone.config)
+
+    # Create a ZoneStrip for each GPIO
+    # Zones already have correct pixel indices (per-GPIO) from ConfigManager.get_all_zones()
+    for gpio_pin, zones_for_gpio in sorted(zones_by_gpio.items()):
+        # Calculate total pixels for this GPIO
+        pixel_count_for_gpio = sum(z.pixel_count for z in zones_for_gpio)
+
+        # Create ZoneStrip for this GPIO
+        strip = ZoneStrip(
+            gpio=gpio_pin,
+            pixel_count=pixel_count_for_gpio,
+            zones=zones_for_gpio,
+            gpio_manager=gpio_manager
+        )
+        zone_strips[gpio_pin] = strip
+        log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count_for_gpio} pixels ({len(zones_for_gpio)} zones)")
+
+    # Use main zone strip (GPIO 18) as the primary strip for controllers
+    zone_strip = zone_strips.get(18, list(zone_strips.values())[0])
 
     # ========================================================================
     # FRAME MANAGER
     # ========================================================================
 
     log.info("Initializing FrameManager...")
-    from engine.frame_manager import FrameManager
     frame_manager = FrameManager(fps=60)
+
+    # Register all LED strips with FrameManager
+    for gpio_pin, strip in zone_strips.items():
+        frame_manager.register_main_strip(strip)
+        log.info(f"Registered ZoneStrip (GPIO {gpio_pin}) with FrameManager")
 
     # ========================================================================
     # SERVICES: TRANSITIONS
@@ -242,18 +273,6 @@ async def main():
     
     log.info("Performing startup transition...")
     await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
-
-    # ========================================================================
-    # SYSTEM STATUS
-    # ========================================================================
-
-    log.info("=" * 60)
-    log.info("Initial state loaded:")
-    # log.info(f"  Mode: {led_controller.main_mode.name}")
-    log.info(f"  Edit Mode: {'ON' if led_controller.edit_mode else 'OFF'}")
-    log.info("=" * 60)
-    log.info("System ready. Press Ctrl+C to exit.")
-    log.info("=" * 60)
 
     # ========================================================================
     # RUN LOOPS

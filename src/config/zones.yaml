@@ -46,13 +46,29 @@ zones:
     enabled: true
     order: 6
 
-  - id: DESK
-    name: Desk
-    tag: desk
-    pixel_count: 9      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+  - id: PIXEL
+    name: Pixel
+    tag: pixel
+    pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
     order: 7
     reversed: false
+
+  - id: PREVIEW
+    name: Preview
+    tag: preview
+    pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
+    enabled: true
+    order: 8
+    reversed: true
+
+  # - id: DESK
+  #   name: Desk
+  #   tag: desk
+  #   pixel_count: 9      # 54 physical LEDs (18 * 3) - back wall (was "strip")
+  #   enabled: true
+  #   order: 9
+  #   reversed: false
 
   # - id: DESK2
   #   name: desk2

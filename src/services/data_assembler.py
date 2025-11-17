@@ -61,7 +61,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
-                log.info(f"Saved state to {self.state_path}")
+                log.debug(f"Saved state to {self.state_path}")
         except Exception as e:
             log.error(f"Failed to save state: {e}")
             raise

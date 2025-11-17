@@ -7,7 +7,16 @@ Returns simple dicts compatible with existing component constructors.
 
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TypedDict
+
+
+class LEDStripConfig(TypedDict, total=False):
+    """Type definition for LED strip configuration"""
+    gpio: int
+    zones: List[str]
+    color_order: str
+    count: Optional[int]
+    brightness: Optional[int]
 
 
 class HardwareManager:
@@ -142,18 +151,39 @@ class HardwareManager:
             strip_cfg = hw_mgr.get_led_strip("strip")
             # {"gpio": 18, "count": 45, "color_order": "BRG", "brightness": 255}
         """
-        leds = self.data.get('leds', {})
-        return leds.get(name)
+        led_strips = self.data.get('led_strips', [])
+        return led_strips.get(name)
 
     @property
     def led_strips(self) -> Dict[str, Dict[str, Any]]:
         """
-        Get all LED strip configurations
+        Get all LED strip configurations (named strips)
 
         Returns:
             Dict mapping strip name to config dict
         """
-        return self.data.get('leds', {})
+        leds = self.data.get('leds', {})
+        # Return only non-list items (legacy named strips, not the new led_strips list)
+        return {k: v for k, v in leds.items() if not isinstance(v, list) and k != 'led_strips'}
+
+    def get_gpio_to_zones_mapping(self) -> List[LEDStripConfig]:
+        """
+        Get GPIO-to-zones mapping for multi-GPIO strip support
+
+        Returns:
+            List of LEDStripConfig dicts describing which zones are on each GPIO pin
+            Each dict contains: gpio (int), zones (List[str]), color_order (str)
+
+        Example:
+            mapping = hw_mgr.get_gpio_to_zones_mapping()
+            # [
+            #   {"gpio": 18, "zones": ["FLOOR", "LEFT", "TOP", ...], "color_order": "BRG"},
+            #   {"gpio": 19, "zones": ["PIXEL", "PREVIEW"], "color_order": "GRB"}
+            # ]
+        """
+        leds = self.data.get('leds', {})
+        led_strips = leds.get('led_strips', [])
+        return led_strips if isinstance(led_strips, list) else []
 
     # ===== Validation =====
 

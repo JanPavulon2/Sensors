@@ -14,12 +14,16 @@ encoders:
 
 buttons: [22, 26, 23, 24]
 
-leds:
-  preview:
-    gpio: 19
-    count: 8
-    color_order: GRB
+led_strips:  
+  # GPIO-to-zones mapping
+  # Specifies which zones are connected to which GPIO pin
+  # Zones are rendered sequentially on their assigned GPIO
+    - id: PIXEL
+      gpio: 18
+      zones: [FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP]  # Main zone strip (chained)
+      color_order: BRG
 
-  zone_strip:
-    gpio: 18
-    color_order: BRG
+    - id: PREVIEW
+      gpio: 19
+      zones: [PIXEL, PREVIEW]  # User zone strip (30px) + preview (8px, reversed)
+      color_order: GRB

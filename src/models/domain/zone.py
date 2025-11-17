@@ -18,6 +18,7 @@ class ZoneConfig:
     order: int
     start_index: int
     end_index: int
+    gpio: int = 18       # GPIO pin for this zone's LED strip (default: 18)
 
     @property
     def tag(self) -> str:
