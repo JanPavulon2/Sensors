@@ -1,8 +1,9 @@
 """Data assembler - Loads config + state and builds domain objects"""
 
+import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from models.enums import ParamID, AnimationID, ZoneID, MainMode
 from models.domain import (
     ParameterConfig, ParameterState, ParameterCombined,
@@ -22,12 +23,17 @@ log = get_logger().for_category(LogCategory.CONFIG)
 class DataAssembler:
     """Assembles domain objects from existing managers + state"""
 
-    def __init__(self, config_manager: ConfigManager, state_path: Path):
+    def __init__(self, config_manager: ConfigManager, state_path: Path, debounce_ms: int = 500):
         self.config_manager = config_manager
         self.state_path = state_path
         self.color_manager = config_manager.color_manager
         self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
+
+        # Debouncing: prevent IO thrashing on rapid state changes (all saves go through here)
+        self._save_task: Optional[asyncio.Task] = None
+        self._pending_state: Optional[dict] = None  # Latest state waiting to be saved
+        self._save_delay = debounce_ms / 1000  # Convert to seconds
 
         log.info("DataAssembler initialized")
 
@@ -45,8 +51,13 @@ class DataAssembler:
             log.warn(f"Invalid JSON in state file: {e}")
             raise
 
-    def save_state(self, state: dict) -> None:
-        """Save state to JSON file"""
+    def _write_state_to_disk(self, state: dict) -> None:
+        """
+        Internal: Actually write state to disk.
+
+        Called after debounce delay. Uses latest pending state (not the
+        state passed to save_state() call), ensuring we save final state.
+        """
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
@@ -54,6 +65,49 @@ class DataAssembler:
         except Exception as e:
             log.error(f"Failed to save state: {e}")
             raise
+
+    async def _debounced_save(self) -> None:
+        """
+        Internal: Debounced save implementation.
+
+        Waits for debounce delay, then saves to disk ONLY IF _pending_state is not None.
+        This ensures we skip intermediate saves and only write final state.
+        """
+        try:
+            await asyncio.sleep(self._save_delay)
+
+            # Only save if still pending (timer wasn't cancelled)
+            if self._pending_state is None:
+                return
+
+            self._write_state_to_disk(self._pending_state)
+            self._pending_state = None
+
+        except asyncio.CancelledError:
+            pass  # Timer was cancelled, don't save
+
+    def save_state(self, state: dict) -> None:
+        """
+        Queue a debounced save of state to disk.
+
+        Cancels any pending save timer and schedules a new one.
+        This prevents IO thrashing when state changes rapidly
+        (e.g., encoder rotations, parameter adjustments).
+
+        Key behavior:
+        - Rapid changes (10 encoder rotations in 100ms) → 1 disk write (not 10)
+        - State is always up-to-date in memory
+        - Disk write waits 500ms after LAST change, saves final state once
+        """
+        # Store latest state (will be saved after debounce delay)
+        self._pending_state = state
+
+        # Cancel previous pending save if any
+        if self._save_task and not self._save_task.done():
+            self._save_task.cancel()
+
+        # Schedule new save with debounce delay
+        self._save_task = asyncio.create_task(self._debounced_save())
 
     def build_animations(self) -> List[AnimationCombined]:
         """Build animation domain objects from config + state"""
