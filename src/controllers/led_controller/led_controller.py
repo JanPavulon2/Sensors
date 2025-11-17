@@ -227,8 +227,19 @@ class LEDController:
             asyncio.create_task(self._enter_frame_by_frame_mode_async())
 
     async def _enter_frame_by_frame_mode_async(self):
-        """Async wrapper to enter frame-by-frame mode."""
-        await self.start_frame_by_frame_debugging(AnimationID.BREATHE)
+        """Async wrapper to enter frame-by-frame mode for currently running animation."""
+        current_anim = self.animation_service.get_current()
+        if not current_anim:
+            log.warn("No animation running, cannot enter frame-by-frame mode")
+            return
+
+        # Debug current animation with its current parameters
+        anim_id = current_anim.config.id
+        params = current_anim.build_params_for_engine()
+        safe_params = Serializer.params_enum_to_str(params)
+
+        log.info(f"Entering frame-by-frame mode for animation: {anim_id.name}")
+        await self.start_frame_by_frame_debugging(anim_id, **safe_params)
 
     # ------------------------------------------------------------------
     # ACTIONS (DISPATCH)
