@@ -24,6 +24,21 @@ class MainMode(Enum):
     ANIMATION = auto()   # Animation control
 
 
+class ZoneMode(Enum):
+    """
+    Per-zone operating modes (replaces global MainMode)
+
+    Each zone independently operates in one of these modes:
+
+    STATIC: Zone displays static color (zone editing mode)
+    ANIMATION: Zone displays animation
+    OFF: Zone is powered off (disabled)
+    """
+    STATIC = auto()
+    ANIMATION = auto()
+    OFF = auto()
+
+
 class PreviewMode(Enum):
     """Preview panel display modes"""
     COLOR_DISPLAY = auto()    # Show color on all 8 LEDs

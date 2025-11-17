@@ -13,10 +13,11 @@ log = get_logger().for_category(LogCategory.ZONE)
 class ZoneService:
     """High-level zone operations"""
 
-    def __init__(self, assembler: DataAssembler):
+    def __init__(self, assembler: DataAssembler, app_state_service=None):
         self.assembler = assembler
         self.zones = assembler.build_zones()
         self._by_id = {zone.config.id: zone for zone in self.zones}
+        self.app_state_service = app_state_service
 
         log.info(f"ZoneService initialized with {len(self.zones)} zones")
 
@@ -27,6 +28,30 @@ class ZoneService:
     def get_all(self) -> List[ZoneCombined]:
         """Get all zones"""
         return self.zones
+
+    def get_selected_zone(self) -> Optional[ZoneCombined]:
+        """
+        Get currently selected zone based on ApplicationState.current_zone_index
+
+        Per-zone mode: The selected zone determines which zone's mode and parameters
+        are being edited. A zone is always selected (even if not visible due to lack
+        of pulse), allowing per-zone mode toggling via BTN4.
+
+        Returns:
+            Selected ZoneCombined object or None if app_state_service not available
+        """
+        if not self.app_state_service:
+            log.warn("Cannot get selected zone: app_state_service not configured")
+            return None
+
+        app_state = self.app_state_service.get_state()
+        zone_index = app_state.current_zone_index
+
+        if 0 <= zone_index < len(self.zones):
+            return self.zones[zone_index]
+        else:
+            log.warn(f"Invalid zone index: {zone_index}, clamping to 0")
+            return self.zones[0] if self.zones else None
 
     def get_enabled(self) -> List[ZoneCombined]:
         """Get only enabled zones"""
@@ -79,3 +104,7 @@ class ZoneService:
     def save(self) -> None:
         """Persist current state"""
         self.assembler.save_zone_state(self.zones)
+
+    def save_state(self) -> None:
+        """Persist current state (alias for save)"""
+        self.save()

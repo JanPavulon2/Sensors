@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from models.enums import ParamID, AnimationID, ZoneID, MainMode
+from models.enums import ParamID, AnimationID, ZoneID, MainMode, ZoneMode
 from models.domain import (
     ParameterConfig, ParameterState, ParameterCombined,
     AnimationConfig, AnimationState, AnimationCombined,
@@ -42,7 +42,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "r") as f:
                 state = json.load(f)
-                log.info(f"Loaded state from {self.state_path}")
+                log.debug(f"Loaded state from {self.state_path}")
                 return state
         except FileNotFoundError:
             log.error(f"State file not found: {self.state_path}")
@@ -200,14 +200,34 @@ class DataAssembler:
                     log.warn(f"No state found for zone {zone_config.tag}, using defaults")
                     color = Color.from_hue(0)
                     brightness = 100
+                    mode = ZoneMode.STATIC
+                    animation_id = None
                 else:
                     color_dict = zone_state_data.get("color", {"mode": "HUE", "hue": 0})
                     color = Color.from_dict(color_dict, self.color_manager)
                     brightness = zone_state_data.get("brightness", 100)
 
+                    # Load zone mode using EnumHelper with fallback to STATIC
+                    try:
+                        mode = EnumHelper.to_enum(ZoneMode, zone_state_data.get("mode", "STATIC"))
+                    except (ValueError, TypeError):
+                        mode = ZoneMode.STATIC
+
+                    # Load animation_id if zone is in ANIMATION mode
+                    animation_id = None
+                    if mode == ZoneMode.ANIMATION:
+                        anim_id_str = zone_state_data.get("animation_id")
+                        if anim_id_str:
+                            try:
+                                animation_id = EnumHelper.to_enum(AnimationID, anim_id_str)
+                            except (ValueError, TypeError):
+                                log.warn(f"Invalid animation_id for zone {zone_config.tag}: {anim_id_str}")
+
                 zone_state = ZoneState(
                     id=zone_config.id,
-                    color=color
+                    color=color,
+                    mode=mode,
+                    animation_id=animation_id
                 )
 
                 params_combined = {}
@@ -272,10 +292,17 @@ class DataAssembler:
 
             for zone in zones:
                 tag = zone.config.id.name.lower()
-                state_json["zones"][tag] = {
+                zone_data = {
                     "color": zone.state.color.to_dict(),
-                    "brightness": zone.brightness  # Read from property (gets from parameters)
+                    "brightness": zone.brightness,  # Read from property (gets from parameters)
+                    "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION, OFF)
                 }
+
+                # Save animation_id if zone is in ANIMATION mode
+                if zone.state.animation_id:
+                    zone_data["animation_id"] = zone.state.animation_id.name
+
+                state_json["zones"][tag] = zone_data
 
             self.save_state(state_json)
             log.info(f"Successfully saved {len(zones)} zone states")
@@ -303,17 +330,11 @@ class DataAssembler:
 
             # Parse enums using EnumHelper with fallback to dataclass defaults
             try:
-                main_mode = EnumHelper.to_enum(MainMode, app_data.get("main_mode"))
-            except (ValueError, TypeError):
-                main_mode = ApplicationState.main_mode  # Dataclass default
-
-            try:
                 current_param = EnumHelper.to_enum(ParamID, app_data.get("active_parameter"))
             except (ValueError, TypeError):
                 current_param = ApplicationState.current_param  # Dataclass default
 
             state = ApplicationState(
-                main_mode=main_mode,
                 edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
                 lamp_white_mode=app_data.get("lamp_white_mode_on", ApplicationState.lamp_white_mode),
                 lamp_white_saved_state=app_data.get("lamp_white_saved_state", ApplicationState.lamp_white_saved_state),
@@ -323,7 +344,7 @@ class DataAssembler:
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
             )
 
-            log.info(f"Built application state: {main_mode.name}, zone_idx={state.current_zone_index}")
+            log.info(f"Built application state: zone_idx={state.current_zone_index}")
             return state
 
         except Exception as e:
@@ -341,7 +362,6 @@ class DataAssembler:
             state_json = self.load_state()
 
             state_json["application"] = {
-                "main_mode": EnumHelper.to_string(app_state.main_mode),
                 "edit_mode_on": app_state.edit_mode,
                 "lamp_white_mode_on": app_state.lamp_white_mode,
                 "lamp_white_saved_state": app_state.lamp_white_saved_state,

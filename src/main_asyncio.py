@@ -152,9 +152,9 @@ async def main():
     assembler = DataAssembler(config_manager, state_file)
 
     log.info("Initializing services...")
-    zone_service = ZoneService(assembler)
     animation_service = AnimationService(assembler)
     app_state_service = ApplicationStateService(assembler)
+    zone_service = ZoneService(assembler, app_state_service)
 
     # ========================================================================
     # LAYER 1: HARDWARE
@@ -249,7 +249,7 @@ async def main():
 
     log.info("=" * 60)
     log.info("Initial state loaded:")
-    log.info(f"  Mode: {led_controller.main_mode.name}")
+    # log.info(f"  Mode: {led_controller.main_mode.name}")
     log.info(f"  Edit Mode: {'ON' if led_controller.edit_mode else 'OFF'}")
     log.info("=" * 60)
     log.info("System ready. Press Ctrl+C to exit.")

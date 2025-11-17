@@ -23,7 +23,7 @@ from services.transition_service import TransitionService
 from services import AnimationService
 from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
-from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource
+from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneMode
 from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
 from components import ZoneStrip
@@ -428,6 +428,24 @@ class AnimationEngine:
                             if i in pix_dict:
                                 pixels_list[i] = pix_dict[i]
                         zone_pixels_dict[zone_id] = pixels_list
+
+                # === Merge static zones into frame ===
+                # Before submitting, add all STATIC zones to the frame
+                for zone in self.zones:
+                    zone_id = zone.config.id
+                    # Skip if this zone is already in the animated frame or is OFF
+                    if zone_id in zone_pixels_dict or zone.state.mode == ZoneMode.OFF:
+                        continue
+
+                    # If zone is STATIC, add its current color
+                    if zone.state.mode == ZoneMode.STATIC:
+                        rgb = zone.get_rgb()
+                        zone_length = self.zone_lengths.get(zone_id, 0)
+                        # Fill entire zone with static color
+                        zone_pixels_dict[zone_id] = [rgb] * zone_length
+                        log.debug(
+                            f"[Frame {frame_count}] Merged static zone: {zone_id.name} color={rgb}"
+                        )
 
                 if zone_pixels_dict:
                     # Skip frame submission if frozen (frame-by-frame debugging)

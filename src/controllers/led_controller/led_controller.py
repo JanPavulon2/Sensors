@@ -6,7 +6,7 @@ Coordinates between static, animation, and lamp/power modes.
 import asyncio
 from typing import TYPE_CHECKING
 from animations.engine import AnimationEngine
-from models.enums import MainMode, ButtonID, EncoderSource, AnimationID
+from models.enums import MainMode, ButtonID, EncoderSource, AnimationID, ZoneMode
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
@@ -78,7 +78,10 @@ class LEDController:
         
         # Load persistent state
         state = app_state_service.get_state()
-        self.main_mode = state.main_mode
+        # Note: main_mode has been removed - zones now have individual modes
+        # Keeping self.main_mode for backward compatibility during transition
+        # TODO: Remove this after full per-zone migration
+        self.main_mode = MainMode.STATIC  # Default fallback
         self.edit_mode = state.edit_mode
 
         # Create ServiceContainer for dependency injection
@@ -217,7 +220,7 @@ class LEDController:
         elif btn == ButtonID.BTN3:
             asyncio.create_task(self.power_toggle.toggle())
         elif btn == ButtonID.BTN4:
-            asyncio.create_task(self._toggle_main_mode())
+            asyncio.create_task(self._toggle_zone_mode())
 
     def _handle_keyboard_keypress(self, e: KeyboardKeyPressEvent):
         """Handle keyboard key presses for debug features."""
@@ -246,40 +249,97 @@ class LEDController:
     # ------------------------------------------------------------------
 
     def _handle_selector_rotation(self, delta: int):
+        """
+        Selector rotation: Context-aware behavior based on selected zone's mode.
+
+        Per-zone mode architecture:
+        - STATIC zone: Rotate to select different zones
+        - ANIMATION zone: Rotate to cycle through animations
+        - OFF zone: Rotate to select different zones
+        """
         if not self.edit_mode:
             log.info("Selector rotation ignored when not in edit mode")
             return
-        
-        if self.main_mode == MainMode.STATIC:
-            self.static_mode_controller.change_zone(delta)
-        else:
+
+        current_zone = self.zone_service.get_selected_zone()
+        if not current_zone:
+            log.warn("No zone selected for selector rotation")
+            return
+
+        # Context-aware routing based on selected zone's mode
+        if current_zone.state.mode == ZoneMode.ANIMATION:
+            # In ANIMATION mode: rotate to cycle animations
             self.animation_mode_controller.select_animation(delta)
+        else:
+            # In STATIC or OFF mode: rotate to select zones
+            self.static_mode_controller.change_zone(delta)
             
     def _handle_selector_click(self):
-        if self.main_mode == MainMode.STATIC:
-            log.info("Selector click ignored in STATIC mode")
-        else:
+        """
+        Selector click: Route based on currently selected zone's mode.
+
+        Per-zone mode: Selector click behavior depends on zone's mode
+        - STATIC zone: Ignored (no click action in STATIC mode)
+        - ANIMATION zone: Start/stop animation
+        - OFF zone: Ignored
+        """
+        current_zone = self.zone_service.get_selected_zone()
+        if not current_zone:
+            log.warn("No zone selected for selector click")
+            return
+
+        if current_zone.state.mode == ZoneMode.ANIMATION:
             asyncio.create_task(self.animation_mode_controller.toggle_animation())
+        else:
+            log.info(f"Selector click ignored for {current_zone.state.mode.name} zone")
             
     def _handle_modulator_rotation(self, delta: int):
+        """
+        Modulator rotation: Adjust parameter based on selected zone's mode.
+
+        Per-zone mode: Routes to appropriate controller based on zone's mode
+        - STATIC zone: Adjust zone parameters (color, brightness)
+        - ANIMATION zone: Adjust animation parameters (speed, intensity)
+        - OFF zone: Ignored
+        """
         if not self.edit_mode:
             log.info("Modulator rotation ignored when not in edit mode")
             return
-        
-        if self.main_mode == MainMode.STATIC:
+
+        current_zone = self.zone_service.get_selected_zone()
+        if not current_zone:
+            log.warn("No zone selected for modulator rotation")
+            return
+
+        if current_zone.state.mode == ZoneMode.STATIC:
             self.static_mode_controller.adjust_param(delta)
-        else:
+        elif current_zone.state.mode == ZoneMode.ANIMATION:
             self.animation_mode_controller.adjust_param(delta)
+        # For OFF mode, do nothing
         
     def _handle_modulator_click(self):
+        """
+        Modulator click: Cycle parameter based on selected zone's mode.
+
+        Per-zone mode: Routes to appropriate controller based on zone's mode
+        - STATIC zone: Cycle zone parameters (COLOR → BRIGHTNESS → ...)
+        - ANIMATION zone: Cycle animation parameters (SPEED → INTENSITY → ...)
+        - OFF zone: Ignored
+        """
         if not self.edit_mode:
             log.info("Modulator click ignored when not in edit mode")
             return
-        
-        if self.main_mode == MainMode.STATIC:
+
+        current_zone = self.zone_service.get_selected_zone()
+        if not current_zone:
+            log.warn("No zone selected for modulator click")
+            return
+
+        if current_zone.state.mode == ZoneMode.STATIC:
             self.static_mode_controller.cycle_parameter()
-        else: 
+        elif current_zone.state.mode == ZoneMode.ANIMATION:
             self.animation_mode_controller.cycle_param()
+        # For OFF mode, do nothing
         
     def _toggle_edit_mode(self):
         self.edit_mode = not self.edit_mode
@@ -290,97 +350,95 @@ class LEDController:
         else:
             self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
         
-    async def _toggle_main_mode(self):
+    async def _toggle_zone_mode(self):
         """
-        Switch between STATIC ↔ ANIMATION with smooth crossfade transitions.
+        Toggle currently selected zone between STATIC ↔ ANIMATION mode.
+
+        Per-zone architecture: Only affects the selected zone, not all zones.
 
         Flow:
-        1. Capture current frame (for crossfade)
-        2. Exit current mode (cleanup, no fade)
-        3. Switch mode
-        4. Prepare new mode state
-        5. CROSSFADE from old to new (no black frame)
-        6. Enter new mode
+        1. Get currently selected zone
+        2. Stop any animations running on this zone
+        3. Toggle zone mode (STATIC ↔ ANIMATION)
+        4. Start animation if switching to ANIMATION, or render static color if STATIC
         """
-        log.info("Toggling main mode...")
+        current_zone = self.zone_service.get_selected_zone()
+        if not current_zone:
+            log.warn("No zone selected for mode toggle")
+            return
+
+        zone_id = current_zone.config.id
+        log.info(f"Toggling zone mode for {zone_id.name}...")
 
         # 1. Determine next mode
-        if self.main_mode == MainMode.STATIC:
-            next_mode = MainMode.ANIMATION
+        if current_zone.state.mode == ZoneMode.STATIC:
+            next_mode = ZoneMode.ANIMATION
         else:
-            next_mode = MainMode.STATIC
+            next_mode = ZoneMode.STATIC
 
-        # 2. Capture current frame BEFORE any changes (for crossfade)
-        old_frame = self.zone_strip_controller.zone_strip.get_frame()
+        # 2. Stop any animation running on this zone
+        if self.animation_engine.is_running():
+            current_anim_id = self.animation_engine.get_current_animation_id()
+            log.debug(f"Stopping animation {current_anim_id.name if current_anim_id else '?'}")
+            await self.animation_engine.stop()
 
-        # 3. Exit current mode (cleanup only, NO fade)
-        if self.main_mode == MainMode.STATIC:
-            self.static_mode_controller.exit_mode()  # Stop pulse
-        else:
-            await self.animation_mode_controller.exit_mode()  # Stop animation (skip_fade=True already)
-        log.debug(f"Exited {self.main_mode.name} mode")
+        # 3. Update zone mode
+        current_zone.state.mode = next_mode
+        self.zone_service.save_state()
+        log.info(f"Zone {zone_id.name} mode toggled to {next_mode.name}")
 
-        # 4. Switch mode
-        self.main_mode = next_mode
-        self.app_state_service.set_main_mode(next_mode)
-        log.debug(f"Switched to {next_mode.name}")
+        # 4. Handle mode-specific setup
+        if next_mode == ZoneMode.STATIC:
+            log.debug(f"Zone {zone_id.name}: Switching to STATIC mode")
+            # Just render the static color - frame merging will handle it
+            r, g, b = current_zone.get_rgb()
+            self.zone_strip_controller.zone_strip.set_zone_color(zone_id, r, g, b)
 
-        # 5. Prepare new state and crossfade
-        if next_mode == MainMode.STATIC:
-            # STATIC mode: render to buffer, then crossfade to it
-            # Render all zones to buffer (show=False)
-            for zone in self.zone_service.get_all():
-                r, g, b = zone.get_rgb()
-                self.zone_strip_controller.zone_strip.set_zone_color(
-                    zone.config.id,
-                    r, g, b,
-                    show=False
-                )
-
-            # Get target frame
-            new_frame = self.zone_strip_controller.zone_strip.get_frame()
-
-            # CROSSFADE from old to new (no black frame!)
-            if old_frame and new_frame and len(old_frame) == len(new_frame):
-                log.debug("Mode toggle: crossfading to STATIC")
-                await self.zone_strip_controller.transition_service.crossfade(
-                    old_frame,
-                    new_frame,
-                    self.zone_strip_controller.transition_service.MODE_SWITCH
-                )
-            else:
-                # Fallback: fade in from black
-                log.debug("Mode toggle: fade in to STATIC (no old frame)")
-                await self.zone_strip_controller.fade_in_all(
-                    new_frame,
-                    self.zone_strip_controller.transition_service.MODE_SWITCH
-                )
-
-            # Post-transition setup
+            # Sync preview
             self.static_mode_controller._sync_preview()
             if self.edit_mode:
                 self.static_mode_controller._start_pulse()
 
         else:
-            # ANIMATION mode: Start animation with crossfade from old_frame
+            # ANIMATION mode
+            log.debug(f"Zone {zone_id.name}: Switching to ANIMATION mode")
+
+            # Stop any pulse from STATIC mode before starting animation
+            self.static_mode_controller._stop_pulse()
+
             current_anim = self.animation_service.get_current()
-            if current_anim:
-                anim_id = current_anim.config.id
-                params = current_anim.build_params_for_engine()
 
-                # Convert param keys to strings (AnimationEngine needs string keys)
-                safe_params = Serializer.params_enum_to_str(params)
+            # Auto-select first animation if none is selected
+            if not current_anim:
+                all_animations = self.animation_service.get_all()
+                if all_animations:
+                    first_anim_id = all_animations[0].config.id
+                    self.animation_service.set_current(first_anim_id)
+                    current_anim = self.animation_service.get_current()
+                    log.info(f"Auto-selected first animation: {first_anim_id.name}")
+                else:
+                    log.warn("No animations available, cannot switch zone to ANIMATION mode")
+                    # Revert the mode change since we can't start animation
+                    current_zone.state.mode = ZoneMode.STATIC
+                    self.zone_service.save_state()
+                    return
 
-                log.debug(f"ANIMATION mode: starting {anim_id.name} with crossfade")
-                # Pass old_frame for crossfade (no black frame!)
-                await self.animation_engine.start(anim_id, from_frame=old_frame, **safe_params)
+            anim_id = current_anim.config.id
+            params = current_anim.build_params_for_engine()
+            safe_params = Serializer.params_enum_to_str(params)
 
-                # Sync preview to match main animation
-                self.animation_mode_controller._sync_preview()
-            else:
-                log.warn("No animation selected, cannot enter ANIMATION mode")
+            log.debug(f"Starting animation {anim_id.name} on zone {zone_id.name}")
 
-        log.info(f"Switched to {next_mode.name} mode")
+            # Build excluded zones list: exclude ALL zones except the selected one
+            # This ensures animation runs ONLY on the selected zone
+            excluded_zone_ids = [
+                z.config.id for z in self.zone_service.get_all()
+                if z.config.id != zone_id
+            ]
+
+            # Start animation with proper exclusions
+            await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+            self.animation_mode_controller._sync_preview()
         
         
     # ------------------------------------------------------------------

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID, PreviewMode
+from models.enums import ParamID, PreviewMode, ZoneMode
 from utils.logger import get_logger, LogCategory, LogLevel
 from utils.serialization import Serializer
 from services import ServiceContainer
@@ -98,7 +98,12 @@ class AnimationModeController:
         self._sync_preview()
 
     async def _switch_to_selected_animation(self):
-        """Switch main strip to currently selected animation (with transition)."""
+        """
+        Switch main strip to currently selected animation (with transition).
+
+        Per-zone mode: Only animate the currently selected zone.
+        All other zones are excluded from animation.
+        """
         current_anim = self.animation_service.get_current()
         if not current_anim:
             return
@@ -109,11 +114,30 @@ class AnimationModeController:
         log.info(f"Auto-switching to animation: {anim_id.name}")
         safe_params = Serializer.params_enum_to_str(params)
 
+        # Get the currently selected zone
+        selected_zone = self.zone_service.get_selected_zone()
+        if not selected_zone:
+            log.warn("No zone selected for animation")
+            return
+
+        # Build list of zones to exclude: ALL zones except the selected one
+        excluded_zone_ids = [
+            zone.config.id for zone in self.zone_service.get_all()
+            if zone.config.id != selected_zone.config.id
+        ]
+
+        log.debug(f"Animation on selected zone {selected_zone.config.id.name}, excluded: {[z.name for z in excluded_zone_ids]}")
+
         # AnimationEngine.start() will handle stop → fade_out → fade_in → start
-        await self.animation_engine.start(anim_id, **safe_params)
+        # Pass excluded_zone_ids so animation only runs on the selected zone
+        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
 
     async def toggle_animation(self):
-        """Start or stop the currently selected animation."""
+        """
+        Start or stop the currently selected animation.
+
+        Per-zone mode: Only animate the currently selected zone.
+        """
         log.info("Toggle animation called")
 
         current_anim = self.animation_service.get_current()
@@ -122,17 +146,33 @@ class AnimationModeController:
             return
 
         engine = self.animation_engine
-        
+
         if engine and engine.is_running():
             log.info(f"Stopping running animation: {engine.get_current_animation_id().name}")
             await engine.stop()
+            return
+
+        # Get the currently selected zone
+        selected_zone = self.zone_service.get_selected_zone()
+        if not selected_zone:
+            log.warn("No zone selected for animation")
             return
 
         anim_id = current_anim.config.id
         params = current_anim.build_params_for_engine()
         log.info(f"Starting animation: {anim_id.name} ({params})")
         safe_params = Serializer.params_enum_to_str(params)
-        await self.animation_engine.start(anim_id, **safe_params)
+
+        # Build list of zones to exclude: ALL zones except the selected one
+        excluded_zone_ids = [
+            zone.config.id for zone in self.zone_service.get_all()
+            if zone.config.id != selected_zone.config.id
+        ]
+
+        log.debug(f"Animation on selected zone {selected_zone.config.id.name}, excluded: {[z.name for z in excluded_zone_ids]}")
+
+        # Only animate the selected zone
+        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
 
         log.info("Animation start call completed")
 

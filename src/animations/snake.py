@@ -53,9 +53,8 @@ class SnakeAnimation(BaseAnimation):
         self.length = max(1, min(4, length))  # Clamp 1-20 pixels
 
         # Build zone pixel map for navigation
-        # Sort active zones by physical position (start index) not alphabetically
-        # zone_items = [(zone_id, start, end) for zone_id, (start, end) in self.active_zones.items()]
-        zone_items = [(z.config.id, z.config.start_index, z.config.end_index) for z in zones]
+        # Use only active zones (already filtered in BaseAnimation.__init__)
+        zone_items = [(z.config.id, z.config.start_index, z.config.end_index) for z in self.active_zone_objects]
         zone_items.sort(key=lambda x: x[1])
 
         self.zone_order = [zone_id for zone_id, _, _ in zone_items]

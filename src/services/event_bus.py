@@ -157,10 +157,7 @@ class EventBus:
             event = EncoderRotateEvent("selector", 1)
             await bus.publish(event)
         """
-        log.info(
-            "Event: ",
-            event_type=event.type.name
-        )
+        log.debug("Event: ", event_type=event.type.name)
         
         # Apply middleware pipeline
         for middleware in self._middleware:
