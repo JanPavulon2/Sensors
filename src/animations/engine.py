@@ -174,7 +174,7 @@ class AnimationEngine:
 
         # Step 4: Cache current zone colors
         for zone in self.zones:
-            color = self.strip.get_zone_color(zone.config.tag)
+            color = self.strip.get_zone_color(zone.config.id)
             if color:
                 self.current_animation.set_zone_color_cache(zone.config.id, *color)
 
@@ -321,10 +321,10 @@ class AnimationEngine:
                 # Apply to buffer (show=False)
                 if len(frame) == 5:
                     zone_id, pixel_index, r, g, b = frame
-                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
+                    self.strip.set_pixel_color(zone_id, pixel_index, r, g, b, show=False)
                 elif len(frame) == 4:
                     zone_id, r, g, b = frame
-                    self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
+                    self.strip.set_zone_color(zone_id, r, g, b, show=False)
 
                 yields_collected += 1
 

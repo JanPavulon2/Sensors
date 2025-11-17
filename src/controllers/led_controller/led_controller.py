@@ -321,7 +321,7 @@ class LEDController:
             for zone in self.zone_service.get_all():
                 r, g, b = zone.get_rgb()
                 self.zone_strip_controller.zone_strip.set_zone_color(
-                    zone.config.id.name,
+                    zone.config.id,
                     r, g, b,
                     show=False
                 )

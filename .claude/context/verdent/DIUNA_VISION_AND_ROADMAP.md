@@ -1055,8 +1055,9 @@ tar -czf /mnt/backup/diuna-$DATE.tar.gz \
 
 ### Phase 8: Backend Refactoring (CURRENT)
 - ✅ Clean up technical debt (logger migration)
-- 🔄 Dependency injection refactor
-- 🔄 Centralize enum serialization
+- ✅ Dependency injection refactor
+- ✅ Centralize enum serialization
+- 🔄 Refactoring to make all zone_colors dicts use consistent types (all enums):
 - 🔄 Add save debouncing
 
 ### Phase 9: Backend API Layer

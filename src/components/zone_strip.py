@@ -1,11 +1,11 @@
 # components/zone_strip.py  (replace existing ZoneStrip class with this)
 
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
+from models.enums import ZoneID
 from infrastructure import GPIOManager
 from utils.enum_helper import EnumHelper
-from utils.serialization import Serializer
 
 
 class ZoneStrip:
@@ -18,7 +18,7 @@ class ZoneStrip:
       - zone_reversed: mapping zone_key -> bool
       - zone_colors cache
 
-    All public APIs accept either ZoneID enum or string zone identifier.
+    All public APIs expect ZoneID enum zone identifiers.
     """
 
     def __init__(
@@ -86,15 +86,6 @@ class ZoneStrip:
     # -----------------------------------------------------------------------
     # Helpers
     # -----------------------------------------------------------------------
-    def _zone_key(self, zone: Any) -> Optional[str]:
-        """Normalize zone input (ZoneID or str) to internal key (str)."""
-        from models.enums import ZoneID
-        if isinstance(zone, ZoneID):
-            return zone.name
-        if isinstance(zone, str):
-            return zone
-        return None
-
     def _validate_zone(self, zone_key: str) -> bool:
         return zone_key in self.zone_indices
 
@@ -120,17 +111,17 @@ class ZoneStrip:
     # -----------------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------------
-    def show_full_pixel_frame(self, zone_pixels_dict: Dict[Any, List[Tuple[int, int, int]]]) -> None:
+    def show_full_pixel_frame(self, zone_pixels_dict: Dict[ZoneID, List[Tuple[int, int, int]]]) -> None:
         """
         Render full absolute frame to hardware.
-        zone_pixels_dict: { ZoneID|str: [(r,g,b), ...], ... }
+        zone_pixels_dict: { ZoneID: [(r,g,b), ...], ... }
         Expectation: provided lists are per-zone logical arrays (length == zone length or shorter).
         """
         # Build full buffer
         full_buffer = [(0, 0, 0)] * self.pixel_count
 
         for zone_in, pixels in zone_pixels_dict.items():
-            zone_key = Serializer.to_str(zone_in)
+            zone_key = zone_in.name
             if zone_key not in self.zone_indices:
                 # unknown zone skip
                 continue
@@ -164,9 +155,9 @@ class ZoneStrip:
 
         self.pixel_strip.show()
 
-    def set_zone_color(self, zone: Any, r: int, g: int, b: int, show: bool = True) -> None:
-        zone_key = self._zone_key(zone)
-        if zone_key is None or not self._validate_zone(zone_key):
+    def set_zone_color(self, zone: ZoneID, r: int, g: int, b: int, show: bool = True) -> None:
+        zone_key = zone.name
+        if not self._validate_zone(zone_key):
             return
 
         self.zone_colors[zone_key] = (r, g, b)
@@ -181,9 +172,9 @@ class ZoneStrip:
         if show:
             self.pixel_strip.show()
 
-    def set_multiple_zones(self, zone_colors: Dict[Any, Tuple[int, int, int]]) -> None:
+    def set_multiple_zones(self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]) -> None:
         for zone_in, (r, g, b) in zone_colors.items():
-            zone_key = Serializer.to_str(zone_in)
+            zone_key = zone_in.name
             if not self._validate_zone(zone_key):
                 continue
             self.zone_colors[zone_key] = (r, g, b)
@@ -194,9 +185,9 @@ class ZoneStrip:
                     self.pixel_strip.setPixelColor(phys, color)
         self.pixel_strip.show()
 
-    def set_pixel_color(self, zone: Any, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
-        zone_key = self._zone_key(zone)
-        if zone_key is None or not self._validate_zone(zone_key):
+    def set_pixel_color(self, zone: ZoneID, pixel_index: int, r: int, g: int, b: int, show: bool = True) -> None:
+        zone_key = zone.name
+        if not self._validate_zone(zone_key):
             return
 
         try:
@@ -239,17 +230,15 @@ class ZoneStrip:
             frame.append((r, g, b))
         return frame
 
-    def get_zone_color(self, zone: Any) -> Optional[Tuple[int, int, int]]:
-        zone_key = self._zone_key(zone)
-        if zone_key is None:
-            return None
+    def get_zone_color(self, zone: ZoneID) -> Optional[Tuple[int, int, int]]:
+        zone_key = zone.name
         return self.zone_colors.get(zone_key)
 
-    def build_frame_from_zones(self, zone_colors: Dict[Any, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+    def build_frame_from_zones(self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
         """Build pixel-level frame from given zone colors (for transitions)."""
         frame = [(0, 0, 0)] * self.pixel_count
         for zone_in, (r, g, b) in zone_colors.items():
-            zone_key = Serializer.to_str(zone_in)
+            zone_key = zone_in.name
             if zone_key not in self.zone_indices:
                 continue
             indices = self.zone_indices[zone_key]

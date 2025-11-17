@@ -19,8 +19,8 @@ def log_middleware(event: Event) -> Event:
     Usage:
         event_bus.add_middleware(log_middleware)
     """
-    # Format source (handle both enum and string)
-    source_str = Serializer.to_str(event.source)
+    # Format source (event.source is always an enum)
+    source_str = Serializer.enum_to_str(event.source)
 
     # Format data compactly
     if 'delta' in event.data:

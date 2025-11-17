@@ -17,7 +17,6 @@ import time
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from utils.logger import get_category_logger
-from utils.serialization import Serializer
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import FullStripFrame, ZoneFrame, PixelFrame
@@ -222,7 +221,7 @@ class FramePlaybackController:
     def _blank_full_state(self) -> Dict:
         """
         Create empty full-frame state for all zones.
-        Uses ZoneStrip.zone_indices which maps zone_name → list of pixel indices."""
+        Uses ZoneID enums as keys (not string zone names)."""
         state = {}
 
         # Find first ZoneStrip (skip PreviewPanel and other strip types)
@@ -237,9 +236,14 @@ class FramePlaybackController:
             return {}
 
         # strip.zone_indices = { "TOP": [0,1,2], "LAMP": [3,4,5,...] }
+        # Convert string keys to ZoneID enums
         for zone_name, physical_indices in strip.zone_indices.items():
-            pixel_count = len(physical_indices)
-            state[zone_name] = [(0, 0, 0)] * pixel_count
+            try:
+                zone_id = ZoneID[zone_name]
+                pixel_count = len(physical_indices)
+                state[zone_id] = [(0, 0, 0)] * pixel_count
+            except KeyError:
+                log.error(f"Unknown zone name: {zone_name}")
 
         return state
 
@@ -251,6 +255,8 @@ class FramePlaybackController:
         (r,g,b)
         (zone_id, r,g,b)
         (zone_id, pixel_idx, r,g,b)
+
+        State dict uses ZoneID enum keys.
         """
         if not isinstance(update, tuple):
             return
@@ -258,25 +264,23 @@ class FramePlaybackController:
         # Case 1 — Full strip solid color
         if len(update) == 3 and isinstance(update[0], int):
             r, g, b = update
-            for zone_name in state.keys():
-                state[zone_name ] = [(r, g, b)] * len(state[zone_name])
+            for zone_id in state.keys():
+                state[zone_id] = [(r, g, b)] * len(state[zone_id])
             return
 
         # Case 2 — Zone-level color update
         if len(update) == 4:
             zone_id, r, g, b = update
-            zone_name = Serializer.enum_to_str(zone_id)
-            if zone_name in state:
-                state[zone_name] = [(r, g, b)] * len(state[zone_name])
+            if zone_id in state:
+                state[zone_id] = [(r, g, b)] * len(state[zone_id])
             return
 
         # Case 3 — Pixel-level update
         if len(update) == 5:
             zone_id, pixel_idx, r, g, b = update
-            zone_name = Serializer.enum_to_str(zone_id)
-            if zone_name in state:
-                if 0 <= pixel_idx < len(state[zone_name]):
-                    state[zone_name][pixel_idx] = (r, g, b)
+            if zone_id in state:
+                if 0 <= pixel_idx < len(state[zone_id]):
+                    state[zone_id][pixel_idx] = (r, g, b)
             return
         
     # ============================================================

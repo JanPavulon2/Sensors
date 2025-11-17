@@ -22,7 +22,7 @@ from collections import deque
 
 from utils.logger import get_logger
 from utils.serialization import Serializer
-from models.enums import LogCategory, FramePriority
+from models.enums import LogCategory, FramePriority, ZoneID
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame, AnyFrame
@@ -390,11 +390,17 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         r, g, b = frame.color
-        for zone_name in getattr(strip, "zones", {}).keys():
-            try:
-                strip.set_zone_color(zone_name, r, g, b, show=False)
-            except Exception as e:
-                log.error(f"Error setting zone {zone_name}: {e}")
+        # Note: ZoneStrip doesn't expose zones list, so this renders via zone_indices
+        if hasattr(strip, 'zone_indices'):
+            for zone_key in strip.zone_indices.keys():
+                try:
+                    # zone_key is already a string, but set_zone_color expects ZoneID
+                    # We need to convert string back to ZoneID enum
+                    from models.enums import ZoneID
+                    zone_id = ZoneID[zone_key]
+                    strip.set_zone_color(zone_id, r, g, b, show=False)
+                except (KeyError, ValueError) as e:
+                    log.error(f"Error setting zone {zone_key}: {e}")
         strip.show()
 
     def _render_zone_frame(self, frame: ZoneFrame, strip) -> None:
@@ -406,11 +412,10 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         for zone_id, (r, g, b) in frame.zone_colors.items():
-            zone_name = Serializer.to_str(zone_id)
             try:
-                strip.set_zone_color(zone_name, r, g, b, show=False)
+                strip.set_zone_color(zone_id, r, g, b, show=False)
             except Exception as e:
-                log.error(f"Error setting zone {zone_name}: {e}")
+                log.error(f"Error setting zone {Serializer.enum_to_str(zone_id)}: {e}")
         strip.show()
 
     def _render_pixel_frame(self, frame: PixelFrame, strip) -> None:
@@ -426,25 +431,26 @@ class FrameManager:
             zone_map = getattr(strip, 'zone_indices', {})
 
             for zone_id, pixels in frame.zone_pixels.items():
-                zone_name = zone_id if isinstance(zone_id, str) else zone_id.name
+                # Normalize to string key for zone_map lookup (zone_indices has string keys)
+                zone_key = zone_id.name if isinstance(zone_id, ZoneID) else zone_id
 
                 # If we have zone mapping, validate; otherwise accept as-is
-                if zone_map and zone_name not in zone_map:
+                if zone_map and zone_key not in zone_map:
                     continue
 
                 if zone_map:
-                    expected_len = len(zone_map[zone_name])
+                    expected_len = len(zone_map[zone_key])
 
                     # extend or trim
                     if len(pixels) != expected_len:
                         fixed = list(pixels[:expected_len])
                         if len(fixed) < expected_len:
                             fixed += [(0, 0, 0)] * (expected_len - len(fixed))
-                        cleaned[zone_name] = fixed
+                        cleaned[zone_id] = fixed
                     else:
-                        cleaned[zone_name] = list(pixels)
+                        cleaned[zone_id] = list(pixels)
                 else:
-                    cleaned[zone_name] = list(pixels)
+                    cleaned[zone_id] = list(pixels)
 
             strip.show_full_pixel_frame(cleaned)
 

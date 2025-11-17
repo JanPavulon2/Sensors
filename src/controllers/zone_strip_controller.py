@@ -118,9 +118,8 @@ class ZoneStripController:
         g = int(g * brightness / 100)
         b = int(b * brightness / 100)
 
-        zone_id_str = zone_id.name
-        self.zone_strip.set_zone_color(zone_id_str, r, g, b)
-        log.debug(f"Rendered zone {zone_id_str}: RGB({r},{g},{b}) @ {brightness}%")
+        self.zone_strip.set_zone_color(zone_id, r, g, b)
+        log.debug(f"Rendered zone {zone_id.name}: RGB({r},{g},{b}) @ {brightness}%")
 
     def render_zone_combined(self, zone: ZoneCombined) -> None:
         """
@@ -146,14 +145,13 @@ class ZoneStripController:
             }
             controller.render_all_zones(states)
         """
-        # Build dict with lowercase tags for hardware layer
-        colors_dict = {}
+        # Build dict with ZoneID enums and RGB colors
+        colors_dict: Dict[ZoneID, Tuple[int, int, int]] = {}
 
         for zone_id, (color, brightness) in zone_states.items():
-            zone_id_str = EnumHelper.to_string(zone_id)
             r, g, b = color.to_rgb()
 
-            colors_dict[zone_id_str] = (
+            colors_dict[zone_id] = (
             # Apply brightness scaling
                 int(r * brightness / 100),
                 int(g * brightness / 100),
@@ -258,7 +256,7 @@ class ZoneStripController:
 
         # Build target frame from zone states (no rendering yet)
         color_map = {
-            EnumHelper.to_string(z.config.id): z.get_rgb()
+            z.config.id: z.get_rgb()
             for z in zone_service.get_all()
         }
         target_frame = self.zone_strip.build_frame_from_zones(color_map)

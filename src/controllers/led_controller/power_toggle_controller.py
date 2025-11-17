@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Tuple
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from models.transition import TransitionConfig
-from models.enums import MainMode
+from models.enums import MainMode, ZoneID
 from services import ServiceContainer
 
 if TYPE_CHECKING:
@@ -117,8 +117,8 @@ class PowerToggleController:
         transition_config = TransitionConfig(duration_ms=800, steps=20)
 
         # Build target frame with restored brightness
-        color_map = {
-            z.config.id.name: z.get_rgb()
+        color_map: Dict[ZoneID, Tuple[int, int, int]] = {
+            z.config.id: z.get_rgb()
             for z in zones
         }
         main_frame = self.strip_controller.zone_strip.build_frame_from_zones(color_map)
