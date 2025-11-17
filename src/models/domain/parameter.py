@@ -53,7 +53,7 @@ class ParameterCombined:
 
     def __post_init__(self):
         if not self.config.validate(self.state.value):
-            log.for_category(LogCategory.STATE).warn(f"Parameter {self.config.id.name} value {self.state.value} out of range, clamping")
+            log.with_category(LogCategory.STATE).warn(f"Parameter {self.config.id.name} value {self.state.value} out of range, clamping")
             self.state.value = self.config.clamp(self.state.value)
 
     def adjust(self, delta: int) -> None:
@@ -86,4 +86,4 @@ class ParameterCombined:
             return
 
         self.state.value = new_value
-        log.for_category(LogCategory.STATE).debug(f"Adjusted {self.config.id.name}: {old_value} → {new_value}")
+        log.with_category(LogCategory.STATE).debug(f"Adjusted {self.config.id.name}: {old_value} → {new_value}")

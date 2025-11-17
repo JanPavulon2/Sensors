@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 from utils.logger import get_logger, LogCategory
+from utils.serialization import Serializer
 from models.transition import TransitionConfig
 from models.enums import MainMode
 from services import ServiceContainer
@@ -143,9 +144,7 @@ class PowerToggleController:
             if current_anim:
                 anim_id = current_anim.config.id
                 params = current_anim.build_params_for_engine()
-                safe_params = {
-                    (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
-                }
+                safe_params = Serializer.params_enum_to_str(params)
                 # Start animation with fade in
                 await self.animation_engine.start(anim_id, **safe_params)
             else:

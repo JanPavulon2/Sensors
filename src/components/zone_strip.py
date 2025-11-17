@@ -5,6 +5,7 @@ from rpi_ws281x import PixelStrip, Color
 from models.domain.zone import ZoneConfig
 from infrastructure import GPIOManager
 from utils.enum_helper import EnumHelper
+from utils.serialization import Serializer
 
 
 class ZoneStrip:
@@ -129,7 +130,7 @@ class ZoneStrip:
         full_buffer = [(0, 0, 0)] * self.pixel_count
 
         for zone_in, pixels in zone_pixels_dict.items():
-            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            zone_key = Serializer.to_str(zone_in)
             if zone_key not in self.zone_indices:
                 # unknown zone skip
                 continue
@@ -182,7 +183,7 @@ class ZoneStrip:
 
     def set_multiple_zones(self, zone_colors: Dict[Any, Tuple[int, int, int]]) -> None:
         for zone_in, (r, g, b) in zone_colors.items():
-            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            zone_key = Serializer.to_str(zone_in)
             if not self._validate_zone(zone_key):
                 continue
             self.zone_colors[zone_key] = (r, g, b)
@@ -248,7 +249,7 @@ class ZoneStrip:
         """Build pixel-level frame from given zone colors (for transitions)."""
         frame = [(0, 0, 0)] * self.pixel_count
         for zone_in, (r, g, b) in zone_colors.items():
-            zone_key = zone_in.name if hasattr(zone_in, "name") else str(zone_in)
+            zone_key = Serializer.to_str(zone_in)
             if zone_key not in self.zone_indices:
                 continue
             indices = self.zone_indices[zone_key]

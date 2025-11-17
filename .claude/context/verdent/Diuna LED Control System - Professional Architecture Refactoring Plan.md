@@ -1076,6 +1076,22 @@ system:
 
 ---
 
+## Phase 8C Status: ✅ COMPLETE (2025-11-17)
+
+**Completed By:** Phase 8C Implementation + Manual Bug Fix
+**Created Files:**
+- `src/utils/serialization.py` - Serializer class with enum↔string and model↔dict conversion methods
+
+**Modified Files:**
+- `src/controllers/led_controller/animation_mode_controller.py` - Uses Serializer.params_enum_to_str() instead of manual conversion
+- `src/controllers/led_controller/power_toggle_controller.py` - Uses Serializer.params_enum_to_str()
+- `src/controllers/led_controller/led_controller.py` - Uses Serializer.params_enum_to_str()
+- `src/models/domain/parameter.py` - Fixed BoundLogger.for_category() → with_category() (bugfix)
+
+**Result:** Single source of truth for enum serialization. All param conversions now use Serializer instead of inline dict comprehensions. Logger bug fixed. Ready for JSON API layer.
+
+---
+
 ## Phase 9: Backend API Layer (FastAPI)
 
 **Goal:** Add REST + WebSocket API for frontend

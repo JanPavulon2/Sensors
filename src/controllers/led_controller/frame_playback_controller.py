@@ -17,6 +17,7 @@ import time
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from utils.logger import get_category_logger
+from utils.serialization import Serializer
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import FullStripFrame, ZoneFrame, PixelFrame
@@ -264,7 +265,7 @@ class FramePlaybackController:
         # Case 2 — Zone-level color update
         if len(update) == 4:
             zone_id, r, g, b = update
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
+            zone_name = Serializer.enum_to_str(zone_id)
             if zone_name in state:
                 state[zone_name] = [(r, g, b)] * len(state[zone_name])
             return
@@ -272,7 +273,7 @@ class FramePlaybackController:
         # Case 3 — Pixel-level update
         if len(update) == 5:
             zone_id, pixel_idx, r, g, b = update
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
+            zone_name = Serializer.enum_to_str(zone_id)
             if zone_name in state:
                 if 0 <= pixel_idx < len(state[zone_name]):
                     state[zone_name][pixel_idx] = (r, g, b)

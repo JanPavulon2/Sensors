@@ -103,11 +103,10 @@
     }
   },
   "current_animation": {
-    "id": "COLOR_FADE",
+    "id": "COLOR_CYCLE",
     "parameters": {
       "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_INTENSITY": 100
+      "ANIM_PRIMARY_COLOR_HUE": 0
     }
   },
   "application": {
@@ -115,8 +114,8 @@
     "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 5,
+    "active_parameter": "ANIM_INTENSITY",
+    "selected_zone_index": 7,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

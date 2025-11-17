@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Deque, Callable
 from collections import deque
 
 from utils.logger import get_logger
+from utils.serialization import Serializer
 from models.enums import LogCategory, FramePriority
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
@@ -405,7 +406,7 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         for zone_id, (r, g, b) in frame.zone_colors.items():
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
+            zone_name = Serializer.to_str(zone_id)
             try:
                 strip.set_zone_color(zone_name, r, g, b, show=False)
             except Exception as e:

@@ -8,6 +8,7 @@ import asyncio
 from typing import TYPE_CHECKING
 from models.enums import ParamID, PreviewMode
 from utils.logger import get_logger, LogCategory, LogLevel
+from utils.serialization import Serializer
 from services import ServiceContainer
 from animations.engine import AnimationEngine
 
@@ -106,9 +107,7 @@ class AnimationModeController:
         params = current_anim.build_params_for_engine()
 
         log.info(f"Auto-switching to animation: {anim_id.name}")
-        safe_params = {
-            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
-        }
+        safe_params = Serializer.params_enum_to_str(params)
 
         # AnimationEngine.start() will handle stop → fade_out → fade_in → start
         await self.animation_engine.start(anim_id, **safe_params)
@@ -131,13 +130,8 @@ class AnimationModeController:
 
         anim_id = current_anim.config.id
         params = current_anim.build_params_for_engine()
-        
-        # Build parameters dynamically
-        params = current_anim.build_params_for_engine()
         log.info(f"Starting animation: {anim_id.name} ({params})")
-        safe_params = {
-            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
-        }
+        safe_params = Serializer.params_enum_to_str(params)
         await self.animation_engine.start(anim_id, **safe_params)
 
         log.info("Animation start call completed")
@@ -209,9 +203,7 @@ class AnimationModeController:
         current_zone = zones[0] if zones else None
 
         params = anim.build_params_for_engine(current_zone)
-        safe_params = {
-            (k.name if hasattr(k, "name") else str(k)): v for k, v in params.items()
-        }
+        safe_params = Serializer.params_enum_to_str(params)
         try:
             self.preview_panel_controller.start_animation_preview(anim_id, **safe_params)
             log.debug(f"Preview synced for {anim_id.name}")

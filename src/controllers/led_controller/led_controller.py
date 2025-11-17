@@ -10,6 +10,7 @@ from models.enums import MainMode, ButtonID, EncoderSource, AnimationID
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
+from utils.serialization import Serializer
 from engine import FrameManager
 from services import ServiceContainer
 
@@ -357,10 +358,7 @@ class LEDController:
                 params = current_anim.build_params_for_engine()
 
                 # Convert param keys to strings (AnimationEngine needs string keys)
-                safe_params = {
-                    (k.name if hasattr(k, "name") else str(k)): v
-                    for k, v in params.items()
-                }
+                safe_params = Serializer.params_enum_to_str(params)
 
                 log.debug(f"ANIMATION mode: starting {anim_id.name} with crossfade")
                 # Pass old_frame for crossfade (no black frame!)
