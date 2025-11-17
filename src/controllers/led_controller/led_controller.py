@@ -11,6 +11,7 @@ from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
 from engine import FrameManager
+from services import ServiceContainer
 
 from controllers.led_controller.static_mode_controller import StaticModeController
 from controllers.led_controller.animation_mode_controller import AnimationModeController
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from services.event_bus import EventBus
     from engine.frame_manager import FrameManager
     
-log = get_logger()
+log = get_logger().for_category(LogCategory.GENERAL)
 
 class LEDController:
     """
@@ -78,12 +79,40 @@ class LEDController:
         state = app_state_service.get_state()
         self.main_mode = state.main_mode
         self.edit_mode = state.edit_mode
-        
-        # Initialize feature controllers
-        self.static_mode_controller = StaticModeController(self)
-        self.animation_mode_controller = AnimationModeController(self)
-        self.lamp_white_mode = LampWhiteModeController(self)
-        self.power_toggle = PowerToggleController(self)
+
+        # Create ServiceContainer for dependency injection
+        services = ServiceContainer(
+            zone_service=zone_service,
+            animation_service=animation_service,
+            app_state_service=app_state_service,
+            frame_manager=frame_manager,
+            event_bus=event_bus,
+            color_manager=config_manager.color_manager
+        )
+
+        # Initialize feature controllers with dependency injection
+        self.static_mode_controller = StaticModeController(
+            services=services,
+            strip_controller=zone_strip_controller,
+            preview_panel=preview_panel_controller
+        )
+        self.animation_mode_controller = AnimationModeController(
+            services=services,
+            animation_engine=self.animation_engine,
+            preview_panel=preview_panel_controller
+        )
+        self.lamp_white_mode = LampWhiteModeController(
+            services=services,
+            strip_controller=zone_strip_controller
+        )
+        self.power_toggle = PowerToggleController(
+            services=services,
+            strip_controller=zone_strip_controller,
+            preview_panel=preview_panel_controller,
+            animation_engine=self.animation_engine,
+            static_mode_controller=self.static_mode_controller,
+            main_mode_getter=lambda: self.main_mode
+        )
         self.frame_playback_controller = FramePlaybackController(
             frame_manager=self.frame_manager,
             animation_engine=self.animation_engine,
@@ -97,7 +126,7 @@ class LEDController:
         self._enter_mode(self.main_mode)
 
 
-        log.info(LogCategory.SYSTEM, "LEDController initialized")
+        log.info("LEDController initialized")
 
     # ------------------------------------------------------------------
     # MODE MANAGEMENT
@@ -133,16 +162,13 @@ class LEDController:
                 ANIM_SPEED=50
             )
         """
-        log.info(
-            LogCategory.SYSTEM,
-            f"Starting frame-by-frame debugging mode"
-        )
+        log.info(f"Starting frame-by-frame debugging mode")
 
         # Use current animation if not specified
         if animation_id is None:
             current_anim = self.animation_service.get_current()
             if not current_anim:
-                log.warn(LogCategory.SYSTEM, "No animation selected for frame-by-frame debugging")
+                log.warn("No animation selected for frame-by-frame debugging")
                 return
             animation_id = current_anim.config.id
 
@@ -163,7 +189,7 @@ class LEDController:
 
         self.event_bus.subscribe(EventType.KEYBOARD_KEYPRESS, self._handle_keyboard_keypress)
 
-        log.info(LogCategory.SYSTEM, "LEDController subscribed to EventBus")
+        log.info("LEDController subscribed to EventBus")
         
     # ------------------------------------------------------------------
     # EVENT HANDLING
@@ -196,7 +222,7 @@ class LEDController:
         """Handle keyboard key presses for debug features."""
         key = e.key.upper()
         if key == 'F':
-            log.info(LogCategory.SYSTEM, "Entering frame-by-frame mode (F pressed)")
+            log.info("Entering frame-by-frame mode (F pressed)")
             asyncio.create_task(self._enter_frame_by_frame_mode_async())
 
     async def _enter_frame_by_frame_mode_async(self):
@@ -209,7 +235,7 @@ class LEDController:
 
     def _handle_selector_rotation(self, delta: int):
         if not self.edit_mode:
-            log.info(LogCategory.SYSTEM, "Selector rotation ignored when not in edit mode")
+            log.info("Selector rotation ignored when not in edit mode")
             return
         
         if self.main_mode == MainMode.STATIC:
@@ -219,13 +245,13 @@ class LEDController:
             
     def _handle_selector_click(self):
         if self.main_mode == MainMode.STATIC:
-            log.info(LogCategory.SYSTEM, "Selector click ignored in STATIC mode")
+            log.info("Selector click ignored in STATIC mode")
         else:
             asyncio.create_task(self.animation_mode_controller.toggle_animation())
             
     def _handle_modulator_rotation(self, delta: int):
         if not self.edit_mode:
-            log.info(LogCategory.SYSTEM, "Modulator rotation ignored when not in edit mode")
+            log.info("Modulator rotation ignored when not in edit mode")
             return
         
         if self.main_mode == MainMode.STATIC:
@@ -235,7 +261,7 @@ class LEDController:
         
     def _handle_modulator_click(self):
         if not self.edit_mode:
-            log.info(LogCategory.SYSTEM, "Modulator click ignored when not in edit mode")
+            log.info("Modulator click ignored when not in edit mode")
             return
         
         if self.main_mode == MainMode.STATIC:
@@ -264,7 +290,7 @@ class LEDController:
         5. CROSSFADE from old to new (no black frame)
         6. Enter new mode
         """
-        log.info(LogCategory.SYSTEM, "Toggling main mode...")
+        log.info("Toggling main mode...")
 
         # 1. Determine next mode
         if self.main_mode == MainMode.STATIC:
@@ -280,12 +306,12 @@ class LEDController:
             self.static_mode_controller.exit_mode()  # Stop pulse
         else:
             await self.animation_mode_controller.exit_mode()  # Stop animation (skip_fade=True already)
-        log.debug(LogCategory.SYSTEM, f"Exited {self.main_mode.name} mode")
+        log.debug(f"Exited {self.main_mode.name} mode")
 
         # 4. Switch mode
         self.main_mode = next_mode
         self.app_state_service.set_main_mode(next_mode)
-        log.debug(LogCategory.SYSTEM, f"Switched to {next_mode.name}")
+        log.debug(f"Switched to {next_mode.name}")
 
         # 5. Prepare new state and crossfade
         if next_mode == MainMode.STATIC:
@@ -304,7 +330,7 @@ class LEDController:
 
             # CROSSFADE from old to new (no black frame!)
             if old_frame and new_frame and len(old_frame) == len(new_frame):
-                log.debug(LogCategory.TRANSITION, "Mode toggle: crossfading to STATIC")
+                log.debug("Mode toggle: crossfading to STATIC")
                 await self.zone_strip_controller.transition_service.crossfade(
                     old_frame,
                     new_frame,
@@ -312,7 +338,7 @@ class LEDController:
                 )
             else:
                 # Fallback: fade in from black
-                log.debug(LogCategory.TRANSITION, "Mode toggle: fade in to STATIC (no old frame)")
+                log.debug("Mode toggle: fade in to STATIC (no old frame)")
                 await self.zone_strip_controller.fade_in_all(
                     new_frame,
                     self.zone_strip_controller.transition_service.MODE_SWITCH
@@ -336,16 +362,16 @@ class LEDController:
                     for k, v in params.items()
                 }
 
-                log.debug(LogCategory.SYSTEM, f"ANIMATION mode: starting {anim_id.name} with crossfade")
+                log.debug(f"ANIMATION mode: starting {anim_id.name} with crossfade")
                 # Pass old_frame for crossfade (no black frame!)
                 await self.animation_engine.start(anim_id, from_frame=old_frame, **safe_params)
 
                 # Sync preview to match main animation
                 self.animation_mode_controller._sync_preview()
             else:
-                log.warn(LogCategory.SYSTEM, "No animation selected, cannot enter ANIMATION mode")
+                log.warn("No animation selected, cannot enter ANIMATION mode")
 
-        log.info(LogCategory.SYSTEM, f"Switched to {next_mode.name} mode")
+        log.info(f"Switched to {next_mode.name} mode")
         
         
     # ------------------------------------------------------------------
@@ -355,14 +381,14 @@ class LEDController:
         """Turn off all LEDs (both preview and strip)."""
         self.zone_strip_controller.zone_strip.clear()
         self.preview_panel_controller.clear()
-        log.info(LogCategory.SYSTEM, "All LEDs cleared")
+        log.info("All LEDs cleared")
 
     async def stop_all(self) -> None:
         """Stop all async operations gracefully."""
-        log.debug(LogCategory.SYSTEM, "Stopping animation engine...")
+        log.debug("Stopping animation engine...")
         await self.animation_engine.stop()
 
-        log.debug(LogCategory.SYSTEM, "Clearing all LEDs...")
+        log.debug("Clearing all LEDs...")
         self.clear_all()
 
-        log.debug(LogCategory.SYSTEM, "LEDController stopped.")
+        log.debug("LEDController stopped.")

@@ -5,9 +5,9 @@ from models.enums import ZoneID, ParamID
 from models.domain import ZoneCombined
 from models.color import Color
 from services.data_assembler import DataAssembler
-from utils.logger import get_category_logger, LogCategory
+from utils.logger import get_logger, LogCategory
 
-log = get_category_logger(LogCategory.ZONE)
+log = get_logger().for_category(LogCategory.ZONE)
 
 
 class ZoneService:
@@ -18,7 +18,7 @@ class ZoneService:
         self.zones = assembler.build_zones()
         self._by_id = {zone.config.id: zone for zone in self.zones}
 
-        log(f"ZoneService initialized with {len(self.zones)} zones")
+        log.info(f"ZoneService initialized with {len(self.zones)} zones")
 
     def get_zone(self, zone_id: ZoneID) -> ZoneCombined:
         """Get zone by ID"""
@@ -40,28 +40,28 @@ class ZoneService:
         """Set zone color"""
         zone = self.get_zone(zone_id)
         zone.state.color = color
-        log(f"Set {zone.config.display_name} color: {color.mode.name}")
+        log.info(f"Set {zone.config.display_name} color: {color.mode.name}")
         self.save()
 
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
         """Set zone brightness"""
         zone = self.get_zone(zone_id)
         zone.set_param_value(ParamID.ZONE_BRIGHTNESS, brightness)
-        log(f"Set {zone.config.display_name} brightness: {brightness}%")
+        log.info(f"Set {zone.config.display_name} brightness: {brightness}%")
         self.save()
 
     def adjust_parameter(self, zone_id: ZoneID, param_id: ParamID, delta: int) -> None:
         """Adjust zone parameter by delta steps"""
         zone = self.get_zone(zone_id)
         zone.adjust_param(param_id, delta)
-        log(f"Adjusted {zone.config.display_name}.{param_id.name}: {zone.get_param_value(param_id)}")
+        log.info(f"Adjusted {zone.config.display_name}.{param_id.name}: {zone.get_param_value(param_id)}")
         self.save()
 
     def set_parameter(self, zone_id: ZoneID, param_id: ParamID, value: Any) -> None:
         """Set zone parameter value directly"""
         zone = self.get_zone(zone_id)
         zone.set_param_value(param_id, value)
-        log(f"Set {zone.config.display_name}.{param_id.name} = {value}")
+        log.info(f"Set {zone.config.display_name}.{param_id.name} = {value}")
         self.save()
 
     def get_rgb(self, zone_id: ZoneID) -> tuple[int, int, int]:

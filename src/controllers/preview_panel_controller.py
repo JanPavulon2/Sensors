@@ -16,7 +16,7 @@ from services.transition_service import TransitionService
 if TYPE_CHECKING:
     from animations.base import BaseAnimation
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.HARDWARE)
 
 
 class PreviewPanelController:
@@ -333,7 +333,7 @@ class PreviewPanelController:
             self._animation_running = True
             self._animation_task = asyncio.create_task(self._run_preview_loop())
 
-            log.debug(LogCategory.ANIMATION, f"Preview: {animation_id} @ {speed}")
+            log.debug(f"Preview: {animation_id} @ {speed}")
 
         except Exception as e:
             log.log(LogCategory.SYSTEM, "Failed to start preview animation",
@@ -505,7 +505,7 @@ class PreviewPanelController:
                 await asyncio.sleep(step_delay)
 
             self.preview_panel.clear()
-            log.debug(LogCategory.TRANSITION, "Preview panel faded out")
+            log.debug("Preview panel faded out")
 
         except Exception as e:
             log.log(LogCategory.TRANSITION, "Preview fade-out failed",
@@ -558,7 +558,7 @@ class PreviewPanelController:
                 self.preview_panel.show_frame(faded_frame)
                 await asyncio.sleep(step_delay)
 
-            log.debug(LogCategory.TRANSITION, "Preview panel faded in")
+            log.debug("Preview panel faded in")
 
         except Exception as e:
             log.log(LogCategory.TRANSITION, "Preview fade-in failed",

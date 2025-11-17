@@ -4,9 +4,9 @@ from typing import Optional
 from models.enums import MainMode, ParamID, LogCategory
 from models.domain.application import ApplicationState
 from services.data_assembler import DataAssembler
-from utils.logger import get_category_logger
+from utils.logger import get_logger
 
-log = get_category_logger(LogCategory.STATE)
+log = get_logger().for_category(LogCategory.STATE)
 
 
 class ApplicationStateService:
@@ -39,7 +39,7 @@ class ApplicationStateService:
         self.assembler = assembler
         self.state: ApplicationState = assembler.build_application_state()
 
-        log(f"ApplicationStateService initialized: {self.state.main_mode.name} mode")
+        log.info(f"ApplicationStateService initialized: {self.state.main_mode.name} mode")
 
     # === Internal Methods ===
 
@@ -95,13 +95,13 @@ class ApplicationStateService:
         """Set edit mode ON/OFF"""
         self.state.edit_mode = enabled
         self._save()
-        log(f"Edit mode set to: {self.state.edit_mode}")
+        log.info(f"Edit mode set to: {self.state.edit_mode}")
 
     def set_lamp_white_mode(self, enabled: bool) -> None:
         """Set lamp white mode ON/OFF"""
         self.state.lamp_white_mode = enabled
         self._save()
-        log(f"Lamp white mode set to: {self.state.lamp_white_mode}")
+        log.info(f"Lamp white mode set to: {self.state.lamp_white_mode}")
 
     def set_main_mode(self, mode: MainMode) -> None:
         """
@@ -113,7 +113,7 @@ class ApplicationStateService:
         
         self.state.main_mode = mode
         self._save()
-        log(f"Main mode changed: {self.state.main_mode.name}")
+        log.info(f"Main mode changed: {self.state.main_mode.name}")
 
     # === Selection Management ===
 
@@ -129,7 +129,7 @@ class ApplicationStateService:
             return
         self.state.current_param = param
         self._save()
-        log(f"Active parameter changed: {self.state.current_param.name}")
+        log.info(f"Active parameter changed: {self.state.current_param.name}")
 
     def set_current_zone_index(self, index: int) -> None:
         """
@@ -143,7 +143,7 @@ class ApplicationStateService:
             return
         self.state.current_zone_index = index
         self._save()
-        log(f"Zone index changed: {index}")
+        log.info(f"Zone index changed: {index}")
 
     # === Lamp White Mode State ===
 
@@ -156,7 +156,7 @@ class ApplicationStateService:
         """
         self.state.lamp_white_saved_state = saved
         self._save()
-        log(f"Lamp white saved state updated: {'saved' if saved else 'cleared'}")
+        log.info(f"Lamp white saved state updated: {'saved' if saved else 'cleared'}")
 
     # === Debugging Features ===
 
@@ -164,7 +164,7 @@ class ApplicationStateService:
         """Toggle frame-by-frame debugging mode ON/OFF"""
         self.state.frame_by_frame_mode = not self.state.frame_by_frame_mode
         self._save()
-        log(f"Frame-by-frame mode toggled: {self.state.frame_by_frame_mode}")
+        log.info(f"Frame-by-frame mode toggled: {self.state.frame_by_frame_mode}")
 
     # === System Configuration ===
 
@@ -180,4 +180,4 @@ class ApplicationStateService:
         self.state.save_on_change = True
         self._save()
         self.state.save_on_change = enabled
-        log(f"Auto-save {'enabled' if enabled else 'disabled'}")
+        log.info(f"Auto-save {'enabled' if enabled else 'disabled'}")

@@ -15,7 +15,7 @@ from typing import Dict
 from models.enums import GPIOPullMode, GPIOInitialState
 from utils.logger import get_logger, LogCategory
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.HARDWARE)
 
 
 class GPIOManager:
@@ -38,7 +38,7 @@ class GPIOManager:
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
-        log.info(LogCategory.HARDWARE, "GPIO manager initialized (BCM mode)")
+        log.info("GPIO manager initialized (BCM mode)")
 
     def register_input(
         self,
@@ -70,7 +70,6 @@ class GPIOManager:
         self._registry[pin] = component
 
         log.info(
-            LogCategory.HARDWARE,
             f"GPIO pin registered (INPUT)",
             pin=pin,
             component=component,
@@ -106,8 +105,7 @@ class GPIOManager:
         self._registry[pin] = component
 
         log.info(
-            LogCategory.HARDWARE,
-            f"GPIO pin registered (OUTPUT)",
+             f"GPIO pin registered (OUTPUT)",
             pin=pin,
             component=component,
             initial=initial.name
@@ -133,8 +131,7 @@ class GPIOManager:
         self._registry[pin] = component
 
         log.info(
-            LogCategory.HARDWARE,
-            f"GPIO pin registered (WS281x DMA)",
+             f"GPIO pin registered (WS281x DMA)",
             pin=pin,
             component=component
         )
@@ -156,7 +153,7 @@ class GPIOManager:
                 f"GPIO pin conflict detected: Pin {pin} requested by '{component}' "
                 f"is already registered to '{existing_owner}'"
             )
-            log.error(LogCategory.HARDWARE, error_msg)
+            log.error(error_msg)
             raise ValueError(error_msg)
 
     def cleanup(self) -> None:
@@ -166,12 +163,12 @@ class GPIOManager:
         Called on application shutdown to release GPIO resources.
         """
         pin_count = len(self._registry)
-        log.info(LogCategory.HARDWARE, f"Cleaning up {pin_count} GPIO pins")
+        log.info(f"Cleaning up {pin_count} GPIO pins")
 
         GPIO.cleanup()
         self._registry.clear()
 
-        log.info(LogCategory.HARDWARE, "GPIO cleanup complete")
+        log.info("GPIO cleanup complete")
 
     def get_registry(self) -> Dict[int, str]:
         """
@@ -185,9 +182,9 @@ class GPIOManager:
     def log_registry(self) -> None:
         """Log all registered pins (useful for startup debugging)"""
         if not self._registry:
-            log.info(LogCategory.HARDWARE, "GPIO registry is empty")
+            log.info("GPIO registry is empty")
             return
 
-        log.info(LogCategory.HARDWARE, f"GPIO registry ({len(self._registry)} pins):")
+        log.info(f"GPIO registry ({len(self._registry)} pins):")
         for pin, component in sorted(self._registry.items()):
-            log.info(LogCategory.HARDWARE, f"  GPIO {pin:2d} → {component}")
+            log.info(f"  GPIO {pin:2d} → {component}")

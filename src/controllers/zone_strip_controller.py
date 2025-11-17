@@ -26,7 +26,7 @@ from models import Color
 from models.domain import ZoneCombined
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.frame import ZoneFrame
-from utils.logger2 import get_logger, LogCategory
+from utils.logger import get_logger, LogCategory
 from utils.enum_helper import EnumHelper
 from services.transition_service import TransitionService
 

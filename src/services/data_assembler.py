@@ -14,9 +14,9 @@ from models.color import Color
 from managers import ConfigManager
 from utils.enum_helper import EnumHelper
 from models.enums import LogLevel
-from utils.logger import get_category_logger, LogCategory
+from utils.logger import get_logger, LogCategory
 
-log = get_category_logger(LogCategory.CONFIG)
+log = get_logger().for_category(LogCategory.CONFIG)
 
 
 class DataAssembler:
@@ -29,20 +29,20 @@ class DataAssembler:
         self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
 
-        log("DataAssembler initialized")
+        log.info("DataAssembler initialized")
 
     def load_state(self) -> dict:
         """Load state from JSON file"""
         try:
             with open(self.state_path, "r") as f:
                 state = json.load(f)
-                log(f"Loaded state from {self.state_path}", LogLevel.DEBUG)
+                log.info(f"Loaded state from {self.state_path}")
                 return state
         except FileNotFoundError:
-            log(f"State file not found: {self.state_path}", LogLevel.ERROR)
+            log.error(f"State file not found: {self.state_path}")
             raise
         except json.JSONDecodeError as e:
-            log(f"Invalid JSON in state file: {e}", LogLevel.ERROR)
+            log.warn(f"Invalid JSON in state file: {e}")
             raise
 
     def save_state(self, state: dict) -> None:
@@ -50,9 +50,9 @@ class DataAssembler:
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
-                log(f"Saved state to {self.state_path}", LogLevel.DEBUG)
+                log.info(f"Saved state to {self.state_path}")
         except Exception as e:
-            log(f"Failed to save state: {e}", LogLevel.ERROR)
+            log.error(f"Failed to save state: {e}")
             raise
 
     def build_animations(self) -> List[AnimationCombined]:
@@ -64,7 +64,7 @@ class DataAssembler:
             param_configs = self.parameter_manager.get_all_parameters()
             available_animations = self.animation_manager.get_all_animations()
 
-            log(f"Building {len(available_animations)} animation objects...")
+            log.info(f"Building {len(available_animations)} animation objects...")
 
             current_anim_id = state_json.get("current_animation", {}).get("id")
             current_anim_params = state_json.get("current_animation", {}).get("parameters", {})
@@ -103,7 +103,7 @@ class DataAssembler:
                 for param_id in parameter_ids:
                     param_config = param_configs.get(param_id)
                     if not param_config:
-                        log(f"Parameter {param_id.name} not found in config, skipping", LogLevel.WARN)
+                        log.warn(f"Parameter {param_id.name} not found in config, skipping")
                         continue
 
                     value = param_values.get(param_id, param_config.default)
@@ -117,13 +117,13 @@ class DataAssembler:
                 )
 
                 animations.append(animation_combined)
-                log(f"  ✓ {animation_config.display_name} (current={is_current})", LogLevel.DEBUG)
+                log.info(f"  ✓ {animation_config.display_name} (current={is_current})")
 
-            log(f"Successfully built {len(animations)} animations")
+            log.info(f"Successfully built {len(animations)} animations")
             return animations
 
         except Exception as e:
-            log(f"Failed to build animations: {e}", LogLevel.ERROR)
+            log.error(f"Failed to build animations: {e}")
             raise
 
     def build_zones(self) -> List[ZoneCombined]:
@@ -136,14 +136,14 @@ class DataAssembler:
             # IMPORTANT: Use get_all_zones() to preserve pixel indices for disabled zones
             zone_configs = self.config_manager.get_all_zones()  # Returns List[ZoneConfig] with indices calculated
 
-            log(f"Building {len(zone_configs)} zone objects...")
+            log.info(f"Building {len(zone_configs)} zone objects...")
 
             for zone_config in zone_configs:
                 # Get state data using zone tag (lowercase, e.g., "lamp")
                 zone_state_data = state_json.get("zones", {}).get(zone_config.tag, {})
 
                 if not zone_state_data:
-                    log(f"No state found for zone {zone_config.tag}, using defaults", LogLevel.WARN)
+                    log.warn(f"No state found for zone {zone_config.tag}, using defaults")
                     color = Color.from_hue(0)
                     brightness = 100
                 else:
@@ -172,13 +172,13 @@ class DataAssembler:
                 )
 
                 zones.append(zone_combined)
-                log(f"  ✓ {zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
+                log.info(f"  ✓ {zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
 
-            log(f"Successfully built {len(zones)} zones")
+            log.info(f"Successfully built {len(zones)} zones")
             return zones
 
         except Exception as e:
-            log(f"Failed to build zones: {e}")
+            log.error(f"Failed to build zones: {e}")
             raise
 
     def save_animation_state(self, animations: List[AnimationCombined]) -> None:
@@ -205,7 +205,7 @@ class DataAssembler:
             self.save_state(state_json)
 
         except Exception as e:
-            log(f"Failed to save animation state: {e}")
+            log.error(f"Failed to save animation state: {e}")
             raise
 
     def save_zone_state(self, zones: List[ZoneCombined]) -> None:
@@ -224,10 +224,10 @@ class DataAssembler:
                 }
 
             self.save_state(state_json)
-            log(f"Successfully saved {len(zones)} zone states", LogLevel.DEBUG)
+            log.info(f"Successfully saved {len(zones)} zone states")
 
         except Exception as e:
-            log(f"Failed to save zone state: {e}")
+            log.error(f"Failed to save zone state: {e}")
             raise
 
     def build_application_state(self) -> ApplicationState:
@@ -244,7 +244,7 @@ class DataAssembler:
             app_data = state_json.get("application", {})
 
             if not app_data:
-                log("No application state found, using defaults", LogLevel.WARN)
+                log.warn("No application state found, using defaults")
                 return ApplicationState()  # Use dataclass defaults
 
             # Parse enums using EnumHelper with fallback to dataclass defaults
@@ -269,11 +269,11 @@ class DataAssembler:
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
             )
 
-            log(f"Built application state: {main_mode.name}, zone_idx={state.current_zone_index}")
+            log.info(f"Built application state: {main_mode.name}, zone_idx={state.current_zone_index}")
             return state
 
         except Exception as e:
-            log(f"Failed to build application state, using defaults: {e}", LogLevel.WARN)
+            log.warn(f"Failed to build application state, using defaults: {e}")
             return ApplicationState()  # Use dataclass defaults
 
     def save_application_state(self, app_state: ApplicationState) -> None:
@@ -298,8 +298,8 @@ class DataAssembler:
             }
 
             self.save_state(state_json)
-            log(f"Saved application state", LogLevel.DEBUG)
+            log.info(f"Saved application state")
 
         except Exception as e:
-            log(f"Failed to save application state: {e}", LogLevel.ERROR)
+            log.error(f"Failed to save application state: {e}")
             raise

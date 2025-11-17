@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from managers.color_manager import ColorManager
     from managers.parameter_manager import ParameterManager
 
-log = get_category_logger(LogCategory.CONFIG)
+log = get_logger().for_category(LogCategory.CONFIG) 
 
 
 
@@ -88,16 +88,16 @@ class ConfigManager:
 
             # Check for include system
             if 'include' in main_config:
-                log("Using include-based configuration")
+                log.info("Using include-based configuration")
                 self.data = self._load_with_includes(main_config['include'], src_dir / self.config_path.parent)
             else:
                 # Monolithic config (backward compatibility)
-                log("Using monolithic configuration")
+                log.info("Using monolithic configuration")
                 self.data = main_config
 
         except Exception as ex:
-            log("Failed to load config.yaml", LogLevel.ERROR, error=str(ex), error_type=type(ex).__name__)
-            log("Falling back to factory defaults", LogLevel.WARN)
+            log.error("Failed to load config.yaml", error=str(ex), error_type=type(ex).__name__)
+            log.warn("Falling back to factory defaults")
 
             # Load factory defaults
             src_dir = Path(__file__).parent.parent
@@ -130,15 +130,15 @@ class ConfigManager:
                     file_data = yaml.safe_load(f)
                     if file_data:
                         merged.update(file_data)
-                        log(f"Loaded {filename}", keys=str(list(file_data.keys())))
+                        log.info(f"Loaded {filename}", keys=str(list(file_data.keys())))
             except FileNotFoundError:
-                log(f"File not found: {filename}", LogLevel.ERROR)
+                log.error(f"File not found: {filename}")
                 raise
             except Exception as ex:
-                log(f"Error loading {filename}", LogLevel.ERROR, error=str(ex))
+                log.error(f"Error loading {filename}", error=str(ex))
                 raise
 
-        log("Config merge complete", total_keys=len(merged), keys=str(list(merged.keys())[:10]))
+        log.info("Config merge complete", total_keys=len(merged), keys=str(list(merged.keys())[:10]))
         return merged
 
     def _initialize_managers(self):
@@ -166,16 +166,16 @@ class ConfigManager:
         # Verify zones exist in config
         zones_config = self.data.get("zones", [])
         if not zones_config:
-            log("No zones defined in config!", LogLevel.WARN)
+            log.warn("No zones defined in config!")
         else:
-            log(f"Loaded {len(zones_config)} zone definitions from config")
+            log.info(f"Loaded {len(zones_config)} zone definitions from config")
 
         # AnimationManager - always initialize with fallback to empty
         try:
             self.animation_manager = AnimationManager(self.data)
             self.animation_manager.print_summary()
         except Exception as ex:
-            log("Failed to initialize AnimationManager, using empty", LogLevel.WARN, error=str(ex))
+            log.error("Failed to initialize AnimationManager, using empty", error=str(ex))
             self.animation_manager = AnimationManager({})
 
         # ColorManager - always initialize with fallback to empty
@@ -186,7 +186,7 @@ class ConfigManager:
             }
             self.color_manager = ColorManager(color_data)
         except Exception as ex:
-            log("Failed to initialize ColorManager, using empty", LogLevel.WARN, error=str(ex))
+            log.warn("Failed to initialize ColorManager, using empty", error=str(ex))
             self.color_manager = ColorManager({})
 
         # ParameterManager - always initialize with fallback to empty
@@ -194,7 +194,7 @@ class ConfigManager:
             self.parameter_manager = ParameterManager(self.data)
             self.parameter_manager.print_summary()
         except Exception as ex:
-            log("Failed to initialize ParameterManager, using empty", LogLevel.WARN, error=str(ex))
+            log.error("Failed to initialize ParameterManager, using empty", error=str(ex))
             self.parameter_manager = ParameterManager({})
 
     # ===== Zone Access API =====
@@ -211,7 +211,7 @@ class ConfigManager:
         """
         zones_raw = self.data.get("zones", [])
         if not zones_raw:
-            log("No zones found in config!", LogLevel.WARN)
+            log.warn("No zones found in config!")
             return []
 
         # Sort by order (ALL zones, not just enabled)
@@ -241,5 +241,5 @@ class ConfigManager:
             )
             zone_configs.append(zone_config)
 
-        log(f"Built {len(zone_configs)} ZoneConfig objects (includes disabled zones)")
+        log.info(f"Built {len(zone_configs)} ZoneConfig objects (includes disabled zones)")
         return zone_configs

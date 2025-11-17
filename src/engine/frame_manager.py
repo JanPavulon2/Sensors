@@ -20,7 +20,7 @@ import time
 from typing import Dict, List, Optional, Deque, Callable
 from collections import deque
 
-from utils.logger2 import get_logger
+from utils.logger import get_logger
 from models.enums import LogCategory, FramePriority
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,

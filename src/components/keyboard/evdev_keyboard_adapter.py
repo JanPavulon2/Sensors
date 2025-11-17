@@ -8,7 +8,7 @@ from models.events import KeyboardKeyPressEvent
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.HARDWARE)
 
 class EvdevKeyboardAdapter:
     """
@@ -64,7 +64,6 @@ class EvdevKeyboardAdapter:
                     candidates.append((path, name, len(key_codes)))
 
                 log.debug(
-                    LogCategory.HARDWARE,
                     f"Keyboard candidate",
                     name=name,
                     path=path,
@@ -73,11 +72,11 @@ class EvdevKeyboardAdapter:
                 )
 
             except Exception as e:
-                log.error(LogCategory.HARDWARE, f"Cannot inspect {path}: {e}")
+                log.error(f"Cannot inspect {path}: {e}")
                 continue
 
         if not candidates:
-            log.warn(LogCategory.HARDWARE, "No valid keyboard input devices found.")
+            log.warn("No valid keyboard input devices found.")
             return None
 
         # Sort by number of keys (more = likely full keyboard)
@@ -85,7 +84,6 @@ class EvdevKeyboardAdapter:
         best_path, best_name, num_keys = candidates[0]
 
         log.info(
-            LogCategory.HARDWARE,
             "Selected keyboard device",
             name=best_name,
             path=best_path,
@@ -100,19 +98,19 @@ class EvdevKeyboardAdapter:
             self.device_path = await self._find_keyboard_device()
 
         if not self.device_path:
-            log.warning(LogCategory.HARDWARE, "No physical keyboard found via evdev")
+            log.warn("No physical keyboard found via evdev")
             return False
 
         try:
             self.device = InputDevice(self.device_path)
-            log.info(LogCategory.HARDWARE, "Listening for physical keyboard input",
+            log.info("Listening for physical keyboard input",
                      device=self.device.name, path=self.device_path)
         except (OSError, PermissionError) as e:
-            log.error(LogCategory.HARDWARE, f"Cannot open keyboard device: {e}")
+            log.error(f"Cannot open keyboard device: {e}")
             return False
 
         loop = asyncio.get_running_loop()
-        log.info(LogCategory.HARDWARE, "Physical keyboard active (evdev mode)")
+        log.info("Physical keyboard active (evdev mode)")
 
         try:
             while True:
@@ -124,16 +122,16 @@ class EvdevKeyboardAdapter:
                             await self._handle_key_event(event)
 
                 except OSError as e:
-                    log.warn(LogCategory.HARDWARE, f"Temporary read error: {e}")
+                    log.warn(f"Temporary read error: {e}")
                     await asyncio.sleep(0.1)
                     continue  # retry after short delay
                 except Exception as e:
-                    log.error(LogCategory.HARDWARE, f"Unexpected error in keyboard loop: {e}")
+                    log.error(f"Unexpected error in keyboard loop: {e}")
                     await asyncio.sleep(0.1)
                     continue
 
         except asyncio.CancelledError:
-            log.debug(LogCategory.HARDWARE, "Evdev keyboard cancelled (task stopped)")
+            log.debug("Evdev keyboard cancelled (task stopped)")
             raise
         finally:
             try:
@@ -146,8 +144,8 @@ class EvdevKeyboardAdapter:
     
     async def _handle_key_event(self, event) -> None:
         log.info(
-            LogCategory.EVENT,
-            "Keyboard key event"
+            "Keyboard key event",
+            LogCategory=LogCategory.EVENT
         )
         
         """Handle keyboard event from evdev"""
@@ -158,7 +156,7 @@ class EvdevKeyboardAdapter:
         try:
             key_name = ecodes.bytype[event.type][event.code]
         except KeyError:
-            log.debug(LogCategory.HARDWARE, f"Unknown key code: {event.code}")
+            log.debug(f"Unknown key code: {event.code}")
             return
 
         pressed = event.value == 1
@@ -177,8 +175,8 @@ class EvdevKeyboardAdapter:
 
         modifiers = [k for k, v in self._modifiers.items() if v]
         log.info(
-            LogCategory.EVENT,
             "Keyboard key pressed",
+            LogCategory=LogCategory.EVENT,
             key=normalized,
             modifiers=modifiers if modifiers else None
         )
@@ -291,11 +289,11 @@ class EvdevKeyboardAdapter:
 #                         candidates.append((path, device.name, has_letters, len(key_codes)))
 
 #             except (OSError, PermissionError) as e:
-#                 log.debug(LogCategory.HARDWARE, f"Cannot access device {path}: {e}")
+#                 log.debug(f"Cannot access device {path}: {e}")
 #                 continue
 
 #         if not candidates:
-#             log.warn(LogCategory.HARDWARE, "No keyboard input device found under /dev/input/")
+#             log.warn("No keyboard input device found under /dev/input/")
 #             return None
 
 #         # Sort by: has_letters (True first), then num_keys (more keys first)
@@ -353,7 +351,7 @@ class EvdevKeyboardAdapter:
 #             )
 #             return False
 
-#         log.info(LogCategory.HARDWARE, "Listening for physical keyboard input",
+#         log.info("Listening for physical keyboard input",
 #                  device=self.device.name, path=self.device_path)
 
 #         loop = asyncio.get_running_loop()
@@ -367,10 +365,10 @@ class EvdevKeyboardAdapter:
 #                     #         await self._handle_key_event(event)
 
 #         except asyncio.CancelledError:
-#             log.debug(LogCategory.HARDWARE, "Evdev keyboard cancelled")
+#             log.debug("Evdev keyboard cancelled")
 #             raise  # Re-raise to propagate cancellation
 #         except OSError as e:
-#             log.error(LogCategory.HARDWARE, f"Keyboard device error: {e}", device=self.device_path)
+#             log.error(f"Keyboard device error: {e}", device=self.device_path)
 #             return False
 #         finally:
 #             # Release exclusive access on exit
@@ -394,7 +392,7 @@ class EvdevKeyboardAdapter:
 #             # No events available (shouldn't happen with blocking mode)
 #             return []
 #         except Exception as e:
-#             log.error(LogCategory.HARDWARE, f"Device read error: {e}", e)
+#             log.error(f"Device read error: {e}", e)
 #             return []
 
 #     async def _handle_key_event(self, event) -> None:
@@ -406,7 +404,7 @@ class EvdevKeyboardAdapter:
 #         try:
 #             key_name = ecodes.bytype[event.type][event.code]
 #         except KeyError:
-#             log.debug(LogCategory.HARDWARE, f"Unknown key code: {event.code}")
+#             log.debug(f"Unknown key code: {event.code}")
 #             return
 
 #         pressed = event.value == 1
@@ -467,7 +465,7 @@ class EvdevKeyboardAdapter:
 #     #         return
 
 #     #     modifiers = [k for k, v in self._modifiers.items() if v]
-#     #     log.info(LogCategory.EVENT, "Keyboard key pressed",
+#     #     log.info("Keyboard key pressed",
 #     #             key=normalized, modifiers=modifiers if modifiers else None)
 
 #     #     await self.event_bus.publish(

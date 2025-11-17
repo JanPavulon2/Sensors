@@ -5,7 +5,7 @@ from typing import Any, Optional
 from models.enums import ParamID, ParameterType, LogCategory
 from utils.logger import get_logger
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.CONFIG)
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ class ParameterCombined:
 
     def __post_init__(self):
         if not self.config.validate(self.state.value):
-            log.warning(LogCategory.STATE, f"Parameter {self.config.id.name} value {self.state.value} out of range, clamping")
+            log.for_category(LogCategory.STATE).warn(f"Parameter {self.config.id.name} value {self.state.value} out of range, clamping")
             self.state.value = self.config.clamp(self.state.value)
 
     def adjust(self, delta: int) -> None:
@@ -86,4 +86,4 @@ class ParameterCombined:
             return
 
         self.state.value = new_value
-        log.debug(LogCategory.STATE, f"Adjusted {self.config.id.name}: {old_value} → {new_value}")
+        log.for_category(LogCategory.STATE).debug(f"Adjusted {self.config.id.name}: {old_value} → {new_value}")

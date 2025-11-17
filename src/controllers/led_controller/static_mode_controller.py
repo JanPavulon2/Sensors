@@ -10,26 +10,39 @@ import asyncio
 from typing import TYPE_CHECKING
 from models.enums import ParamID
 from models.domain import ZoneCombined
-from services import ZoneService, ApplicationStateService
+from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
 
 if TYPE_CHECKING:
-    from controllers.led_controller.led_controller import LEDController
-    from engine.frame_manager import FrameManager
+    from controllers.zone_strip_controller import ZoneStripController
+    from controllers.preview_panel_controller import PreviewPanelController
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.GENERAL)
 
 class StaticModeController:
-    def __init__(self, parent: LEDController):
-        self.parent = parent
+    def __init__(
+        self,
+        services: ServiceContainer,
+        strip_controller: ZoneStripController,
+        preview_panel: PreviewPanelController,
+    ):
+        """
+        Initialize static mode controller with dependency injection.
 
-        self.zone_service: ZoneService = parent.zone_service
-        self.app_state_service: ApplicationStateService = parent.app_state_service
-        self.frame_manager: FrameManager = parent.frame_manager
+        Args:
+            services: ServiceContainer with all core services and managers
+            strip_controller: ZoneStripController for rendering
+            preview_panel: PreviewPanelController for display
+        """
+        self.zone_service = services.zone_service
+        self.app_state_service = services.app_state_service
+        self.frame_manager = services.frame_manager
+        self.event_bus = services.event_bus
+        self.color_manager = services.color_manager
 
-        self.preview_panel = parent.preview_panel_controller.preview_panel
-        self.strip_controller = parent.zone_strip_controller
-        
+        self.strip_controller = strip_controller
+        self.preview_panel_controller = preview_panel
+
         self.zone_ids = [z.config.id for z in self.zone_service.get_all()]
         self.current_zone_index = self.app_state_service.get_state().current_zone_index
         self.current_param = self.app_state_service.get_state().current_param
@@ -46,24 +59,24 @@ class StaticModeController:
         On first call (during app startup), skips rendering to allow startup_fade_in to handle it.
         On subsequent calls (mode toggle), renders zones normally via FrameManager.
         """
-        log.info(LogCategory.SYSTEM, "Entering STATIC mode")
+        log.info("Entering STATIC mode")
 
         # Check if this is first enter BEFORE changing the flag
         is_first_enter = self.first_enter
-        log.debug(LogCategory.SYSTEM, f"STATIC enter_mode: first_enter={is_first_enter}")
+        log.debug(f"STATIC enter_mode: first_enter={is_first_enter}")
 
         # Skip rendering on first enter (startup transition handles it)
         if not is_first_enter:
-            log.debug(LogCategory.SYSTEM, f"STATIC: Rendering {len(self.zone_service.get_all())} zones")
+            log.debug(f"STATIC: Rendering {len(self.zone_service.get_all())} zones")
             # Batch all zones and submit through unified FrameManager path
             zone_colors = {
                 zone.config.id: (zone.state.color, zone.brightness)
                 for zone in self.zone_service.get_all()
             }
             self.strip_controller.submit_all_zones_frame(zone_colors)
-            log.debug(LogCategory.SYSTEM, "STATIC: Rendering complete")
+            log.debug("STATIC: Rendering complete")
         else:
-            log.debug(LogCategory.SYSTEM, "STATIC: Skipping render (first enter)")
+            log.debug("STATIC: Skipping render (first enter)")
             self.first_enter = False
 
         self._sync_preview()
@@ -79,7 +92,7 @@ class StaticModeController:
 
         Called when switching away from STATIC mode.
         """
-        log.info(LogCategory.SYSTEM, "Exiting STATIC mode")
+        log.info("Exiting STATIC mode")
         self._stop_pulse()
 
     def on_edit_mode_change(self, enabled: bool):
@@ -96,7 +109,7 @@ class StaticModeController:
         new_zone = self.zone_ids[self.current_zone_index]
         self.app_state_service.set_current_zone_index(self.current_zone_index)
 
-        log.zone("Changed zone", from_zone=old_zone.name, to_zone=new_zone.name)
+        log.info("Changed zone", from_zone=old_zone.name, to_zone=new_zone.name)
         self._sync_preview()
         
     # --- Parameter Adjustment ---
@@ -112,7 +125,7 @@ class StaticModeController:
             # Only render if NOT pulsing (pulse task handles rendering)
             if not self.pulse_active:
                 self.strip_controller.submit_all_zones_frame({zone_id: (zone.state.color, zone.brightness)})
-            log.zone("Adjusted brightness", zone=zone.config.display_name, brightness=zone.brightness)
+            log.info("Adjusted brightness", zone=zone.config.display_name, brightness=zone.brightness)
 
         elif self.current_param == ParamID.ZONE_COLOR_HUE:
             new_color = zone.state.color.adjust_hue(delta * 10)
@@ -120,16 +133,15 @@ class StaticModeController:
             # Only render if NOT pulsing
             if not self.pulse_active:
                 self.strip_controller.submit_all_zones_frame({zone_id: (new_color, zone.brightness)})
-            log.zone("Adjusted hue", zone=zone.config.display_name, delta=delta)
+            log.info("Adjusted hue", zone=zone.config.display_name, delta=delta)
 
         elif self.current_param == ParamID.ZONE_COLOR_PRESET:
-            color_manager = self.parent.config_manager.color_manager
-            new_color = zone.state.color.next_preset(delta, color_manager)
+            new_color = zone.state.color.next_preset(delta, self.color_manager)
             self.zone_service.set_color(zone_id, new_color)
             # Only render if NOT pulsing
             if not self.pulse_active:
                 self.strip_controller.submit_all_zones_frame({zone_id: (new_color, zone.brightness)})
-            log.zone("Changed preset", zone=zone.config.display_name, preset=new_color._preset_name)
+            log.info("Changed preset", zone=zone.config.display_name, preset=new_color._preset_name)
 
         self._sync_preview()
         
@@ -146,7 +158,7 @@ class StaticModeController:
 
         self.app_state_service.set_current_param(self.current_param)
         self._sync_preview()
-        log.info(LogCategory.SYSTEM, f"Cycled param to {self.current_param.name}")
+        log.info(f"Cycled param to {self.current_param.name}")
         
         
     # --- Preview + Pulse ---
@@ -158,9 +170,9 @@ class StaticModeController:
 
         # Show brightness as progress bar when editing brightness
         if self.current_param == ParamID.ZONE_BRIGHTNESS:
-            self.parent.preview_panel_controller.show_bar(brightness, 100, rgb)
+            self.preview_panel_controller.show_bar(brightness, 100, rgb)
         else:
-            self.parent.preview_panel_controller.show_color(rgb, brightness)
+            self.preview_panel_controller.show_color(rgb, brightness)
 
     def _start_pulse(self):
         if not self.pulse_active:
@@ -168,6 +180,7 @@ class StaticModeController:
             self.pulse_task = asyncio.create_task(self._pulse_task())
 
     def _stop_pulse(self):
+        """Stop pulse animation (synchronous version for normal mode changes)"""
         self.pulse_active = False
         if self.pulse_task:
             self.pulse_task.cancel()
@@ -175,7 +188,21 @@ class StaticModeController:
         # Restore current zone to correct brightness (not pulse state)
         current_zone = self._get_current_zone()
         self.strip_controller.submit_all_zones_frame({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
-          
+
+    async def _stop_pulse_async(self):
+        """Stop pulse animation asynchronously (for shutdown cleanup)"""
+        self.pulse_active = False
+        if self.pulse_task and not self.pulse_task.done():
+            self.pulse_task.cancel()
+            try:
+                await self.pulse_task
+            except asyncio.CancelledError:
+                pass  # Expected when cancelling
+            self.pulse_task = None
+
+        # Restore current zone to correct brightness (not pulse state)
+        current_zone = self._get_current_zone()
+        self.strip_controller.submit_all_zones_frame({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
     
     async def _pulse_task(self):
         import math

@@ -62,11 +62,11 @@ class SnakeAnimation(BaseAnimation):
         self.zone_pixel_counts = {zone_id: (end - start + 1) for zone_id, start, end in zone_items}
         self.total_pixels = sum(self.zone_pixel_counts.values())
 
-        if self.total_pixels == 0:
-            raise ValueError(
-                f"SnakeAnimation requires at least one zone with pixels. "
-                f"Got {len(zones)} zones with total {self.total_pixels} pixels."
-            )
+        # if self.total_pixels == 0:
+        #     raise ValueError(
+        #         f"SnakeAnimation requires at least one zone with pixels. "
+        #         f"Got {len(zones)} zones with total {self.total_pixels} pixels."
+        #     )
 
         self.current_position = 0
 

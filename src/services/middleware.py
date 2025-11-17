@@ -8,7 +8,7 @@ Can modify events, block events, or log/validate events.
 from models.events import Event
 from utils.logger import get_logger, LogCategory
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 def log_middleware(event: Event) -> Event:
@@ -27,8 +27,7 @@ def log_middleware(event: Event) -> Event:
     else:
         data_str = str(event.data)
 
-    log.debug(
-        LogCategory.SYSTEM,
+    log.info(
         f"Event: {event.type.name} from {source_str} | {data_str}"
     )
     return event

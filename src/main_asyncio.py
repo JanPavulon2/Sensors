@@ -27,7 +27,7 @@ import signal
 import asyncio
 from pathlib import Path
 
-from utils.logger2 import get_logger, configure_logger
+from utils.logger import get_logger, configure_logger
 
 from models.enums import LogCategory, LogLevel
 from components import ControlPanel, KeyboardInputAdapter, ZoneStrip
@@ -50,7 +50,7 @@ log = get_logger().for_category(LogCategory.SYSTEM)
 
 configure_logger(LogLevel.DEBUG)
 # ---------------------------------------------------------------------------
-# SHUTDOWN HANDLER
+# SHUTDOWN & CLEANUP
 # ---------------------------------------------------------------------------
 
 async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
@@ -70,7 +70,54 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
     # Allow pending logs to flush
     await asyncio.sleep(0.05)
     log.info("Shutdown complete. Goodbye!")
-    
+
+
+async def cleanup_application(
+    led_controller,
+    zone_strip_transition_service,
+    gpio_manager,
+    keyboard_task,
+    polling_task
+) -> None:
+    """Perform graceful application cleanup on shutdown."""
+    log.info("🧹 Starting cleanup...")
+
+    # Cancel polling and keyboard tasks
+    if not keyboard_task.done():
+        keyboard_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await keyboard_task
+
+    if not polling_task.done():
+        polling_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await polling_task
+
+    # Stop animations
+    log.info("Stopping animations...")
+    led_controller.animation_mode_controller.animation_service.stop_all()
+    if led_controller.animation_engine and led_controller.animation_engine.is_running():
+        await led_controller.animation_engine.stop()
+
+    # Stop pulsing
+    log.info("Stopping pulsing...")
+    await led_controller.static_mode_controller._stop_pulse_async()
+    await asyncio.sleep(0.05)
+
+    # Fade out
+    log.info("Performing shutdown transition...")
+    await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
+
+    # Clear LEDs
+    log.info("Clearing LEDs...")
+    led_controller.clear_all()
+
+    # Cleanup GPIO
+    log.info("Cleaning up GPIO...")
+    gpio_manager.cleanup()
+
+    log.info("Cleanup complete.")
+
 
 # ---------------------------------------------------------------------------
 # Application Entry
@@ -174,20 +221,9 @@ async def main():
     # FRAME MANAGER STARTUP
     # ========================================================================
 
-    # Ensure frame manager exists and start it
-    if hasattr(led_controller, "frame_manager"):
-        frame_manager = led_controller.frame_manager
-    elif hasattr(led_controller, "frame_manager"):
-        frame_manager = led_controller.frame_manager
-    else:
-        frame_manager = None
-
-    if frame_manager:
-        log.info("Starting FrameManager render loop...")
-        asyncio.create_task(frame_manager.start())
-        log.info("FrameManager running.")
-    else:
-        log.warn("⚠ No FrameManager found — animations may not render.")
+    log.info("Starting FrameManager render loop...")
+    asyncio.create_task(frame_manager.start())
+    log.info("FrameManager running.")
         
     # Set parent controller reference for preview panel (needed for power toggle fade)
     preview_panel_controller._parent_controller = led_controller
@@ -246,52 +282,13 @@ async def main():
     except asyncio.CancelledError:
         log.debug("Main loop cancelled.")
     finally:
-        # Graceful cleanup
-        log.info("🧹 Starting cleanup...")
-
-        if not keyboard_task.done():
-            keyboard_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await keyboard_task
-                
-        
-        if not polling_task.done():
-            polling_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await polling_task
-
-        log.info("Stopping animations...")
-        led_controller.animation_mode_controller.animation_service.stop_all()
-        
-        
-        log.info("Stopping pulsing...")
-        led_controller.static_mode_controller._stop_pulse()
-        await asyncio.sleep(0.05)
-
-        log.info("Performing shutdown transition...")
-        await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
-
-        keyboard_task.cancel()
-        try:
-            await keyboard_task
-        except asyncio.CancelledError:
-            pass
-
-        # Stop animations safely
-        log.info("Stopping animations...")
-        if led_controller.animation_engine and led_controller.animation_engine.is_running():
-            await led_controller.animation_engine.stop()
-
-        if hasattr(led_controller, "animation_service"):
-            led_controller.animation_service.stop_all()
-            
-        log.info("Clearing LEDs...")
-        led_controller.clear_all()
-
-        log.info("Cleaning up GPIO...")
-        gpio_manager.cleanup()
-
-        log.info("Shutdown complete. Goodbye!")
+        await cleanup_application(
+            led_controller,
+            zone_strip_transition_service,
+            gpio_manager,
+            keyboard_task,
+            polling_task
+        )
 
 
 

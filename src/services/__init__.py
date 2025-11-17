@@ -6,6 +6,7 @@ from .zone_service import ZoneService
 from .application_state_service import ApplicationStateService
 from .transition_service import TransitionService
 from .event_bus import EventBus
+from .service_container import ServiceContainer
 
 __all__ = [
     "DataAssembler",
@@ -13,5 +14,6 @@ __all__ = [
     "ZoneService",
     "ApplicationStateService",
     "TransitionService",
-    "EventBus", 
+    "EventBus",
+    "ServiceContainer",
 ]
