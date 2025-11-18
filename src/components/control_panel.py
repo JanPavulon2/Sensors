@@ -68,12 +68,10 @@ class ControlPanel:
         button_pins = hardware_manager.button_pins
         self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
 
-        # Preview Panel (CJMCU-2812-8): WS2812 5V on GPIO 19
-        preview_cfg = hardware_manager.get_strip(LEDStripID.AUX_5V)
-        self.preview_panel = PreviewPanel(
-            gpio=preview_cfg.gpio,
-            gpio_manager=gpio_manager
-        )
+        # Preview Panel - initialized later in main_asyncio.py after zone_strips are created
+        # PreviewPanel is a logical view of PREVIEW zone within ZoneStrip(GPIO 19)
+        # It will be passed the zone_strip instance that contains both PIXEL and PREVIEW zones
+        self.preview_panel = None
 
 
 

@@ -11,7 +11,7 @@ PreviewPanel is a logical component within that physical strip.
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
 from infrastructure import GPIOManager
-
+from .zone_strip import ZoneStrip
 
 class PreviewPanel:
     """
@@ -43,29 +43,31 @@ class PreviewPanel:
 
     def __init__(
         self,
-        gpio: int,
-        gpio_manager: GPIOManager,
+        zone_strip: ZoneStrip,
         count: int = 8,
-        color_order=None,
         brightness: int = 32
     ):
-        from rpi_ws281x import ws
+        """
+        Initialize PreviewPanel as logical view of PREVIEW zone in ZoneStrip.
 
-        if color_order is None:
-            color_order = ws.WS2812_STRIP   # CJMCU-2812-8 uses GRB
+        PREVIEW zone is part of the AUX_5V strip (GPIO 19).
+        CJMCU-2812-8 physical device IS the PREVIEW zone (last 8 pixels).
+        This component controls pixels within the shared ZoneStrip, not a separate one.
 
+        Args:
+            zone_strip: ZoneStrip instance for GPIO 19 (AUX_5V) containing both PIXEL and PREVIEW zones
+            count: Number of LEDs in preview (default 8)
+            brightness: Global brightness 0-255 (default 32)
+
+        Note:
+            PreviewPanel does NOT create its own PixelStrip.
+            It renders to PREVIEW zone within the shared ZoneStrip on GPIO 19.
+            Both PIXEL and PREVIEW zones share one PixelStrip instance (PWM channel 0).
+        """
         self.count = count
         self.brightness = brightness
-
-        # NOTE: GPIO registration handled by HardwareManager for the entire GPIO pin
-        # PreviewPanel is a logical component on the AUX_5V strip, not a separate registration
-        # This avoids GPIO pin conflicts when multiple components share the same GPIO
-
-        # Private WS2811 strip - use public methods instead of direct access
-        self._pixel_strip = PixelStrip(
-            count, gpio, 800000, 10, False, brightness, 1, color_order
-        )
-        self._pixel_strip.begin()
+        self.zone_strip = zone_strip
+        self._pixel_strip = zone_strip.pixel_strip
 
     def _reverse_index(self, index: int) -> int:
         """

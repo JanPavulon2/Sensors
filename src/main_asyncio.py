@@ -27,11 +27,10 @@ import signal
 import asyncio
 import atexit
 from pathlib import Path
-
 from utils.logger import get_logger, configure_logger
 
 from models.enums import LogCategory, LogLevel
-from components import ControlPanel, KeyboardInputAdapter, ZoneStrip
+from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
 from infrastructure import GPIOManager
 from controllers.led_controller.led_controller import LEDController
 from controllers import ControlPanelController, PreviewPanelController, ZoneStripController
@@ -39,8 +38,6 @@ from managers import ConfigManager
 from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
-
-from models.enums import AnimationID
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
@@ -50,6 +47,7 @@ log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 configure_logger(LogLevel.DEBUG)
+
 # ---------------------------------------------------------------------------
 # SHUTDOWN & CLEANUP
 # ---------------------------------------------------------------------------
@@ -136,6 +134,8 @@ async def main():
     log.info("Initializing GPIO manager (singleton)...")
     gpio_manager = GPIOManager()
 
+    # LED hardware initialization moved below after zone config is loaded
+    
     log.info("Loading configuration...")
     config_manager = ConfigManager(gpio_manager)
     config_manager.load()
@@ -181,10 +181,9 @@ async def main():
 
     log.info("Initializing LED strips...")
     from engine.frame_manager import FrameManager
+    from components import ZoneStrip
 
-    # Create ZoneStrips for each GPIO
-    # Each strip gets only the zones assigned to its GPIO, with pixel indices reset to 0
-    zone_strips = {}  # gpio -> ZoneStrip
+    # Get all zones from service
     all_zones = zone_service.get_all()
 
     # Group zones by GPIO
@@ -195,40 +194,46 @@ async def main():
             zones_by_gpio[gpio] = []
         zones_by_gpio[gpio].append(zone.config)
 
-    # Map GPIO pins to DMA channels
-    # GPIO 18 uses DMA 10 (default), other GPIOs use different channels to avoid conflicts
-    gpio_to_dma = {
-        18: 10,  # MAIN_12V on GPIO 18
-        19: 11,  # AUX_5V on GPIO 19 (use DMA 11 to avoid conflict with GPIO 18)
-    }
-    gpio_to_pwm = {
-        18: 0,  # MAIN_12V on GPIO 18
-        19: 1,  # AUX_5V on GPIO 19 (use DMA 11 to avoid conflict with GPIO 18)
+    # GPIO configuration (DMA, color order)
+    from rpi_ws281x import ws
+    gpio_config = {
+        18: {"dma": 10, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
+        19: {"dma": 11, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
     }
 
-    # Create a ZoneStrip for each GPIO
-    # Zones already have correct pixel indices (per-GPIO) from ConfigManager.get_all_zones()
-    for gpio_pin, zones_for_gpio in sorted(zones_by_gpio.items()):
-        # Calculate total pixels for this GPIO
-        pixel_count_for_gpio = sum(z.pixel_count for z in zones_for_gpio)
+    # Create ZoneStrips for each GPIO
+    zone_strips = {}  # gpio -> ZoneStrip
 
-        # Get DMA channel for this GPIO (default to 10)
-        dma_channel = gpio_to_dma.get(gpio_pin, 10)
-        pwm_channel = gpio_to_pwm.get(gpio_pin, 0)
+    for gpio_pin in sorted(zones_by_gpio.keys()):
+        zones_for_gpio = zones_by_gpio[gpio_pin]
+        config = gpio_config.get(gpio_pin)
+
+        if not config:
+            log.warning(f"No config for GPIO {gpio_pin}, skipping")
+            continue
+
+        # Calculate total pixel count for this GPIO
+        pixel_count = sum(z.pixel_count for z in zones_for_gpio)
+
         # Create ZoneStrip for this GPIO
+        # Note: ZoneStrip creates PixelStrip internally
         strip = ZoneStrip(
             gpio=gpio_pin,
-            pixel_count=pixel_count_for_gpio,
+            pixel_count=pixel_count,
             zones=zones_for_gpio,
             gpio_manager=gpio_manager,
-            dma_channel=dma_channel,
-            pwm_channel=pwm_channel
+            color_order=config["color_order"],
+            brightness=config["brightness"],
+            dma_channel=config["dma"]
         )
         zone_strips[gpio_pin] = strip
-        log.info(f"Created ZoneStrip on GPIO {gpio_pin} (DMA {dma_channel}) with {pixel_count_for_gpio} pixels ({len(zones_for_gpio)} zones)")
+        log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count} pixels ({len(zones_for_gpio)} zones)")
 
-    # Use main zone strip (GPIO 18) as the primary strip for controllers
+    # Use GPIO 18 strip as primary
     zone_strip = zone_strips.get(18, list(zone_strips.values())[0])
+
+    # PREVIEW PANEL: TEMPORARILY DISABLED
+    # Treating last 8 pixels (PREVIEW zone) as normal zone for now
 
     # ========================================================================
     # FRAME MANAGER
@@ -248,7 +253,9 @@ async def main():
 
     log.info("Creating transition services...")
     zone_strip_transition_service = TransitionService(zone_strip, frame_manager)
-    preview_panel_transition_service = TransitionService(control_panel.preview_panel, frame_manager)
+    # PREVIEW PANEL DISABLED - will enable after testing main LED strips
+    # preview_panel_transition_service = TransitionService(control_panel.preview_panel, frame_manager)
+    preview_panel_transition_service = None
 
     # ========================================================================
     # LAYER 2: CONTROLLERS
@@ -256,7 +263,9 @@ async def main():
 
     log.info("Initializing controllers...")
     zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service, frame_manager)
-    preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
+    # PREVIEW PANEL DISABLED
+    # preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
+    preview_panel_controller = None
     control_panel_controller = ControlPanelController(control_panel, event_bus)
 
     # ========================================================================
@@ -284,8 +293,10 @@ async def main():
     asyncio.create_task(frame_manager.start())
     log.info("FrameManager running.")
         
+    # PREVIEW PANEL DISABLED
     # Set parent controller reference for preview panel (needed for power toggle fade)
-    preview_panel_controller._parent_controller = led_controller
+    # if preview_panel_controller:
+    #     preview_panel_controller._parent_controller = led_controller
 
     # ========================================================================
     # ADAPTERS
