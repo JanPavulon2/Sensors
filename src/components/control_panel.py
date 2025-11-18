@@ -14,7 +14,7 @@ from managers.hardware_manager import HardwareManager
 from infrastructure import GPIOManager
 from services.event_bus import EventBus
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
-from models.enums import EncoderSource, ButtonID
+from models.enums import EncoderSource, ButtonID, LEDStripID
 
 
 class ControlPanel:
@@ -68,10 +68,10 @@ class ControlPanel:
         button_pins = hardware_manager.button_pins
         self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
 
-        # Preview Panel (CJMCU-2812-8)
-        preview_cfg = hardware_manager.get_led_strip("preview")
+        # Preview Panel (CJMCU-2812-8): WS2812 5V on GPIO 19
+        preview_cfg = hardware_manager.get_strip(LEDStripID.AUX_5V)
         self.preview_panel = PreviewPanel(
-            gpio=preview_cfg["gpio"], # type: ignore
+            gpio=preview_cfg.gpio,
             gpio_manager=gpio_manager
         )
 

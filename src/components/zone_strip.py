@@ -28,7 +28,9 @@ class ZoneStrip:
         zones: List[ZoneConfig],
         gpio_manager: GPIOManager,
         color_order: Optional[int] = None,
-        brightness: int = 255
+        brightness: int = 255,
+        dma_channel: int = 10,
+        pwm_channel: int = 0
     ) -> None:
         from rpi_ws281x import ws
 
@@ -37,11 +39,9 @@ class ZoneStrip:
 
         self.pixel_count: int = pixel_count
 
-        # Register WS281x pin via GPIOManager
-        gpio_manager.register_ws281x(
-            pin=gpio,
-            component=f"ZoneStrip(GPIO{gpio},{pixel_count}px)"
-        )
+        # NOTE: GPIO registration is handled by HardwareManager
+        # This component receives already-registered pins, just uses them for LED control
+        # Do NOT register pins here to avoid conflicts
 
         # Build both representations: range and explicit indices
         self.zone_range: Dict[str, Tuple[int, int]] = {}
@@ -75,10 +75,10 @@ class ZoneStrip:
             pixel_count,    # num: total LED count
             gpio,           # pin: GPIO number
             800000,         # freq_hz: 800kHz signal frequency
-            10,             # dma: DMA channel 10
+            dma_channel,    # dma: DMA channel (10 for GPIO 18, different for other GPIOs)
             False,          # invert: normal signal (not inverted)
             brightness,     # brightness: 0-255 global brightness
-            0,              # channel: PWM channel 0
+            pwm_channel,    # channel: PWM channel 0
             color_order     # strip_type
         )
         self.pixel_strip.begin()

@@ -61,6 +61,11 @@ class KeyboardSource(Enum):
     EVDEV = auto(),
     STDIN = auto()
     
+class EncoderID(Enum):
+    """Encoder identifiers for event sources"""
+    SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)
+    MODULATOR = auto()  # Parameter value modulator encoder
+
 class ButtonID(Enum):
     """Button identifiers"""
     BTN1 = auto()  # Toggle edit mode
@@ -86,6 +91,21 @@ class ZoneID(Enum):
     DESK4 = auto()
     DESK5 = auto()
     DESK6 = auto()
+
+
+class LEDStripID(Enum):
+    """LED Strip identifiers (by chip type and GPIO)"""
+    MAIN_12V = auto()       # GPIO 18: WS2811 12V strip (FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP)
+    AUX_5V = auto()       # GPIO 19: WS2812 5V strip (PIXEL zone + PREVIEW zone)
+
+
+class LEDStripType(Enum):
+    """Typ fizycznego paska LED — używamy enumów, nie stringów."""
+    WS2811_12V = "WS2811_12V"
+    WS2812_5V = "WS2812_5V"
+    WS2813 = "WS2813"
+    APA102 = "APA102"
+    SK6812 = "SK6812"
 
 class AnimationID(Enum):
     """Animation identifiers"""

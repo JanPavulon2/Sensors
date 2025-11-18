@@ -4,7 +4,8 @@ Preview Panel Component - Hardware Abstraction Layer (Layer 1)
 CJMCU-2812-8 module - 8 RGB LEDs for previewing colors and animations.
 Hardware abstraction layer for WS2811 strip (GPIO 19, GRB color order).
 
-Registers WS281x GPIO pin via GPIOManager for conflict detection.
+GPIO registration is handled by HardwareManager for the entire AUX_5V strip.
+PreviewPanel is a logical component within that physical strip.
 """
 
 from typing import Tuple, List
@@ -51,16 +52,14 @@ class PreviewPanel:
         from rpi_ws281x import ws
 
         if color_order is None:
-            color_order = ws.WS2811_STRIP_GRB  # CJMCU-2812-8 uses GRB
+            color_order = ws.WS2812_STRIP   # CJMCU-2812-8 uses GRB
 
         self.count = count
         self.brightness = brightness
 
-        # Register WS281x pin via GPIOManager (tracking only, no setup needed)
-        gpio_manager.register_ws281x(
-            pin=gpio,
-            component=f"PreviewPanel(GPIO{gpio},{count}px)"
-        )
+        # NOTE: GPIO registration handled by HardwareManager for the entire GPIO pin
+        # PreviewPanel is a logical component on the AUX_5V strip, not a separate registration
+        # This avoids GPIO pin conflicts when multiple components share the same GPIO
 
         # Private WS2811 strip - use public methods instead of direct access
         self._pixel_strip = PixelStrip(

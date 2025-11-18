@@ -1,0 +1,21 @@
+# Zone-to-Hardware Mapping
+# Maps logical zones to physical LED strip hardware
+# Each hardware strip defines which zones are rendered on it
+#
+# This file establishes the relationship between domain zones and hardware resources.
+# No duplicate metadata - hardware details stay in hardware.yaml
+
+hardware_mappings:
+  - hardware_id: MAIN_12V
+    zones:
+      - FLOOR
+      - LEFT
+      - TOP
+      - RIGHT
+      - BOTTOM
+      - LAMP
+
+  - hardware_id: AUX_5V
+    zones:
+      - PIXEL
+      - PREVIEW

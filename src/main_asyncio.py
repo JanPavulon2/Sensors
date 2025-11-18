@@ -25,6 +25,7 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
 
 import signal
 import asyncio
+import atexit
 from pathlib import Path
 
 from utils.logger import get_logger, configure_logger
@@ -132,16 +133,27 @@ async def main():
     # INFRASTRUCTURE
     # ========================================================================
 
+    log.info("Initializing GPIO manager (singleton)...")
+    gpio_manager = GPIOManager()
+
     log.info("Loading configuration...")
-    config_manager = ConfigManager()
+    config_manager = ConfigManager(gpio_manager)
     config_manager.load()
 
     log.info("Initializing event bus...")
     event_bus = EventBus()
     event_bus.add_middleware(log_middleware)
+    
+    # Register GPIO cleanup on exit (handles crashes and segfaults)
+    def emergency_gpio_cleanup():
+        """Emergency GPIO cleanup - called on any exit (including crashes)"""
+        try:
+            gpio_manager.cleanup()
+            log.info("🚨 Emergency GPIO cleanup completed")
+        except Exception as e:
+            log.error(f"Failed to cleanup GPIO on exit: {e}")
 
-    log.info("Initializing GPIO manager...")
-    gpio_manager = GPIOManager()
+    atexit.register(emergency_gpio_cleanup)
 
     # ========================================================================
     # REPOSITORY & SERVICES
@@ -183,21 +195,37 @@ async def main():
             zones_by_gpio[gpio] = []
         zones_by_gpio[gpio].append(zone.config)
 
+    # Map GPIO pins to DMA channels
+    # GPIO 18 uses DMA 10 (default), other GPIOs use different channels to avoid conflicts
+    gpio_to_dma = {
+        18: 10,  # MAIN_12V on GPIO 18
+        19: 11,  # AUX_5V on GPIO 19 (use DMA 11 to avoid conflict with GPIO 18)
+    }
+    gpio_to_pwm = {
+        18: 0,  # MAIN_12V on GPIO 18
+        19: 1,  # AUX_5V on GPIO 19 (use DMA 11 to avoid conflict with GPIO 18)
+    }
+
     # Create a ZoneStrip for each GPIO
     # Zones already have correct pixel indices (per-GPIO) from ConfigManager.get_all_zones()
     for gpio_pin, zones_for_gpio in sorted(zones_by_gpio.items()):
         # Calculate total pixels for this GPIO
         pixel_count_for_gpio = sum(z.pixel_count for z in zones_for_gpio)
 
+        # Get DMA channel for this GPIO (default to 10)
+        dma_channel = gpio_to_dma.get(gpio_pin, 10)
+        pwm_channel = gpio_to_pwm.get(gpio_pin, 0)
         # Create ZoneStrip for this GPIO
         strip = ZoneStrip(
             gpio=gpio_pin,
             pixel_count=pixel_count_for_gpio,
             zones=zones_for_gpio,
-            gpio_manager=gpio_manager
+            gpio_manager=gpio_manager,
+            dma_channel=dma_channel,
+            pwm_channel=pwm_channel
         )
         zone_strips[gpio_pin] = strip
-        log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count_for_gpio} pixels ({len(zones_for_gpio)} zones)")
+        log.info(f"Created ZoneStrip on GPIO {gpio_pin} (DMA {dma_channel}) with {pixel_count_for_gpio} pixels ({len(zones_for_gpio)} zones)")
 
     # Use main zone strip (GPIO 18) as the primary strip for controllers
     zone_strip = zone_strips.get(18, list(zone_strips.values())[0])
@@ -211,7 +239,7 @@ async def main():
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in zone_strips.items():
-        frame_manager.register_main_strip(strip)
+        frame_manager.add_main_strip(strip)
         log.info(f"Registered ZoneStrip (GPIO {gpio_pin}) with FrameManager")
 
     # ========================================================================

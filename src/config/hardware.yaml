@@ -2,28 +2,43 @@
 # GPIO pin assignments for encoders, buttons, and LED strips
 
 encoders:
-  selector:
+  - id: selector
     clk: 5
     dt: 6
     sw: 13
 
-  modulator:
+  - id: modulator
     clk: 16
     dt: 20
     sw: 21
 
-buttons: [22, 26, 23, 24]
+buttons: 
+  - id: BTN1
+    gpio: 22
+    
+  - id: BTN2
+    gpio: 26
 
-led_strips:  
+  - id: BTN3
+    gpio: 23
+
+  - id: BTN4
+    gpio: 24
+
+led_strips:
   # GPIO-to-zones mapping
   # Specifies which zones are connected to which GPIO pin
   # Zones are rendered sequentially on their assigned GPIO
-    - id: PIXEL
-      gpio: 18
-      zones: [FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP]  # Main zone strip (chained)
-      color_order: BRG
+  - id: MAIN_12V
+    gpio: 18
+    type: WS2811_12V
+    color_order: BRG
+    count: 100
+    voltage: 12
 
-    - id: PREVIEW
-      gpio: 19
-      zones: [PIXEL, PREVIEW]  # User zone strip (30px) + preview (8px, reversed)
-      color_order: GRB
+  - id: AUX_5V
+    gpio: 19
+    type: WS2812_5V
+    color_order: GRB
+    count: 38
+    voltage: 5

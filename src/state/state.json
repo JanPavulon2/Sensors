@@ -23,7 +23,7 @@
         "preset_name": "amber"
       },
       "brightness": 12.5,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     },
     "left": {
       "color": {
@@ -107,6 +107,22 @@
         "preset_name": "purple"
       },
       "brightness": 100
+    },
+    "pixel": {
+      "color": {
+        "mode": "HUE",
+        "hue": 0
+      },
+      "brightness": 100,
+      "mode": "STATIC"
+    },
+    "preview": {
+      "color": {
+        "mode": "HUE",
+        "hue": 0
+      },
+      "brightness": 100,
+      "mode": "STATIC"
     }
   },
   "current_animation": {
@@ -118,7 +134,7 @@
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ANIM_INTENSITY",
-    "selected_zone_index": 0,
+    "selected_zone_index": 6,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

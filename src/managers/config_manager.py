@@ -10,9 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, TYPE_CHECKING
 from utils.logger import get_logger, get_category_logger, LogLevel, LogCategory
-from models.enums import ZoneID
+from models.enums import ZoneID, LEDStripID
 from models.domain.zone import ZoneConfig
+from models.zone_mapping import ZoneHardwareMapping, ZoneMappingConfig
 from utils.enum_helper import EnumHelper
+from utils.serialization import Serializer
 
 if TYPE_CHECKING:
     from managers.hardware_manager import HardwareManager
@@ -45,14 +47,16 @@ class ConfigManager:
         anim = config.animation_manager.get_animation("breathe")
     """
 
-    def __init__(self, config_path="config/config.yaml", defaults_path="config/factory_defaults.yaml"):
+    def __init__(self, gpio_manager, config_path="config/config.yaml", defaults_path="config/factory_defaults.yaml"):
         """
         Initialize ConfigManager
 
         Args:
+            gpio_manager: Singleton GPIOManager instance for hardware registration
             config_path: Path to main config.yaml (relative to src/)
             defaults_path: Path to factory defaults fallback
         """
+        self.gpio_manager_singleton = gpio_manager
         self.config_path = Path(config_path)
         self.factory_defaults_path = Path(defaults_path)
         self.data = {}
@@ -159,9 +163,8 @@ class ConfigManager:
         from managers.parameter_manager import ParameterManager
 
         # HardwareManager - always initialize (required)
-        self.hardware_manager = HardwareManager()
-        self.hardware_manager.data = self.data
-        self.hardware_manager.print_summary()
+        # Pass singleton gpio_manager for centralized GPIO registration
+        self.hardware_manager = HardwareManager(self.data, self.gpio_manager_singleton)
 
         # Verify zones exist in config
         zones_config = self.data.get("zones", [])
@@ -197,6 +200,55 @@ class ConfigManager:
             log.error("Failed to initialize ParameterManager, using empty", error=str(ex))
             self.parameter_manager = ParameterManager({})
 
+        # Build zone-to-hardware mapping
+        self.zone_mapping = self._parse_zone_mapping()
+
+    # ===== Zone Mapping =====
+
+    def _parse_zone_mapping(self) -> ZoneMappingConfig:
+        """
+        Parse zone-to-hardware mappings from zone_mapping.yaml
+
+        Converts raw YAML data to typed ZoneMappingConfig with ZoneID and LEDStripID enums.
+        Falls back to empty mapping if parsing fails.
+
+        Returns:
+            ZoneMappingConfig with all zone-to-hardware mappings
+        """
+        try:
+            mappings_raw = self.data.get("hardware_mappings", [])
+            if not mappings_raw:
+                log.warn("No zone-to-hardware mappings found!")
+                return ZoneMappingConfig(mappings=[])
+
+            mappings = []
+            for mapping_entry in mappings_raw:
+                try:
+                    hardware_id = LEDStripID[mapping_entry["hardware_id"]]
+                    zone_ids = [
+                        Serializer.str_to_enum(zone_str, ZoneID)
+                        # EnumHelper.to_enum(ZoneID, zone_str)
+                        for zone_str in mapping_entry.get("zones", [])
+                    ]
+
+                    mapping = ZoneHardwareMapping(
+                        hardware_id=hardware_id,
+                        zones=zone_ids
+                    )
+                    mappings.append(mapping)
+                    log.info(f"Mapped hardware {hardware_id.name} → zones: {[z.name for z in zone_ids]}")
+                except KeyError as e:
+                    log.error(f"Invalid zone mapping entry: {mapping_entry}, error: {e}")
+                    continue
+
+            result = ZoneMappingConfig(mappings=mappings)
+            log.info(f"Loaded {len(mappings)} zone-to-hardware mappings")
+            return result
+
+        except Exception as ex:
+            log.error(f"Failed to parse zone mappings: {ex}")
+            return ZoneMappingConfig(mappings=[])
+
     # ===== Zone Access API =====
 
     def get_all_zones(self) -> List[ZoneConfig]:
@@ -222,13 +274,18 @@ class ConfigManager:
         # Sort by order (ALL zones, not just enabled)
         zones_raw.sort(key=lambda z: z.get("order", 0))
 
-        # Build GPIO-to-zones mapping from hardware.yaml
-        gpio_mapping = {}  # zone_id_str -> gpio
-        for strip_cfg in self.hardware_manager.get_gpio_to_zones_mapping():
-            gpio_pin = strip_cfg.get("gpio", 18)
-            zone_list = strip_cfg.get("zones", [])
-            for zone_name in zone_list:
-                gpio_mapping[zone_name.upper()] = gpio_pin
+        # Build GPIO-to-zones mapping from zone_mapping config
+        # Maps zone_id (enum) → gpio (int)
+        gpio_mapping = {}  # zone_id (enum) → gpio (int)
+
+        # Use HardwareManager to get GPIO for each hardware strip
+        for mapping in self.zone_mapping.mappings:
+            hardware_cfg = self.hardware_manager.get_strip(mapping.hardware_id)
+            gpio_pin = hardware_cfg.gpio
+
+            # Map each zone to its GPIO
+            for zone_id in mapping.zones:
+                gpio_mapping[zone_id] = gpio_pin
 
         # Build zone configs with GPIO assignment
         # Pixel indices are calculated per-GPIO (each GPIO's zones start from index 0)
@@ -238,10 +295,9 @@ class ConfigManager:
         for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
             zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
-            zone_id_str = zone_dict.get("id", "UNKNOWN").upper()
 
-            # Assign GPIO from hardware mapping, default to 18
-            gpio_pin = gpio_mapping.get(zone_id_str, 18)
+            # Assign GPIO from mapping, default to 18
+            gpio_pin = gpio_mapping.get(zone_id, 18)
 
             # Calculate start/end indices for this GPIO's sequence
             if gpio_pin not in prev_end_by_gpio:
