@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from models.enums import ParamID, AnimationID, ZoneID, MainMode, ZoneMode
+from models.enums import ParamID, AnimationID, ZoneID, ZoneMode
 from models.domain import (
     ParameterConfig, ParameterState, ParameterCombined,
     AnimationConfig, AnimationState, AnimationCombined,

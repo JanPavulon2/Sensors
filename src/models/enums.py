@@ -5,25 +5,6 @@ Enums for LED Controller state machine
 from enum import Enum, auto
 
 
-class MainMode(Enum):
-    """
-    Two main operating modes (toggle with BTN4)
-
-    STATIC: Zone editing mode
-      - Encoder 1 rotate: Change zone
-      - Encoder 2 rotate: Adjust parameter value
-      - Encoder 2 click: Cycle parameter (COLOR → BRIGHTNESS)
-
-    ANIMATION: Animation control mode
-      - Encoder 1 rotate: Select animation
-      - Encoder 1 click: Start/Stop animation
-      - Encoder 2 rotate: Adjust parameter value
-      - Encoder 2 click: Cycle parameter (SPEED → INTENSITY → ...)
-    """
-    STATIC = auto()      # Zone editing (default)
-    ANIMATION = auto()   # Animation control
-
-
 class ZoneMode(Enum):
     """
     Per-zone operating modes (replaces global MainMode)
