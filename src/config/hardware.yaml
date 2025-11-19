@@ -32,7 +32,7 @@ led_strips:
   - id: MAIN_12V
     gpio: 18
     type: WS2811_12V
-    color_order: RBG
+    color_order: BGR
     count: 51
     voltage: 12
 
