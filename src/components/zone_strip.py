@@ -71,6 +71,19 @@ class ZoneStrip:
         }
 
         # PixelStrip constructor
+        from utils.logger import get_logger, LogCategory
+        log_zone = get_logger().for_category(LogCategory.HARDWARE)
+
+        log_zone.info(f"Creating PixelStrip with parameters:")
+        log_zone.info(f"  num (pixel_count): {pixel_count}")
+        log_zone.info(f"  pin (gpio): {gpio}")
+        log_zone.info(f"  freq_hz: 800000")
+        log_zone.info(f"  dma: {dma_channel}")
+        log_zone.info(f"  invert: False")
+        log_zone.info(f"  brightness: {brightness}")
+        log_zone.info(f"  channel (pwm): {pwm_channel}")
+        log_zone.info(f"  strip_type (color_order): {color_order} (0x{color_order:08x})")
+
         self.pixel_strip: PixelStrip = PixelStrip(
             pixel_count,    # num: total LED count
             gpio,           # pin: GPIO number
@@ -81,7 +94,9 @@ class ZoneStrip:
             pwm_channel,    # channel: PWM channel 0
             color_order     # strip_type
         )
+        log_zone.info(f"PixelStrip created successfully for GPIO {gpio}")
         self.pixel_strip.begin()
+        log_zone.info(f"PixelStrip.begin() called for GPIO {gpio}")
 
     # -----------------------------------------------------------------------
     # Helpers
