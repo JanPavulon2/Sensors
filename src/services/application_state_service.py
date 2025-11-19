@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import Optional
-from models.enums import MainMode, ParamID, LogCategory
+from models.enums import ParamID, LogCategory
 from models.domain.application import ApplicationState
 from services.data_assembler import DataAssembler
 from utils.logger import get_logger
@@ -24,7 +24,7 @@ class ApplicationStateService:
     - Delegates persistence to DataAssembler
 
     State categories:
-    - Mode state: main_mode, edit_mode, lamp_white_mode
+    - Mode state: edit_mode, lamp_white_mode
     - Selection state: current_zone_index, current_param
     - Debugging: frame_by_frame_mode
     - System config: save_on_change
@@ -133,17 +133,6 @@ class ApplicationStateService:
         self._queue_save()
         log.info(f"Lamp white mode set to: {self.state.lamp_white_mode}")
 
-    def set_main_mode(self, mode: MainMode) -> None:
-        """
-        Set main operating mode (debounced save)
-
-        Args:
-            mode: MainMode.STATIC or MainMode.ANIMATION
-        """
-
-        # self.state.main_mode = mode
-        self._queue_save()
-        # log.info(f"Main mode changed: {self.state.main_mode.name}")
 
     # === Selection Management ===
 

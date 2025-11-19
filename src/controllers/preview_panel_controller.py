@@ -524,15 +524,15 @@ class PreviewPanelController:
         """
         try:
             # Import here to avoid circular dependency
-            from models.enums import MainMode
+            from models.enums import ZoneMode
 
             # Build target frame based on current mode
             if hasattr(self, '_parent_controller'):
                 # If we have parent reference
                 parent = self._parent_controller
-                if parent.main_mode == MainMode.STATIC:
+                current_zone = parent.zone_service.get_selected_zone()
+                if current_zone and current_zone.state.mode == ZoneMode.STATIC:
                     # Static mode: show current zone color
-                    current_zone = parent.static_mode_controller._get_current_zone()
                     r, g, b = current_zone.state.color.to_rgb()
                     brightness = current_zone.brightness
                     r = int(r * brightness / 100)
