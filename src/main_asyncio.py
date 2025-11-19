@@ -79,7 +79,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
 
 def _create_zone_strips(zone_service, config_manager):
     """Create and configure LED strip drivers for all GPIO pins."""
-    from components import ZoneStrip
+    from zone_layer.zone_strip import ZoneStrip
     from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
 
     all_zones = zone_service.get_all()

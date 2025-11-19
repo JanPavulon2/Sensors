@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Dict, Tuple
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from models.transition import TransitionConfig
-from models.enums import MainMode, ZoneID
+from models.enums import ZoneID, ZoneMode
 from services import ServiceContainer
 
 if TYPE_CHECKING:
@@ -34,7 +34,6 @@ class PowerToggleController:
         preview_panel: PreviewPanelController,
         animation_engine,
         static_mode_controller,
-        main_mode_getter,
     ):
         """
         Initialize power toggle controller with dependency injection.
@@ -45,7 +44,6 @@ class PowerToggleController:
             preview_panel: PreviewPanelController for preview display
             animation_engine: AnimationEngine for animation control
             static_mode_controller: StaticModeController for pulse control
-            main_mode_getter: Callable to get current main_mode
         """
         self.zone_service = services.zone_service
         self.animation_service = services.animation_service
@@ -54,7 +52,6 @@ class PowerToggleController:
         self.app_state = services.app_state_service
         self.animation_engine = animation_engine
         self.static_mode_controller = static_mode_controller
-        self.main_mode_getter = main_mode_getter
         self.saved_brightness = {}  # Store brightness values during power off
 
     async def toggle(self):
@@ -75,18 +72,15 @@ class PowerToggleController:
             for zone in zones
         }
 
-        # In ANIMATION mode: stop animation engine before fade
-        main_mode = self.main_mode_getter()
-        if main_mode == MainMode.ANIMATION:
-            log.info("Power OFF in ANIMATION mode - stopping animation engine")
-            if self.animation_engine.is_running():
-                # Stop animation WITHOUT fade (we'll fade the whole strip)
-                await self.animation_engine.stop(skip_fade=True)
+        # Per-zone mode: stop animation engine (affects all animated zones)
+        if self.animation_engine.is_running():
+            log.info("Power OFF - stopping animation engine")
+            # Stop animation WITHOUT fade (we'll fade the whole strip)
+            await self.animation_engine.stop(skip_fade=True)
 
-        # In STATIC mode: stop pulse
-        elif main_mode == MainMode.STATIC:
-            if self.static_mode_controller.pulse_active:
-                self.static_mode_controller._stop_pulse()
+        # Stop pulse from static mode
+        if self.static_mode_controller.pulse_active:
+            self.static_mode_controller._stop_pulse()
 
         transition = TransitionConfig(duration_ms=800, steps=20)
 
@@ -116,41 +110,40 @@ class PowerToggleController:
 
         transition_config = TransitionConfig(duration_ms=800, steps=20)
 
-        # Build target frame with restored brightness
+        # Build target frame with restored brightness (static zones only)
         color_map: Dict[ZoneID, Tuple[int, int, int]] = {
             z.config.id: z.get_rgb()
             for z in zones
+            if z.state.mode == ZoneMode.STATIC  # Only include static zones
         }
         main_frame = self.strip_controller.zone_strip.build_frame_from_zones(color_map)
 
         log.info("Power ON - fading in main strip and preview")
 
-        main_mode = self.main_mode_getter()
-        # In STATIC mode: fade in from the saved state
-        if main_mode == MainMode.STATIC:
-            # Fade in main strip
-            fade_main = self.strip_controller.transition_service.fade_in(main_frame, transition_config)
+        # Per-zone mode architecture:
+        # - Static zones: fade in their saved colors
+        # - Animated zones: restart their animations with fade in
+        has_animated_zones = any(z.state.mode == ZoneMode.ANIMATION for z in zones)
 
-            # Fade in preview panel (delegate to PreviewPanelController)
-            fade_preview = self.preview_panel_controller.fade_in_for_power_on(duration_ms=800, steps=20)
+        # Fade in the main frame (static zones)
+        fade_main = self.strip_controller.transition_service.fade_in(main_frame, transition_config)
 
-            # Run both fades concurrently
-            await asyncio.gather(fade_main, fade_preview)
+        # Fade in preview panel
+        fade_preview = self.preview_panel_controller.fade_in_for_power_on(duration_ms=800, steps=20)
 
-        # In ANIMATION mode: restart animation with fade in
-        elif main_mode == MainMode.ANIMATION:
-            log.info("Power ON in ANIMATION mode - restarting animation")
+        # Run both fades concurrently
+        await asyncio.gather(fade_main, fade_preview)
+
+        # If there are animated zones, restart the global animation
+        # (The animation engine merges with static zones, so this works correctly)
+        if has_animated_zones:
             current_anim = self.animation_service.get_current()
             if current_anim:
                 anim_id = current_anim.config.id
                 params = current_anim.build_params_for_engine()
                 safe_params = Serializer.params_enum_to_str(params)
-                # Start animation with fade in
+                log.info("Power ON - restarting animation for animated zones")
+                # Start animation (will merge with static zones)
                 await self.animation_engine.start(anim_id, **safe_params)
-            else:
-                # No animation selected - just fade in the main frame
-                fade_main = self.strip_controller.transition_service.fade_in(main_frame, transition_config)
-                fade_preview = self.preview_panel_controller.fade_in_for_power_on(duration_ms=800, steps=20)
-                await asyncio.gather(fade_main, fade_preview)
 
         log.info("Power ON complete")

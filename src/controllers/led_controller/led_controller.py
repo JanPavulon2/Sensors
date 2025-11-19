@@ -6,7 +6,7 @@ Coordinates between static, animation, and lamp/power modes.
 import asyncio
 from typing import TYPE_CHECKING
 from animations.engine import AnimationEngine
-from models.enums import MainMode, ButtonID, EncoderSource, AnimationID, ZoneMode
+from models.enums import ButtonID, EncoderSource, AnimationID, ZoneMode
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory, LogLevel
@@ -79,9 +79,6 @@ class LEDController:
         # Load persistent state
         state = app_state_service.get_state()
         # Note: main_mode has been removed - zones now have individual modes
-        # Keeping self.main_mode for backward compatibility during transition
-        # TODO: Remove this after full per-zone migration
-        self.main_mode = MainMode.STATIC  # Default fallback
         self.edit_mode = state.edit_mode
 
         # Create ServiceContainer for dependency injection
@@ -114,8 +111,7 @@ class LEDController:
             strip_controller=zone_strip_controller,
             preview_panel=preview_panel_controller,
             animation_engine=self.animation_engine,
-            static_mode_controller=self.static_mode_controller,
-            main_mode_getter=lambda: self.main_mode
+            static_mode_controller=self.static_mode_controller
         )
         self.frame_playback_controller = FramePlaybackController(
             frame_manager=self.frame_manager,
@@ -126,9 +122,8 @@ class LEDController:
         # Register event handlers
         self._register_events()
 
-        # Initialize zones based on current mode
-        self._enter_mode(self.main_mode)
-
+        # Initialize zones based on per-zone modes
+        self._initialize_zones()
 
         log.info("LEDController initialized")
 
@@ -136,12 +131,11 @@ class LEDController:
     # MODE MANAGEMENT
     # ------------------------------------------------------------------
 
-    def _enter_mode(self, mode: MainMode):
-        """Enter specified mode (called on init and after mode toggle)"""
-        if mode == MainMode.STATIC:
-            self.static_mode_controller.enter_mode()
-        else:
-            self.animation_mode_controller.enter_mode()
+    def _initialize_zones(self):
+        """Initialize zone controllers based on per-zone modes"""
+        # Zones now have individual modes, so initialize both controllers
+        # They will handle mode-specific logic when appropriate
+        self.static_mode_controller.enter_mode()
 
     async def start_frame_by_frame_debugging(self, animation_id: AnimationID, **params):
         """
@@ -342,13 +336,13 @@ class LEDController:
         # For OFF mode, do nothing
         
     def _toggle_edit_mode(self):
+        """Toggle edit mode and notify controllers"""
         self.edit_mode = not self.edit_mode
         self.app_state_service.set_edit_mode(self.edit_mode)
-        
-        if self.main_mode == MainMode.STATIC:
-            self.static_mode_controller.on_edit_mode_change(self.edit_mode)
-        else:
-            self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
+
+        # Notify controllers of edit mode change (per-zone mode aware)
+        self.static_mode_controller.on_edit_mode_change(self.edit_mode)
+        self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
         
     async def _toggle_zone_mode(self):
         """
