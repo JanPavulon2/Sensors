@@ -182,6 +182,17 @@ async def main():
     log.info("Initializing LED strips...")
     from engine.frame_manager import FrameManager
     from components import ZoneStrip
+    from rpi_ws281x import ws
+
+    # Map color order strings to rpi_ws281x constants
+    COLOR_ORDER_MAP = {
+        "RGB": ws.WS2811_STRIP_RGB,
+        "RBG": ws.WS2811_STRIP_RBG,
+        "GRB": ws.WS2811_STRIP_GRB,
+        "GBR": ws.WS2811_STRIP_GBR,
+        "BRG": ws.WS2811_STRIP_BRG,
+        "BGR": ws.WS2811_STRIP_BGR,
+    }
 
     # Get all zones from service
     all_zones = zone_service.get_all()
@@ -194,12 +205,26 @@ async def main():
             zones_by_gpio[gpio] = []
         zones_by_gpio[gpio].append(zone.config)
 
-    # GPIO configuration (DMA, PWM channel, color order)
-    from rpi_ws281x import ws
-    gpio_config = {
-        18: {"dma": 10, "pwm": 0, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
-        19: {"dma": 11, "pwm": 1, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
-    }
+    # Get GPIO configuration from HardwareManager
+    # Returns: [{"gpio": 18, "color_order": "BRG", "type": "WS2811_12V", ...}, ...]
+    hw_mappings = config_manager.hardware_manager.get_gpio_to_zones_mapping()
+    gpio_config = {}
+    for hw in hw_mappings:
+        gpio_pin = hw["gpio"]
+        color_order_str = hw["color_order"]
+        color_order_const = COLOR_ORDER_MAP.get(color_order_str, ws.WS2811_STRIP_GRB)
+
+        # DMA and PWM mapping based on GPIO pin
+        dma = 10 if gpio_pin == 18 else (11 if gpio_pin == 19 else 10)
+        pwm = 0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0)
+
+        gpio_config[gpio_pin] = {
+            "dma": dma,
+            "pwm": pwm,
+            "color_order": color_order_const,
+            "brightness": 255
+        }
+        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}")
 
     # Create ZoneStrips for each GPIO
     zone_strips = {}  # gpio -> ZoneStrip
