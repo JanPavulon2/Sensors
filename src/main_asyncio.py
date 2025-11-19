@@ -76,7 +76,8 @@ async def cleanup_application(
     zone_strip_transition_service,
     gpio_manager,
     keyboard_task,
-    polling_task
+    polling_task,
+    zone_strips
 ) -> None:
     """Perform graceful application cleanup on shutdown."""
     log.info("🧹 Starting cleanup...")
@@ -107,9 +108,13 @@ async def cleanup_application(
     log.info("Performing shutdown transition...")
     await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
-    # Clear LEDs
-    log.info("Clearing LEDs...")
+    # Clear LEDs (ALL strips, not just GPIO 18)
+    log.info("Clearing LEDs on all GPIO strips...")
     led_controller.clear_all()
+    for gpio_pin, strip in zone_strips.items():
+        if gpio_pin != 18:  # GPIO 18 already cleared by led_controller
+            log.info(f"Clearing GPIO {gpio_pin}...")
+            strip.clear()
 
     # Cleanup GPIO
     log.info("Cleaning up GPIO...")
@@ -341,6 +346,24 @@ async def main():
     log.info("Performing startup transition...")
     await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
 
+    # Also fade in GPIO 19 strips (PIXEL, PREVIEW zones)
+    # GPIO 18 handled by zone_strip_controller above
+    for gpio_pin, strip in zone_strips.items():
+        if gpio_pin != 18:
+            log.info(f"Fading in GPIO {gpio_pin} strip...")
+            # Directly set all zones to current color with fade
+            from models import Color
+            current_colors = {}
+            for zone in zone_service.get_all():
+                if zone.config.gpio == gpio_pin:
+                    current_colors[zone.config.id] = zone.state.color.to_rgb()
+            if current_colors:
+                # Use transition service for this strip too (if available)
+                # For now, just show the colors directly
+                for zone_id, rgb in current_colors.items():
+                    strip.set_zone_color(zone_id, rgb[0], rgb[1], rgb[2], show=False)
+                strip.show()
+
     # ========================================================================
     # RUN LOOPS
     # ========================================================================
@@ -373,7 +396,8 @@ async def main():
             zone_strip_transition_service,
             gpio_manager,
             keyboard_task,
-            polling_task
+            polling_task,
+            zone_strips
         )
 
 
