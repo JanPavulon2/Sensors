@@ -26,7 +26,7 @@ from models.transition import TransitionConfig, TransitionType
 from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneMode
 from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
-from components import ZoneStrip
+from zone_layer.zone_strip import ZoneStrip
 
 log = get_category_logger(LogCategory.ANIMATION)
 

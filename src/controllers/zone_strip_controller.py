@@ -21,7 +21,7 @@ Does NOT:
 
 from typing import Dict, Tuple, TYPE_CHECKING
 import asyncio
-from components import ZoneStrip
+from zone_layer.zone_strip import ZoneStrip
 from models import Color
 from models.domain import ZoneCombined
 from models.enums import ZoneID, FramePriority, FrameSource
