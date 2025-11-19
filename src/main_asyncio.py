@@ -340,7 +340,10 @@ async def main():
         """Poll hardware inputs at 50Hz"""
         try:
             while True:
-                await control_panel_controller.poll()
+                try:
+                    await control_panel_controller.poll()
+                except Exception as error:
+                    log.error(f"Hardware polling error: {error}", exc_info=True)
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:
             log.debug("Hardware polling loop cancelled.")
