@@ -187,17 +187,7 @@ async def main():
     log.info("Initializing LED strips...")
     from engine.frame_manager import FrameManager
     from components import ZoneStrip
-    from rpi_ws281x import ws
-
-    # Map color order strings to rpi_ws281x constants
-    COLOR_ORDER_MAP = {
-        "RGB": ws.WS2811_STRIP_RGB,
-        "RBG": ws.WS2811_STRIP_RBG,
-        "GRB": ws.WS2811_STRIP_GRB,
-        "GBR": ws.WS2811_STRIP_GBR,
-        "BRG": ws.WS2811_STRIP_BRG,
-        "BGR": ws.WS2811_STRIP_BGR,
-    }
+    from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
 
     # Get all zones from service
     all_zones = zone_service.get_all()
@@ -211,53 +201,46 @@ async def main():
         zones_by_gpio[gpio].append(zone.config)
 
     # Get GPIO configuration from HardwareManager
-    # Returns: [{"gpio": 18, "color_order": "BRG", "type": "WS2811_12V", ...}, ...]
     hw_mappings = config_manager.hardware_manager.get_gpio_to_zones_mapping()
-    gpio_config = {}
-    for hw in hw_mappings:
-        gpio_pin = hw["gpio"]
-        color_order_str = hw["color_order"]
-        color_order_const = COLOR_ORDER_MAP.get(color_order_str, ws.WS2811_STRIP_GRB)
-
-        # DMA and PWM mapping based on GPIO pin
-        # IMPORTANT: Both GPIO 18 and 19 use DMA 10 (NOT 11)
-        # PWM Channel 0 for GPIO 18, PWM Channel 1 for GPIO 19
-        dma = 10  # Both GPIOs use DMA 10
-        pwm = 0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0)
-
-        gpio_config[gpio_pin] = {
-            "dma": dma,
-            "pwm": pwm,
-            "color_order": color_order_const,
-            "brightness": 255
-        }
-        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}, brightness=255")
 
     # Create ZoneStrips for each GPIO
     zone_strips = {}  # gpio -> ZoneStrip
 
     for gpio_pin in sorted(zones_by_gpio.keys()):
         zones_for_gpio = zones_by_gpio[gpio_pin]
-        config = gpio_config.get(gpio_pin)
 
-        if not config:
+        # Find config for this GPIO
+        hw_config = None
+        for hw in hw_mappings:
+            if hw["gpio"] == gpio_pin:
+                hw_config = hw
+                break
+
+        if not hw_config:
             log.warn(f"No config for GPIO {gpio_pin}, skipping")
             continue
 
         # Calculate total pixel count for this GPIO
         pixel_count = sum(z.pixel_count for z in zones_for_gpio)
 
-        # Create ZoneStrip for this GPIO
-        # Note: ZoneStrip creates PixelStrip internally
+        # Create hardware driver (WS281xStrip)
+        ws_config = WS281xConfig(
+            gpio_pin=gpio_pin,
+            led_count=pixel_count,
+            color_order=hw_config["color_order"],  # e.g., "BRG"
+            frequency_hz=800_000,
+            dma_channel=10,  # Both GPIO 18 and 19 use DMA 10
+            brightness=255,
+            invert=False,
+            channel=0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0),
+        )
+        hardware = WS281xStrip(ws_config)
+
+        # Create ZoneStrip with injected hardware
         strip = ZoneStrip(
-            gpio=gpio_pin,
             pixel_count=pixel_count,
             zones=zones_for_gpio,
-            gpio_manager=gpio_manager,
-            color_order=config["color_order"],
-            brightness=config["brightness"],
-            dma_channel=config["dma"],
-            pwm_channel=config["pwm"]
+            hardware=hardware
         )
         zone_strips[gpio_pin] = strip
         log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count} pixels ({len(zones_for_gpio)} zones)")
