@@ -215,16 +215,18 @@ async def main():
         color_order_const = COLOR_ORDER_MAP.get(color_order_str, ws.WS2811_STRIP_GRB)
 
         # DMA and PWM mapping based on GPIO pin
-        dma = 10 if gpio_pin == 18 else (11 if gpio_pin == 19 else 10)
+        # IMPORTANT: Both GPIO 18 and 19 use DMA 10 (NOT 11)
+        # PWM Channel 0 for GPIO 18, PWM Channel 1 for GPIO 19
+        dma = 10  # Both GPIOs use DMA 10
         pwm = 0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0)
 
         gpio_config[gpio_pin] = {
             "dma": dma,
             "pwm": pwm,
             "color_order": color_order_const,
-            "brightness": 255
+            "brightness": 32  # Reduced from 255 to match working sample
         }
-        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}")
+        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}, brightness=32")
 
     # Create ZoneStrips for each GPIO
     zone_strips = {}  # gpio -> ZoneStrip

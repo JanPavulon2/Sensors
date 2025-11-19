@@ -40,7 +40,7 @@ CATEGORY_COLORS = {
     LogCategory.ZONE: Colors.BRIGHT_GREEN,
     LogCategory.SYSTEM: Colors.BRIGHT_WHITE,
     LogCategory.TRANSITION: Colors.MAGENTA,
-    LogCategory.EVENT: Colors.BRIGHT_RED,
+    LogCategory.EVENT: Colors.BRIGHT_MAGENTA,
     LogCategory.RENDER_ENGINE: Colors.MAGENTA,
 }
 
