@@ -10,7 +10,7 @@ PreviewPanel is a logical component within that physical strip.
 
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
-from .zone_strip import ZoneStrip
+from ..zone_layer.zone_strip import ZoneStrip
 
 class PreviewPanel:
     """
