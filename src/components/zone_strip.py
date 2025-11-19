@@ -62,7 +62,7 @@ class ZoneStrip:
             hardware: Physical strip driver (WS281xStrip)
         """
         self.pixel_count = pixel_count
-        self.hw = hardware
+        self.hardware = hardware
 
         # Zone mapping with reversed support
         self.mapper = ZonePixelMapper(zones, pixel_count)
@@ -90,13 +90,13 @@ class ZoneStrip:
         """
         indices = self.mapper.get_indices(zone)
         for phys_idx in indices:
-            self.hw.set_pixel(phys_idx, color)
+            self.hardware.set_pixel(phys_idx, color)
 
         # Update cache
         self._zone_color_cache[zone] = color
 
         if show:
-            self.hw.show()
+            self.hardware.show()
 
     def set_multiple_zones(self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]) -> None:
         """
@@ -109,11 +109,11 @@ class ZoneStrip:
             color = Color.from_rgb(*rgb) if isinstance(rgb, tuple) else rgb
             indices = self.mapper.get_indices(zone)
             for phys_idx in indices:
-                self.hw.set_pixel(phys_idx, color)
+                self.hardware.set_pixel(phys_idx, color)
             self._zone_color_cache[zone] = color
 
         # Single flush (fast path)
-        self.hw.show()
+        self.hardware.show()
 
     def set_pixel_color(
         self,
@@ -137,16 +137,16 @@ class ZoneStrip:
         if 0 <= pixel_index < len(indices):
             phys_idx = indices[pixel_index]
             color = Color.from_rgb(r, g, b)
-            self.hw.set_pixel(phys_idx, color)
+            self.hardware.set_pixel(phys_idx, color)
 
             if show:
-                self.hw.show()
+                self.hardware.show()
 
     def set_pixel(self, zone: ZoneID, idx: int, color: Color) -> None:
         """Set single pixel (Color object API)."""
         indices = self.mapper.get_indices(zone)
         if 0 <= idx < len(indices):
-            self.hw.set_pixel(indices[idx], color)
+            self.hardware.set_pixel(indices[idx], color)
 
     # ==================== Getters ====================
 
@@ -167,12 +167,12 @@ class ZoneStrip:
         Returns:
             List of (r, g, b) tuples (length = pixel_count)
         """
-        return [self.hw.get_pixel(i).to_rgb() for i in range(self.pixel_count)]
+        return [self.hardware.get_pixel(i).to_rgb() for i in range(self.pixel_count)]
 
     def get_zone_buffer(self, zone: ZoneID) -> List[Color]:
         """Get zone pixels as Color list (logical order)."""
         indices = self.mapper.get_indices(zone)
-        return [self.hw.get_pixel(i) for i in indices]
+        return [self.hardware.get_pixel(i) for i in indices]
 
     # ==================== Frame Rendering ====================
 
@@ -191,7 +191,7 @@ class ZoneStrip:
                 Each list is logical pixels for that zone (respects reversed).
         """
         # Build full frame (preserving pixels from zones not in dict)
-        full_frame: List[Color] = [self.hw.get_pixel(i) for i in range(self.pixel_count)]
+        full_frame: List[Color] = [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
         for zone, pixels in zone_pixels_dict.items():
             indices = self.mapper.get_indices(zone)
@@ -204,13 +204,13 @@ class ZoneStrip:
 
         # Atomic push (single DMA transfer - no flicker)
         try:
-            self.hw.apply_frame(full_frame)
+            self.hardware.apply_frame(full_frame)
         except Exception as ex:
             # Fallback: per-pixel set + show (slower but compatible)
             log.warn("apply_frame failed, using fallback", error=str(ex))
             for i, color in enumerate(full_frame):
-                self.hw.set_pixel(i, color)
-            self.hw.show()
+                self.hardware.set_pixel(i, color)
+            self.hardware.show()
 
     def build_frame_from_zones(
         self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]
@@ -234,7 +234,7 @@ class ZoneStrip:
 
     def get_full_frame(self) -> List[Color]:
         """Get full strip as Color list (for new API)."""
-        return [self.hw.get_pixel(i) for i in range(self.pixel_count)]
+        return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
     # ==================== Control ====================
 
@@ -244,11 +244,11 @@ class ZoneStrip:
 
         Prefer apply_frame if full frame available (faster).
         """
-        self.hw.show()
+        self.hardware.show()
 
     def clear(self) -> None:
         """Turn off all LEDs (black + show)."""
-        self.hw.clear()
+        self.hardware.clear()
         self._zone_color_cache.clear()
 
     def clear_zone(self, zone: ZoneID) -> None:

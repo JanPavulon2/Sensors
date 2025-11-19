@@ -26,7 +26,7 @@ from models.hardware import (
 )
 from models.enums import LEDStripID, LEDStripType, ButtonID, EncoderID
 
-from infrastructure.GPIOManager import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 

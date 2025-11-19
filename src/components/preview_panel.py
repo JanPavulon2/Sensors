@@ -10,7 +10,6 @@ PreviewPanel is a logical component within that physical strip.
 
 from typing import Tuple, List
 from rpi_ws281x import PixelStrip, Color
-from infrastructure import GPIOManager
 from .zone_strip import ZoneStrip
 
 class PreviewPanel:
@@ -67,7 +66,7 @@ class PreviewPanel:
         self.count = count
         self.brightness = brightness
         self.zone_strip = zone_strip
-        self._pixel_strip = zone_strip.pixel_strip
+        # self._pixel_strip = zone_strip.pixel_strip
 
     def _reverse_index(self, index: int) -> int:
         """
@@ -97,7 +96,7 @@ class PreviewPanel:
         """
         if 0 <= index < self.count:
             physical_index = self._reverse_index(index)
-            self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
+            # self._pixel_strip.setPixelColor(physical_index, Color(r, g, b))
 
     def set_pixel_color_absolute(self, pixel_index: int, r: int, g: int, b: int, show: bool = False) -> None:
         """

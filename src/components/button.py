@@ -6,7 +6,7 @@ Simple button with debouncing. Registers GPIO pins via GPIOManager.
 
 import RPi.GPIO as GPIO
 import time
-from infrastructure import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from models.enums import GPIOPullMode
 
 

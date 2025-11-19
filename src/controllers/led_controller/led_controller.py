@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from controllers.zone_strip_controller import ZoneStripController
     from services import ZoneService, AnimationService, ApplicationStateService
     from managers import ConfigManager
-    from infrastructure import GPIOManager
+    from hardware.gpio.gpio_manager import GPIOManager
     from services.event_bus import EventBus
     from engine.frame_manager import FrameManager
     
@@ -391,8 +391,8 @@ class LEDController:
         if next_mode == ZoneMode.STATIC:
             log.debug(f"Zone {zone_id.name}: Switching to STATIC mode")
             # Just render the static color - frame merging will handle it
-            r, g, b = current_zone.get_rgb()
-            self.zone_strip_controller.zone_strip.set_zone_color(zone_id, r, g, b)
+            color = current_zone.get_color()
+            self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color,)
 
             # Sync preview
             self.static_mode_controller._sync_preview()

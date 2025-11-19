@@ -31,7 +31,7 @@ from utils.logger import get_logger, configure_logger
 
 from models.enums import LogCategory, LogLevel
 from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
-from infrastructure import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from controllers.led_controller.led_controller import LEDController
 from controllers import ControlPanelController, PreviewPanelController, ZoneStripController
 from managers import ConfigManager
@@ -55,7 +55,6 @@ configure_logger(LogLevel.DEBUG)
 def emergency_gpio_cleanup():
     """Emergency cleanup - called on any exit (crashes, seg faults)."""
     try:
-        from infrastructure import GPIOManager
         gpio_manager = GPIOManager()
         gpio_manager.cleanup()
         log.info("🚨 Emergency GPIO cleanup completed")

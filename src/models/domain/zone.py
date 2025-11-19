@@ -115,3 +115,16 @@ class ZoneCombined:
             int(g * brightness_factor),
             int(b * brightness_factor)
         )
+        
+    def get_color(self) -> Color:
+        """
+        Get current color 
+
+        Returns black if zone is disabled, otherwise returns color.
+        """
+        # Disabled zones are always black
+        if not self.config.enabled:
+            return Color.black()
+
+        color = self.state.color
+        return color
