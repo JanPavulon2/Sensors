@@ -99,9 +99,117 @@ Changes: What changed
 
 - **Lines of Code**: ~8,000
 - **Python Files**: 50+
-- **LED Zones**: 8 (90 pixels total)
+- **LED Zones**: 9 (90 pixels total)
 - **Animations**: 6 built-in
-- **Hardware**: Raspberry Pi 4 + WS2811 LEDs
+- **Hardware**: Raspberry Pi 4 + WS2811/WS2812 LEDs (2 GPIO pins)
+
+---
+
+## 🔌 Multi-GPIO Architecture
+
+The system supports multiple LED chains on different GPIO pins via clean separation of concerns.
+
+### Configuration Files
+
+**Three files work together:**
+
+1. **`hardware.yaml`** - Defines physical LED strips and GPIO pins
+   - GPIO pin assignments (18, 19, etc.)
+   - LED type and color order (WS2811_12V/BGR, WS2812_5V/GRB)
+   - Physical pixel counts per strip
+
+2. **`zone_mapping.yaml`** - Maps zones to hardware strips
+   - Explicit zone→hardware connections
+   - Single source of truth for "which zones are where"
+   - Clean separation of domain logic from hardware
+
+3. **`zones.yaml`** - Defines logical zones
+   - Zone names, pixel counts, parameters
+   - GPIO is AUTO-ASSIGNED by ConfigManager (not defined here)
+
+### How It Works
+
+```
+hardware.yaml + zone_mapping.yaml
+           ↓
+    ConfigManager._parse_zones()
+    (reads both files, joins data)
+           ↓
+  Auto-assigns GPIO to each zone
+           ↓
+    zones with .gpio property
+           ↓
+  main_asyncio._create_zone_strips()
+  (groups zones by GPIO, creates WS281xStrip per GPIO)
+           ↓
+    FrameManager routes frames to correct strip
+```
+
+### Key Implementation
+
+**ConfigManager** (`src/managers/config_manager.py:277-308`):
+- Parses `zone_mapping.yaml` to build GPIO→zones mapping
+- Assigns `zone.config.gpio` automatically during zone creation
+- Calculates pixel indices per-GPIO (each GPIO's zones start from index 0)
+
+**main_asyncio** (`src/main_asyncio.py:80-126`):
+- Groups zones by GPIO pin
+- Creates one `WS281xStrip` per GPIO
+- Registers all strips with `FrameManager`
+
+**FrameManager**:
+- Routes pixel data to correct strip based on `zone.config.gpio`
+- Calls `show()` on all strips sequentially during frame render
+
+### Adding a New GPIO Pin
+
+**Example: Add GPIO 21 with 100 pixels**
+
+1. Add to `hardware.yaml`:
+```yaml
+led_strips:
+  - id: GPIO_21_STRIP
+    gpio: 21
+    type: WS2812
+    color_order: RGB
+    count: 100
+    voltage: 5
+```
+
+2. Add to `zone_mapping.yaml`:
+```yaml
+hardware_mappings:
+  - hardware_id: GPIO_21_STRIP
+    zones:
+      - NEW_ZONE_1
+      - NEW_ZONE_2
+```
+
+3. Add to `zones.yaml`:
+```yaml
+zones:
+  - id: NEW_ZONE_1
+    name: New Zone 1
+    pixel_count: 50
+    enabled: true
+    # gpio auto-assigned!
+```
+
+That's it! ConfigManager handles the rest automatically.
+
+### Current Setup
+
+- **GPIO 18 (MAIN_12V)**: FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP (51 pixels, BGR order)
+- **GPIO 19 (AUX_5V)**: PIXEL, PIXEL2, PREVIEW (68 pixels, GRB order)
+
+### Architecture Benefits
+
+- **Separation of Concerns**: Hardware, zones, and mappings in separate files
+- **Flexibility**: Add GPIO pins without code changes
+- **DRY**: No duplicate GPIO definitions
+- **Clarity**: Explicit zone→hardware mapping visible at a glance
+
+For detailed architecture documentation, see `.claude/context/architecture/multi-gpio-architecture.md`
 
 ---
 

@@ -274,38 +274,74 @@ class ConfigManager:
         # Sort by order (ALL zones, not just enabled)
         zones_raw.sort(key=lambda z: z.get("order", 0))
 
-        # Build GPIO-to-zones mapping from zone_mapping config
+        # =====================================================================
+        # MULTI-GPIO ARCHITECTURE: Automatic GPIO Assignment
+        # =====================================================================
+        # This elegant design separates hardware from domain logic:
+        #
+        # 1. hardware.yaml defines physical LED strips:
+        #    - GPIO pins (18, 19, etc.)
+        #    - LED types and color orders (WS2811/BGR, WS2812/GRB)
+        #    - Physical pixel counts
+        #
+        # 2. zone_mapping.yaml maps zones to hardware strips:
+        #    - Explicit zone→hardware connections
+        #    - Single source of truth for "which zones are where"
+        #
+        # 3. zones.yaml defines logical zones:
+        #    - Zone names, pixel counts, animation parameters
+        #    - NO GPIO definitions (auto-assigned here!)
+        #
+        # ConfigManager joins all three during initialization:
+        # - Reads zone_mapping.yaml to build zone→GPIO mappings
+        # - Assigns zone.config.gpio automatically
+        # - Calculates pixel indices per-GPIO (each chain starts at 0)
+        #
+        # Benefits:
+        # - Add GPIO pins without touching zones.yaml
+        # - Change LED types without redefining zones
+        # - Move zones between GPIO chains easily
+        # - Clear separation of concerns
+        # =====================================================================
+
+        # Build GPIO-to-zones mapping from zone_mapping.yaml
         # Maps zone_id (enum) → gpio (int)
         gpio_mapping = {}  # zone_id (enum) → gpio (int)
 
-        # Use HardwareManager to get GPIO for each hardware strip
+        # Step 1: Read zone_mapping.yaml and lookup GPIO from hardware.yaml
         for mapping in self.zone_mapping.mappings:
+            # Get hardware config (contains GPIO pin)
             hardware_cfg = self.hardware_manager.get_strip(mapping.hardware_id)
             gpio_pin = hardware_cfg.gpio
 
-            # Map each zone to its GPIO
+            # Map each zone to its GPIO pin
             for zone_id in mapping.zones:
                 gpio_mapping[zone_id] = gpio_pin
 
-        # Build zone configs with GPIO assignment
-        # Pixel indices are calculated per-GPIO (each GPIO's zones start from index 0)
-        prev_end_by_gpio = {}  # gpio -> last_end_index
+        # Step 2: Build zone configs with auto-assigned GPIO
+        # IMPORTANT: Pixel indices are calculated PER-GPIO
+        # (each GPIO's zones start from index 0, not global index)
+        prev_end_by_gpio = {}  # gpio -> last_end_index (tracks per-GPIO sequences)
         zone_configs = []
 
         for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
             zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
 
-            # Assign GPIO from mapping, default to 18
+            # Assign GPIO from mapping (defaults to 18 if not found)
             gpio_pin = gpio_mapping.get(zone_id, 18)
 
-            # Calculate start/end indices for this GPIO's sequence
+            # Calculate start/end indices for this GPIO's pixel sequence
+            # Each GPIO has independent pixel indexing (GPIO 18 starts at 0, GPIO 19 starts at 0, etc.)
+            # Example:
+            #   GPIO 18: FLOOR[0-17], LEFT[18-21], TOP[22-24], ... (51 total)
+            #   GPIO 19: PIXEL[0-29], PIXEL2[30-59], PREVIEW[60-67] (68 total)
             if gpio_pin not in prev_end_by_gpio:
-                prev_end_by_gpio[gpio_pin] = -1
+                prev_end_by_gpio[gpio_pin] = -1  # Initialize for this GPIO
 
             start_index = prev_end_by_gpio[gpio_pin] + 1
             end_index = start_index + pixel_count - 1
-            prev_end_by_gpio[gpio_pin] = end_index
+            prev_end_by_gpio[gpio_pin] = end_index  # Track last index for this GPIO
 
             zone_config = ZoneConfig(
                 id=zone_id,
@@ -316,7 +352,7 @@ class ConfigManager:
                 order=zone_dict.get("order", 0),
                 start_index=start_index,
                 end_index=end_index,
-                gpio=gpio_pin  # Assign GPIO from hardware mapping
+                gpio=gpio_pin  # AUTO-ASSIGNED from zone_mapping.yaml!
             )
             zone_configs.append(zone_config)
 

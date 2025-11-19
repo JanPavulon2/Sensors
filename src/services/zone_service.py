@@ -100,7 +100,50 @@ class ZoneService:
             zone.config.id: (zone.state.color, zone.brightness)
             for zone in self.get_all()
         }
-        
+
+    def get_zones_by_gpio(self, gpio_pin: int) -> List[ZoneCombined]:
+        """
+        Get all zones assigned to a specific GPIO pin
+
+        Useful for:
+        - Debugging multi-GPIO setups
+        - Verifying zone→GPIO mappings
+        - Per-GPIO strip operations
+
+        Args:
+            gpio_pin: GPIO pin number (18, 19, etc.)
+
+        Returns:
+            List of zones on this GPIO (may be empty)
+
+        Example:
+            gpio_18_zones = zone_service.get_zones_by_gpio(18)
+            # Returns: [FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP]
+        """
+        return [zone for zone in self.zones if zone.config.gpio == gpio_pin]
+
+    def get_all_gpios(self) -> List[int]:
+        """
+        Get sorted list of all GPIO pins in use
+
+        Useful for:
+        - Iterating over all GPIO pins
+        - Discovering which GPIOs are configured
+        - Multi-GPIO hardware operations
+
+        Returns:
+            Sorted list of unique GPIO pin numbers
+
+        Example:
+            gpios = zone_service.get_all_gpios()
+            # Returns: [18, 19]
+
+            for gpio in gpios:
+                zones = zone_service.get_zones_by_gpio(gpio)
+                print(f"GPIO {gpio}: {len(zones)} zones")
+        """
+        return sorted(set(zone.config.gpio for zone in self.zones))
+
     def save(self) -> None:
         """Persist current state"""
         self.assembler.save_zone_state(self.zones)
