@@ -35,8 +35,8 @@
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 349
+        "mode": "PRESET",
+        "preset_name": "yellow"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -44,10 +44,10 @@
     "right": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "orange"
       },
-      "brightness": 100,
-      "mode": "STATIC"
+      "brightness": 37.5,
+      "mode": "ANIMATION"
     },
     "bottom": {
       "color": {
@@ -55,12 +55,12 @@
         "preset_name": "orange"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     },
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "green"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -110,16 +110,24 @@
     },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 0
+        "mode": "PRESET",
+        "preset_name": "cool_white"
       },
       "brightness": 100,
       "mode": "STATIC"
     },
     "preview": {
       "color": {
-        "mode": "HUE",
-        "hue": 0
+        "mode": "PRESET",
+        "preset_name": "red"
+      },
+      "brightness": 100,
+      "mode": "STATIC"
+    },
+    "pixel2": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "white"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -133,8 +141,8 @@
     "edit_mode_on": false,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
-    "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 4,
+    "active_parameter": "ZONE_COLOR_PRESET",
+    "selected_zone_index": 3,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

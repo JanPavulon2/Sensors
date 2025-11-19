@@ -447,7 +447,7 @@ class LEDController:
     def clear_all(self) -> None:
         """Turn off all LEDs (both preview and strip)."""
         self.zone_strip_controller.zone_strip.clear()
-        self.preview_panel_controller.clear()
+        # self.preview_panel_controller.clear()
         log.info("All LEDs cleared")
 
     async def stop_all(self) -> None:

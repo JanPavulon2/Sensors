@@ -169,10 +169,10 @@ class StaticModeController:
         brightness = zone.brightness
 
         # Show brightness as progress bar when editing brightness
-        if self.current_param == ParamID.ZONE_BRIGHTNESS:
-            self.preview_panel_controller.show_bar(brightness, 100, rgb)
-        else:
-            self.preview_panel_controller.show_color(rgb, brightness)
+        # if self.current_param == ParamID.ZONE_BRIGHTNESS:
+        #     self.preview_panel_controller.show_bar(brightness, 100, rgb)
+        # else:
+        #     self.preview_panel_controller.show_color(rgb, brightness)
 
     def _start_pulse(self):
         if not self.pulse_active:

@@ -40,5 +40,5 @@ led_strips:
     gpio: 19
     type: WS2812_5V
     color_order: GRB
-    count: 38
+    count: 68
     voltage: 5

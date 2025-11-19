@@ -83,14 +83,10 @@ class ZoneID(Enum):
     BOTTOM = auto()
     LAMP = auto()
     PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
+    PIXEL2 = auto()        # 30-pixel custom LED strip on GPIO 19
     PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
     BACK = auto()
     DESK = auto()
-    DESK2 = auto()
-    DESK3 = auto()
-    DESK4 = auto()
-    DESK5 = auto()
-    DESK6 = auto()
 
 
 class LEDStripID(Enum):

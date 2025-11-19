@@ -372,7 +372,7 @@ class DataAssembler:
             }
 
             self.save_state(state_json)
-            log.info(f"Saved application state")
+            log.debug(f"Saved application state")
 
         except Exception as e:
             log.error(f"Failed to save application state: {e}")

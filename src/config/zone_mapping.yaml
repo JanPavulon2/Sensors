@@ -18,4 +18,5 @@ hardware_mappings:
   - hardware_id: AUX_5V
     zones:
       - PIXEL
+      - PIXEL2
       - PREVIEW

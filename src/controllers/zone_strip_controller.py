@@ -263,4 +263,4 @@ class ZoneStripController:
 
         # Fade in from black
         await self.transition_service.fade_in(target_frame, config)
-        log.info(f"Startup fade-in complete ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)
+        log.with_category(LogCategory.TRANSITION).info(f"Startup fade-in complete ({config.duration_ms}ms)")

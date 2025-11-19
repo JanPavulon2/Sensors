@@ -54,10 +54,18 @@ zones:
     order: 7
     reversed: false
 
+  - id: PIXEL2
+    name: Pixel2
+    tag: pixel2
+    pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
+    enabled: true
+    order: 8
+    reversed: false
+
   - id: PREVIEW
     name: Preview
     tag: preview
-    pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
+    pixel_count: 9      # 8-pixel preview panel on GPIO 19 (mounted upside down)
     enabled: true
     order: 8
     reversed: true
