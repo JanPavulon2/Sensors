@@ -194,11 +194,11 @@ async def main():
             zones_by_gpio[gpio] = []
         zones_by_gpio[gpio].append(zone.config)
 
-    # GPIO configuration (DMA, color order)
+    # GPIO configuration (DMA, PWM channel, color order)
     from rpi_ws281x import ws
     gpio_config = {
-        18: {"dma": 10, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
-        19: {"dma": 11, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
+        18: {"dma": 10, "pwm": 0, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
+        19: {"dma": 11, "pwm": 1, "color_order": ws.WS2811_STRIP_GRB, "brightness": 255},
     }
 
     # Create ZoneStrips for each GPIO
@@ -209,7 +209,7 @@ async def main():
         config = gpio_config.get(gpio_pin)
 
         if not config:
-            log.warning(f"No config for GPIO {gpio_pin}, skipping")
+            log.warn(f"No config for GPIO {gpio_pin}, skipping")
             continue
 
         # Calculate total pixel count for this GPIO
@@ -224,7 +224,8 @@ async def main():
             gpio_manager=gpio_manager,
             color_order=config["color_order"],
             brightness=config["brightness"],
-            dma_channel=config["dma"]
+            dma_channel=config["dma"],
+            pwm_channel=config["pwm"]
         )
         zone_strips[gpio_pin] = strip
         log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count} pixels ({len(zones_for_gpio)} zones)")
