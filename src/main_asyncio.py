@@ -224,9 +224,9 @@ async def main():
             "dma": dma,
             "pwm": pwm,
             "color_order": color_order_const,
-            "brightness": 32  # Reduced from 255 to match working sample
+            "brightness": 255
         }
-        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}, brightness=32")
+        log.debug(f"GPIO {gpio_pin}: {color_order_str} -> {color_order_const}, DMA={dma}, PWM={pwm}, brightness=255")
 
     # Create ZoneStrips for each GPIO
     zone_strips = {}  # gpio -> ZoneStrip
