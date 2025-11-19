@@ -60,7 +60,7 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "green"
+        "preset_name": "warm_white"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -134,11 +134,16 @@
     }
   },
   "current_animation": {
-    "id": null,
-    "parameters": {}
+    "id": "COLOR_SNAKE",
+    "parameters": {
+      "ANIM_SPEED": 50,
+      "ANIM_PRIMARY_COLOR_HUE": 0,
+      "ANIM_LENGTH": 5,
+      "ANIM_HUE_OFFSET": 30
+    }
   },
   "application": {
-    "edit_mode_on": false,
+    "edit_mode_on": true,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ZONE_COLOR_PRESET",
