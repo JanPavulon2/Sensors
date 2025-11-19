@@ -179,13 +179,12 @@ When creating documentation or configuration files:
 
 ### Import Organization
 
-**CRITICAL**: All imports MUST be at the top of the file, not inline within functions.
+**CRITICAL**: All imports MUST be at the top of the file (unless impossible due to circular deps).
 
 ❌ WRONG:
 ```python
 def some_function():
     from models.enums import MainMode  # NO - inline import
-    ...
 ```
 
 ✅ CORRECT:
@@ -196,51 +195,63 @@ def some_function():
     ...
 ```
 
-**Rationale**:
-- Clearer code readability - imports visible at a glance
-- Easier to identify dependencies
-- Better static analysis and IDE support
-- Consistent with PEP 8 style guide
+### Naming Conventions
+
+**NO abbreviations** - use full names always.
+
+❌ WRONG: `hw`, `cfg`, `mgr`, `svc`, `ctrl`
+✅ CORRECT: `hardware`, `config`, `manager`, `service`, `controller`
+
+### Enums Over Strings
+
+**ALWAYS use enums**, never magic strings.
+
+❌ WRONG: `"zone_name"`, `"BRG"` (strings in code)
+✅ CORRECT: `ZoneID.FLOOR`, `ColorOrder.BRG` (enums)
 
 ### Dependency Injection
 
-**CRITICAL**: Use constructor injection only. Do NOT assign dependencies via property assignment.
+**Constructor injection only** - no property assignment.
 
 ❌ WRONG:
 ```python
-service.frame_manager = frame_manager  # NO - property injection
+service.frame_manager = frame_manager
 ```
 
 ✅ CORRECT:
 ```python
-def __init__(self, frame_manager):  # YES - constructor injection
+def __init__(self, frame_manager):
     self.frame_manager = frame_manager
 ```
 
-**Rationale**:
-- Clear and explicit dependencies
-- Easier to understand object initialization
-- Type hints work better with constructor params
-- Prevents issues with uninitialized attributes
-
 ### Type-Explicit APIs
 
-**CRITICAL**: Use explicit type checks and objects, not string-based type detection.
+**Explicit type checks**, no duck-typing.
 
 ❌ WRONG:
 ```python
-if hasattr(obj, 'get_frame'):  # NO - checking for method existence
+if hasattr(obj, 'get_frame'):
     obj.get_frame()
 ```
 
 ✅ CORRECT:
 ```python
-if isinstance(obj, ZoneStrip):  # YES - explicit type check
+if isinstance(obj, ZoneStrip):
     ...
 ```
 
-**Rationale**:
-- Type safety and clarity
-- Prevents accidental duck-typing bugs
-- IDE can provide better autocomplete
-- Easier to refactor
+### Main Function Structure
+
+**Flat, readable, no embedded logic loops**.
+
+✅ CORRECT:
+```python
+log.info("Loading configuration...")
+config_manager = ConfigManager(gpio_manager)
+config_manager.load()
+
+log.info("Initializing services...")
+animation_service = AnimationService(assembler)
+```
+
+❌ WRONG: Don't embed `for` loops or complex logic in main() - extract to helper functions.

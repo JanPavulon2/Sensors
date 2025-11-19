@@ -52,23 +52,79 @@ configure_logger(LogLevel.DEBUG)
 # SHUTDOWN & CLEANUP
 # ---------------------------------------------------------------------------
 
+def emergency_gpio_cleanup():
+    """Emergency cleanup - called on any exit (crashes, seg faults)."""
+    try:
+        from infrastructure import GPIOManager
+        gpio_manager = GPIOManager()
+        gpio_manager.cleanup()
+        log.info("🚨 Emergency GPIO cleanup completed")
+    except Exception as e:
+        log.error(f"Failed to cleanup GPIO on exit: {e}")
+
+
 async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
     """Gracefully shut down all tasks and hardware."""
     if signal_name:
         log.info(f"Received signal: {signal_name} → initiating graceful shutdown...")
 
-    # Cancel all running tasks except current
     tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task(loop)]
     log.debug(f"Cancelling {len(tasks)} running tasks...")
     for task in tasks:
         task.cancel()
 
-    # Wait for cancellation
     await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Allow pending logs to flush
     await asyncio.sleep(0.05)
     log.info("Shutdown complete. Goodbye!")
+
+
+def _create_zone_strips(zone_service, config_manager):
+    """Create and configure LED strip drivers for all GPIO pins."""
+    from components import ZoneStrip
+    from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
+
+    all_zones = zone_service.get_all()
+    zones_by_gpio = {}
+    for zone in all_zones:
+        gpio = zone.config.gpio
+        if gpio not in zones_by_gpio:
+            zones_by_gpio[gpio] = []
+        zones_by_gpio[gpio].append(zone.config)
+
+    hardware_mappings = config_manager.hardware_manager.get_gpio_to_zones_mapping()
+    zone_strips = {}
+
+    for gpio_pin in sorted(zones_by_gpio.keys()):
+        zones_for_gpio = zones_by_gpio[gpio_pin]
+
+        hardware_config = None
+        for hw in hardware_mappings:
+            if hw["gpio"] == gpio_pin:
+                hardware_config = hw
+                break
+
+        if not hardware_config:
+            log.warn(f"No config for GPIO {gpio_pin}, skipping")
+            continue
+
+        pixel_count = sum(z.pixel_count for z in zones_for_gpio)
+
+        ws_config = WS281xConfig(
+            gpio_pin=gpio_pin,
+            led_count=pixel_count,
+            color_order=hardware_config["color_order"],
+            frequency_hz=800_000,
+            dma_channel=10,
+            brightness=255,
+            invert=False,
+            channel=0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0),
+        )
+        hardware = WS281xStrip(ws_config)
+        strip = ZoneStrip(pixel_count=pixel_count, zones=zones_for_gpio, hardware=hardware)
+        zone_strips[gpio_pin] = strip
+        log.info(f"Created ZoneStrip GPIO {gpio_pin}: {pixel_count} pixels, {len(zones_for_gpio)} zones")
+
+    return zone_strips
 
 
 async def cleanup_application(
@@ -139,8 +195,6 @@ async def main():
     log.info("Initializing GPIO manager (singleton)...")
     gpio_manager = GPIOManager()
 
-    # LED hardware initialization moved below after zone config is loaded
-    
     log.info("Loading configuration...")
     config_manager = ConfigManager(gpio_manager)
     config_manager.load()
@@ -148,16 +202,6 @@ async def main():
     log.info("Initializing event bus...")
     event_bus = EventBus()
     event_bus.add_middleware(log_middleware)
-    
-    # Register GPIO cleanup on exit (handles crashes and segfaults)
-    def emergency_gpio_cleanup():
-        """Emergency GPIO cleanup - called on any exit (including crashes)"""
-        try:
-            gpio_manager.cleanup()
-            log.info("🚨 Emergency GPIO cleanup completed")
-        except Exception as e:
-            log.error(f"Failed to cleanup GPIO on exit: {e}")
-
     atexit.register(emergency_gpio_cleanup)
 
     # ========================================================================
@@ -186,66 +230,7 @@ async def main():
 
     log.info("Initializing LED strips...")
     from engine.frame_manager import FrameManager
-    from components import ZoneStrip
-    from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
-
-    # Get all zones from service
-    all_zones = zone_service.get_all()
-
-    # Group zones by GPIO
-    zones_by_gpio = {}
-    for zone in all_zones:
-        gpio = zone.config.gpio
-        if gpio not in zones_by_gpio:
-            zones_by_gpio[gpio] = []
-        zones_by_gpio[gpio].append(zone.config)
-
-    # Get GPIO configuration from HardwareManager
-    hw_mappings = config_manager.hardware_manager.get_gpio_to_zones_mapping()
-
-    # Create ZoneStrips for each GPIO
-    zone_strips = {}  # gpio -> ZoneStrip
-
-    for gpio_pin in sorted(zones_by_gpio.keys()):
-        zones_for_gpio = zones_by_gpio[gpio_pin]
-
-        # Find config for this GPIO
-        hw_config = None
-        for hw in hw_mappings:
-            if hw["gpio"] == gpio_pin:
-                hw_config = hw
-                break
-
-        if not hw_config:
-            log.warn(f"No config for GPIO {gpio_pin}, skipping")
-            continue
-
-        # Calculate total pixel count for this GPIO
-        pixel_count = sum(z.pixel_count for z in zones_for_gpio)
-
-        # Create hardware driver (WS281xStrip)
-        ws_config = WS281xConfig(
-            gpio_pin=gpio_pin,
-            led_count=pixel_count,
-            color_order=hw_config["color_order"],  # e.g., "BRG"
-            frequency_hz=800_000,
-            dma_channel=10,  # Both GPIO 18 and 19 use DMA 10
-            brightness=255,
-            invert=False,
-            channel=0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0),
-        )
-        hardware = WS281xStrip(ws_config)
-
-        # Create ZoneStrip with injected hardware
-        strip = ZoneStrip(
-            pixel_count=pixel_count,
-            zones=zones_for_gpio,
-            hardware=hardware
-        )
-        zone_strips[gpio_pin] = strip
-        log.info(f"Created ZoneStrip on GPIO {gpio_pin} with {pixel_count} pixels ({len(zones_for_gpio)} zones)")
-
-    # Use GPIO 18 strip as primary
+    zone_strips = _create_zone_strips(zone_service, config_manager)
     zone_strip = zone_strips.get(18, list(zone_strips.values())[0])
 
     # PREVIEW PANEL: TEMPORARILY DISABLED

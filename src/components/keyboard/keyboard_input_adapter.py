@@ -83,7 +83,7 @@ class KeyboardInputAdapter:
             else:
                 # Evdev succeeded (shouldn't normally happen as it blocks indefinitely)
                 log.info("Evdev keyboard active")
-                return
+                await evdev_task
 
         except asyncio.TimeoutError:
             # Timeout = evdev is blocking = keyboard device found and working!
