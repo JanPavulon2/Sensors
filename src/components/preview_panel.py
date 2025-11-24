@@ -9,35 +9,31 @@ PreviewPanel is a logical component within that physical strip.
 """
 
 from typing import Tuple, List
-from rpi_ws281x import PixelStrip, Color
 from zone_layer.zone_strip import ZoneStrip
+from models.color import Color
 
 class PreviewPanel:
     """
-    Preview panel hardware abstraction - 8 LED module
+    Preview panel logical component - 8 LED zone
 
-    Provides low-level hardware control for CJMCU-2812-8 preview panel.
-    All methods that modify LEDs call strip.show() to display immediately.
+    Part of GPIO 19 (AUX_5V) ZoneStrip, CJMCU-2812-8 preview panel.
 
-    Hardware:
-        - 8 RGB LEDs (WS2811/WS2812 compatible)
-        - GPIO 19
-        - GRB color order
-        - Independent from main strip
+    This component does NOT directly manipulate pixels or call show().
+    All rendering is done through FrameManager via PreviewPanelController.
+
+    The preview zone is part of the shared ZoneStrip and should be updated
+    through the normal frame submission process, not direct hardware calls.
 
     Args:
-        gpio: GPIO pin number
-        gpio_manager: GPIOManager instance for pin registration
-        count: Number of LEDs (default 8)
-        color_order: Color order constant from ws module (default GRB)
-        brightness: Global hardware brightness 0-255 (default 32)
+        zone_strip: ZoneStrip instance for GPIO 19 (AUX_5V) containing PIXEL and PREVIEW zones
+        count: Number of LEDs in preview (default 8)
+        brightness: Global brightness 0-255 (default 32)
 
     Example:
-        >>> gpio_manager = GPIOManager()
-        >>> preview = PreviewPanel(gpio=19, gpio_manager=gpio_manager)
-        >>> preview.show_color((255, 0, 0))  # All LEDs red
-        >>> preview.show_bar(75, 100, (0, 255, 0))  # 6 LEDs green (75% of 8)
-        >>> preview.clear()
+        Controller flow:
+        >>> controller.render_solid((255, 0, 0))  # Build zone frame
+        >>> frame_manager.submit_zone_frame(frame)  # Submit to FrameManager
+        >>> # FrameManager renders to all strips (including preview)
     """
 
     def __init__(
@@ -50,8 +46,7 @@ class PreviewPanel:
         Initialize PreviewPanel as logical view of PREVIEW zone in ZoneStrip.
 
         PREVIEW zone is part of the AUX_5V strip (GPIO 19).
-        CJMCU-2812-8 physical device IS the PREVIEW zone (last 8 pixels).
-        This component controls pixels within the shared ZoneStrip, not a separate one.
+        This component stores configuration but does NOT perform rendering.
 
         Args:
             zone_strip: ZoneStrip instance for GPIO 19 (AUX_5V) containing both PIXEL and PREVIEW zones
@@ -59,14 +54,15 @@ class PreviewPanel:
             brightness: Global brightness 0-255 (default 32)
 
         Note:
-            PreviewPanel does NOT create its own PixelStrip.
-            It renders to PREVIEW zone within the shared ZoneStrip on GPIO 19.
-            Both PIXEL and PREVIEW zones share one PixelStrip instance (PWM channel 0).
+            PreviewPanel follows the FrameManager architecture:
+            - Does NOT create its own PixelStrip
+            - Does NOT call strip.show()
+            - Does NOT directly manipulate pixels
+            - PreviewPanelController submits zone frames to FrameManager
         """
         self.count = count
         self.brightness = brightness
         self.zone_strip = zone_strip
-        # self._pixel_strip = zone_strip.pixel_strip
 
     def _reverse_index(self, index: int) -> int:
         """
@@ -114,7 +110,8 @@ class PreviewPanel:
             For zone-based control, use set_zone_color() or set_pixel_color().
         """
         if 0 <= pixel_index < self.count:
-            color = Color(r, g, b)
+            color = Color.from_rgb(r, g, b)
+            self.zone_strip.set_pixel_color(ZoneID.PREVIEW, pixel_index)
             self._pixel_strip.setPixelColor(pixel_index, color)
             if show:
                 self._pixel_strip.show()

@@ -128,7 +128,6 @@ class ZoneState:
 # src/models/domain/application.py
 @dataclass
 class ApplicationState:
-    # REMOVED: main_mode: MainMode
     selected_zone_index: int = 0  # Cycles through ALL zones
     edit_mode: bool = False
     lamp_white_mode: bool = False
@@ -339,7 +338,8 @@ GPIO 18 (Main strip - WS2811 12V):
 └─ DESK (15 px)
 
 GPIO 19 (Second strip - WS2812 5V):
-├─ NEW_STRIP (30 px)
+├─ PIXEL (30 px)
+├─ PIXEL2 (30 px)
 └─ PREVIEW (8 px)
 ```
 

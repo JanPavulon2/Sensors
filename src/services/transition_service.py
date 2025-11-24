@@ -11,7 +11,7 @@ Adds:
 - wait_for_idle() for synchronization
 - prepare_for_animation_switch() to safely fade out + stop current animation
 
-This version preserves existing public methods and presets, 
+This version preserves existing public methods and presets,
 so other modules continue to work unchanged.
 
 """
@@ -23,6 +23,7 @@ from models.transition import TransitionType, TransitionConfig
 from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, ZoneID
 from models.frame import PixelFrame
 from utils.logger import get_category_logger
+from zone_layer.zone_strip import ZoneStrip
 
 log = get_category_logger(LogCategory.SYSTEM)
 
@@ -147,19 +148,14 @@ class TransitionService:
         """
         Convert frame to zone-based pixel dictionary.
 
-        Handles both ZoneStrip (has zone_indices) and PreviewPanel (single zone).
-        Uses ZoneID enums as keys (not string zone names).
+        Handles both ZoneStrip and PreviewPanel.
+        Uses ZoneID enums as keys.
         """
-        if hasattr(self.strip, 'zone_indices') and self.strip.zone_indices:
-            # ZoneStrip: distribute pixels using zone_indices mapping
+        if isinstance(self.strip, ZoneStrip):
+            # ZoneStrip: distribute pixels using mapper
             zone_pixels_dict = {}
-            for zone_name, pixel_indices in self.strip.zone_indices.items():
-                # Convert string zone_name to ZoneID enum
-                try:
-                    zone_id = ZoneID[zone_name]
-                except KeyError:
-                    log.error(f"Unknown zone name: {zone_name}")
-                    continue
+            for zone_id in self.strip.mapper.all_zone_ids():
+                pixel_indices = self.strip.mapper.get_indices(zone_id)
                 zone_pixels = [frame[idx] if idx < len(frame) else (0, 0, 0) for idx in pixel_indices]
                 if zone_pixels:
                     zone_pixels_dict[zone_id] = zone_pixels
@@ -180,9 +176,8 @@ class TransitionService:
         if config.type == TransitionType.NONE:
             return  # No transition
 
-        if not hasattr(self.strip, "get_frame"):
-            log.warn("Strip doesn't support get_frame(), using clear()")
-            self.strip.clear()
+        if not isinstance(self.strip, ZoneStrip):
+            log.warn("TransitionService requires ZoneStrip")
             await asyncio.sleep(config.duration_ms / 1000)
             return
 
@@ -383,7 +378,15 @@ class TransitionService:
 
         # Clear to black (with timing protection)
         async with self._transition_lock:
-            self.strip.clear()
+            if self.frame_manager:
+                black_frame = [(0, 0, 0)] * len(target_frame)
+                zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
+                pixel_frame = PixelFrame(
+                    priority=FramePriority.TRANSITION,
+                    source=FrameSource.TRANSITION,
+                    zone_pixels=zone_pixels_dict
+                )
+                await self.frame_manager.submit_pixel_frame(pixel_frame)
             self.last_show_time = time.perf_counter()
 
         # Fade in to target
@@ -419,11 +422,19 @@ class TransitionService:
         new_state_setter()
 
         # Capture new state
-        if hasattr(self.strip, 'get_frame'):
+        if isinstance(self.strip, ZoneStrip):
             new_frame = self.strip.get_frame()
             if new_frame:
-                # Clear and fade in
-                self.strip.clear()
+                # Clear to black and fade in
+                if self.frame_manager:
+                    black_frame = [(0, 0, 0)] * len(new_frame)
+                    zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
+                    pixel_frame = PixelFrame(
+                        priority=FramePriority.TRANSITION,
+                        source=FrameSource.TRANSITION,
+                        zone_pixels=zone_pixels_dict
+                    )
+                    await self.frame_manager.submit_pixel_frame(pixel_frame)
                 await self.fade_in(new_frame, config)
 
     async def crossfade(
@@ -540,6 +551,15 @@ class TransitionService:
         config = config or TransitionConfig(TransitionType.CUT, duration_ms=100)
         async with self._transition_lock:
             log.debug(f"Cut transition: {config.duration_ms}ms black")
-            self.strip.clear()
+            if isinstance(self.strip, ZoneStrip) and self.frame_manager:
+                # Submit black frame via FrameManager
+                black_frame = [(0, 0, 0)] * self.strip.pixel_count
+                zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
+                pixel_frame = PixelFrame(
+                    priority=FramePriority.TRANSITION,
+                    source=FrameSource.TRANSITION,
+                    zone_pixels=zone_pixels_dict
+                )
+                await self.frame_manager.submit_pixel_frame(pixel_frame)
             await asyncio.sleep(config.duration_ms / 1000)
 

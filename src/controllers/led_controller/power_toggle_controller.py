@@ -52,6 +52,7 @@ class PowerToggleController:
         self.app_state = services.app_state_service
         self.animation_engine = animation_engine
         self.static_mode_controller = static_mode_controller
+        self.frame_manager = services.frame_manager
         self.saved_brightness = {}  # Store brightness values during power off
 
     async def toggle(self):
@@ -89,11 +90,14 @@ class PowerToggleController:
         # Fade out main strip (uses TransitionService)
         fade_main = self.strip_controller.transition_service.fade_out(transition)
 
-        # Fade out preview panel (delegate to PreviewPanelController)
-        fade_preview = self.preview_panel_controller.transition_service.fade_out(transition)
+        # Fade out preview panel (if available)
+        fades = [fade_main]
+        if self.preview_panel_controller:
+            fade_preview = self.preview_panel_controller.transition_service.fade_out(transition)
+            fades.append(fade_preview)
 
-        # Run both fades concurrently
-        await asyncio.gather(fade_main, fade_preview)
+        # Run all fades concurrently
+        await asyncio.gather(*fades)
 
         # Set brightness to 0
         for zone in zones:
@@ -102,13 +106,13 @@ class PowerToggleController:
         log.info("Power OFF complete")
 
     async def _power_on(self, zones):
-        """Restore brightness and fade in (main strip + preview panel)"""
-        # Restore brightness values BEFORE building frame
+        """Restore brightness and fade in all GPIO strips (main strip + preview panel)"""
+        # Restore brightness values BEFORE building frames
         for zone in zones:
             saved = self.saved_brightness.get(zone.config.id, 100)  # Default to 100% if no saved value
             self.zone_service.set_brightness(zone.config.id, saved)
 
-        transition_config = TransitionConfig(duration_ms=800, steps=20)
+        transition_config = TransitionConfig(duration_ms=1700, steps=20)
 
         # Build target frame with restored brightness (static zones only)
         color_map: Dict[ZoneID, Tuple[int, int, int]] = {
@@ -116,23 +120,28 @@ class PowerToggleController:
             for z in zones
             if z.state.mode == ZoneMode.STATIC  # Only include static zones
         }
-        main_frame = self.strip_controller.zone_strip.build_frame_from_zones(color_map)
 
-        log.info("Power ON - fading in main strip and preview")
+        log.info("Power ON - fading in all GPIO strips and preview")
 
         # Per-zone mode architecture:
         # - Static zones: fade in their saved colors
         # - Animated zones: restart their animations with fade in
         has_animated_zones = any(z.state.mode == ZoneMode.ANIMATION for z in zones)
 
-        # Fade in the main frame (static zones)
-        fade_main = self.strip_controller.transition_service.fade_in(main_frame, transition_config)
+        # Fade in each GPIO strip (each strip renders only its own zones)
+        fades = []
+        for strip in self.frame_manager.main_strips:
+            frame = strip.build_frame_from_zones(color_map)
+            fade = strip.transition_service.fade_in(frame, transition_config)
+            fades.append(fade)
 
-        # Fade in preview panel
-        fade_preview = self.preview_panel_controller.fade_in_for_power_on(duration_ms=800, steps=20)
+        # Fade in preview panel (if available)
+        if self.preview_panel_controller:
+            fade_preview = self.preview_panel_controller.fade_in_for_power_on(duration_ms=800, steps=20)
+            fades.append(fade_preview)
 
-        # Run both fades concurrently
-        await asyncio.gather(fade_main, fade_preview)
+        # Run all fades concurrently
+        await asyncio.gather(*fades)
 
         # If there are animated zones, restart the global animation
         # (The animation engine merges with static zones, so this works correctly)

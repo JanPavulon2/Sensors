@@ -37,6 +37,7 @@ from collections import deque
 from utils.logger import get_logger
 from utils.serialization import Serializer
 from models.enums import LogCategory, FramePriority, ZoneID
+from models.color import Color
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame, AnyFrame
@@ -404,17 +405,13 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         r, g, b = frame.color
-        # Note: ZoneStrip doesn't expose zones list, so this renders via zone_indices
-        if hasattr(strip, 'zone_indices'):
-            for zone_key in strip.zone_indices.keys():
-                try:
-                    # zone_key is already a string, but set_zone_color expects ZoneID
-                    # We need to convert string back to ZoneID enum
-                    from models.enums import ZoneID
-                    zone_id = ZoneID[zone_key]
-                    strip.set_zone_color(zone_id, r, g, b, show=False)
-                except (KeyError, ValueError) as e:
-                    log.error(f"Error setting zone {zone_key}: {e}")
+        color = Color.from_rgb(r, g, b)
+
+        for zone_id in strip.mapper.all_zone_ids():
+            try:
+                strip.set_zone_color(zone_id, color, show=False)
+            except Exception as e:
+                log.error(f"Error setting zone {zone_id.name}: {e}")
         strip.show()
 
     def _render_zone_frame(self, frame: ZoneFrame, strip) -> None:
@@ -427,7 +424,8 @@ class FrameManager:
         """
         for zone_id, (r, g, b) in frame.zone_colors.items():
             try:
-                strip.set_zone_color(zone_id, r, g, b, show=False)
+                color = Color.from_rgb(r, g, b)
+                strip.set_zone_color(zone_id, color, show=False)
             except Exception as e:
                 log.error(f"Error setting zone {Serializer.enum_to_str(zone_id)}: {e}")
         strip.show()
@@ -441,28 +439,18 @@ class FrameManager:
         try:
             cleaned = {}
 
-            # Use zone_indices if available (ZoneStrip), otherwise skip validation
-            zone_map = getattr(strip, 'zone_indices', {})
-
             for zone_id, pixels in frame.zone_pixels.items():
-                # Normalize to string key for zone_map lookup (zone_indices has string keys)
-                zone_key = zone_id.name if isinstance(zone_id, ZoneID) else zone_id
-
-                # If we have zone mapping, validate; otherwise accept as-is
-                if zone_map and zone_key not in zone_map:
+                # Validate zone exists
+                expected_len = strip.mapper.get_zone_length(zone_id)
+                if expected_len == 0:
                     continue
 
-                if zone_map:
-                    expected_len = len(zone_map[zone_key])
-
-                    # extend or trim
-                    if len(pixels) != expected_len:
-                        fixed = list(pixels[:expected_len])
-                        if len(fixed) < expected_len:
-                            fixed += [(0, 0, 0)] * (expected_len - len(fixed))
-                        cleaned[zone_id] = fixed
-                    else:
-                        cleaned[zone_id] = list(pixels)
+                # Trim or extend pixel list to match zone length
+                if len(pixels) != expected_len:
+                    fixed = list(pixels[:expected_len])
+                    if len(fixed) < expected_len:
+                        fixed += [(0, 0, 0)] * (expected_len - len(fixed))
+                    cleaned[zone_id] = fixed
                 else:
                     cleaned[zone_id] = list(pixels)
 

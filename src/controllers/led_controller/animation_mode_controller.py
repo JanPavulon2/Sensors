@@ -53,7 +53,7 @@ class AnimationModeController:
 
     def enter_mode(self):
         """Initialize or resume animation preview and auto-start animation"""
-        self._sync_preview()
+        # self._sync_preview()
 
         # Auto-start animation if not already running
         if not self.animation_engine.is_running():
@@ -95,7 +95,7 @@ class AnimationModeController:
         # Auto-start/switch animation on main strip (always, regardless of current state)
         asyncio.create_task(self._switch_to_selected_animation())
 
-        self._sync_preview()
+        # self._sync_preview()
 
     async def _switch_to_selected_animation(self):
         """
@@ -209,14 +209,15 @@ class AnimationModeController:
         #         self.parent.animation_engine.update_param(param_map[pid], new_value)
 
         log.info(f"Adjusted {pid.name} → {new_value}")
-        self._sync_preview()
+        # self._sync_preview()
 
     def cycle_param(self):
         params = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
         idx = params.index(self.current_param)
         self.current_param = params[(idx + 1) % len(params)]
         self.app_state_service.set_current_param(self.current_param)
-        self._sync_preview()
+        
+        # self._sync_preview()
         log.info(f"Cycled animation param: {self.current_param.name}")
 
     # ------------------------------------------------------------------
@@ -245,7 +246,8 @@ class AnimationModeController:
         params = anim.build_params_for_engine(current_zone)
         safe_params = Serializer.params_enum_to_str(params)
         try:
-            self.preview_panel_controller.start_animation_preview(anim_id, **safe_params)
+            # self.preview_panel_controller.start_animation_preview(anim_id, **safe_params)
+            
             log.debug(f"Preview synced for {anim_id.name}")
         except Exception as e:
             log.warn(f"Failed to start preview for {anim_id.name}: {e}")

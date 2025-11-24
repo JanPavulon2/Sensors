@@ -73,15 +73,19 @@ class ZoneStripController:
     # Rendering
     # -----------------------------------------------------------------------
 
-    def submit_all_zones_frame(self, zones_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+    def submit_all_zones_frame(self, zones_colors: Dict[ZoneID, Tuple[Color, int]], priority: FramePriority = FramePriority.MANUAL) -> None:
         """
         Submit zones colors to FrameManager.
 
         Each zone gets (Color, brightness) and is converted to RGB with brightness applied.
-        """
-        asyncio.create_task(self._submit_all_zones_frame(zones_colors))
 
-    async def _submit_all_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]]) -> None:
+        Args:
+            zones_colors: Dict of ZoneID → (Color, brightness) tuples
+            priority: Frame priority level (default MANUAL for static, use PULSE for pulsing)
+        """
+        asyncio.create_task(self._submit_all_zones_frame(zones_colors, priority))
+
+    async def _submit_all_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]], priority: FramePriority = FramePriority.MANUAL) -> None:
         """Convert zones to RGB frame and submit to FrameManager."""
         rgb_colors = {}
         for zone_id, (color, brightness) in zone_colors.items():
@@ -91,11 +95,11 @@ class ZoneStripController:
 
         frame = ZoneFrame(
             zone_colors=rgb_colors,
-            priority=FramePriority.MANUAL,
+            priority=priority,
             source=FrameSource.STATIC,
-            ttl=1.0
+            ttl=1.5
         )
-        
+
         await self.frame_manager.submit_zone_frame(frame)
 
     def render_zone(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
@@ -118,7 +122,9 @@ class ZoneStripController:
         g = int(g * brightness / 100)
         b = int(b * brightness / 100)
 
-        self.zone_strip.set_zone_color(zone_id, r, g, b)
+        # self.zone_strip.set_zone_color(zone_id, r, g, b)
+        self.zone_strip.set_zone_color(zone_id, color, False)
+        
         log.debug(f"Rendered zone {zone_id.name}: RGB({r},{g},{b}) @ {brightness}%")
 
     def render_zone_combined(self, zone: ZoneCombined) -> None:

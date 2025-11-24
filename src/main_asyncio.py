@@ -45,6 +45,8 @@ from services.transition_service import TransitionService
 
 log = get_logger().for_category(LogCategory.SYSTEM)
 
+# DEBUG MODE: Set to True to disable animations/pulse/fades for testing
+DEBUG_NOPULSE = False
 
 configure_logger(LogLevel.DEBUG)
 
@@ -156,7 +158,7 @@ async def cleanup_application(
 
     # Stop pulsing
     log.info("Stopping pulsing...")
-    await led_controller.static_mode_controller._stop_pulse_async()
+    # await led_controller.static_mode_controller._stop_pulse_async()
     await asyncio.sleep(0.05)
 
     # Fade out

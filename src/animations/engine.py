@@ -7,7 +7,7 @@ Uses TransitionService for smooth transitions between animation states.
 
 import asyncio
 import time
-from typing import Optional, Dict, List, Any, Type
+from typing import Optional, Dict, List, Tuple, Any, Type
 
 from animations.base import BaseAnimation  # ✅ direct import — breaks circular import safely
 
@@ -128,6 +128,14 @@ class AnimationEngine:
             # Start with crossfade from specific frame
             await engine.start(AnimationID.SNAKE, from_frame=old_frame)
         """
+        # DEBUG: Skip animations if testing static mode only
+        try:
+            from main_asyncio import DEBUG_NOPULSE
+            if DEBUG_NOPULSE:
+                log.info("DEBUG_STATIC_ONLY: Skipping animation start")
+                return
+        except ImportError:
+            pass
         transition = transition or self.transition_service.ANIMATION_SWITCH
         log.info(f"AnimEngine.start(): {animation_id}")
 
@@ -178,11 +186,37 @@ class AnimationEngine:
             if color:
                 self.current_animation.set_zone_color_cache(zone.config.id, *color)
 
-        # Step 5: Render first frame to buffer (WITHOUT starting loop)
-        log.debug("AnimEngine: Rendering first frame...")
-        first_frame = await self._get_first_frame()
+        # Step 5: Keep old frame visible while building first frame
+        # Submit old frame with low priority to prevent black flash during _get_first_frame()
+        if old_frame:
+            zone_pixels_dict_old = self.transition_service._get_zone_pixels_dict(old_frame)
+            pixel_frame_old = PixelFrame(
+                zone_pixels=zone_pixels_dict_old,
+                priority=FramePriority.MANUAL,
+                source=FrameSource.ANIMATION,
+                ttl=5.0  # High TTL to persist while first frame builds (~250ms)
+            )
+            await self.frame_manager.submit_pixel_frame(pixel_frame_old)
 
-        # Step 6: CROSSFADE from old to new (or fade_in if no old frame)
+        # Step 6: Build first frame in memory (WITHOUT touching strip buffer)
+        log.debug("AnimEngine: Building first frame...")
+        zone_pixels_dict = await self._get_first_frame()
+
+        # Step 7: Convert zone_pixels dict to absolute frame for transitions
+        # (strip knows how to map zone pixels to physical indices)
+        first_frame = []
+        if zone_pixels_dict:
+            # Build full frame from zone pixels
+            first_frame = [(0, 0, 0)] * self.strip.pixel_count
+            for zone_id, pixels in zone_pixels_dict.items():
+                indices = self.strip.mapper.get_indices(zone_id)
+                for logical_idx, (r, g, b) in enumerate(pixels):
+                    if logical_idx < len(indices):
+                        phys_idx = indices[logical_idx]
+                        if 0 <= phys_idx < self.strip.pixel_count:
+                            first_frame[phys_idx] = (r, g, b)
+
+        # Step 8: CROSSFADE from old to new (or fade_in if no old frame)
         if first_frame:
             if old_frame and len(old_frame) == len(first_frame):
                 log.debug("AnimEngine: Crossfading from old to new animation...")
@@ -192,11 +226,11 @@ class AnimationEngine:
                 log.debug("AnimEngine: Fading in from black...")
                 await self.transition_service.fade_in(first_frame, transition)
 
-        # Step 7: Clear all buffers before starting loop (prevents stale frame glitch)
+        # Step 9: Clear all buffers before starting loop (prevents stale frame glitch)
         self.zone_pixel_buffers.clear()
         self.zone_color_buffers.clear()
 
-        # Step 8: NOW start animation loop (transition complete - no race condition)
+        # Step 10: NOW start animation loop (transition complete - no race condition)
         log.info(f"AnimEngine: Starting loop for {animation_id}")
         self.animation_task = asyncio.create_task(self._run_loop())
         log.info(f"AnimEngine: Started {animation_id} | params:{params}")
@@ -293,18 +327,19 @@ class AnimationEngine:
     # INTERNAL LOOP
     # ------------------------------------------------------------------
 
-    async def _get_first_frame(self) -> Optional[List]:
+    async def _get_first_frame(self) -> Optional[Dict]:
         """
-        Render first frame of animation to buffer without starting full loop.
+        Build first frame of animation in memory without touching strip buffer.
 
         This allows fade_in to work on a complete first frame before animation starts,
         eliminating race condition between fade and animation loop.
 
         Returns:
-            List of RGB tuples (one per pixel) or empty list if failed
+            Dict mapping ZoneID to list of (r, g, b) tuples (zone_pixels format)
+            or empty dict if failed
         """
         if not self.current_animation:
-            return []
+            return {}
 
         try:
             # Create async generator
@@ -313,27 +348,29 @@ class AnimationEngine:
             # Collect yields for first frame (animations yield multiple times per frame)
             # For zone-based animations: ~10 yields (one per zone)
             # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
-            max_yields = 100  # Safety limit (increased for complex animations)
+            zone_pixels_buffer: Dict[ZoneID, Dict[int, Tuple[int, int, int]]] = {}
+            zone_colors_buffer: Dict[ZoneID, Tuple[int, int, int]] = {}
+
             yields_collected = 0
+            max_yields = 100
             start_time = time.perf_counter()
 
-            async for frame in gen: # type: ignore
-                # Apply to buffer (show=False)
+            async for frame in gen:
                 if len(frame) == 5:
+                    # Pixel-level: (zone_id, pixel_index, r, g, b)
                     zone_id, pixel_index, r, g, b = frame
-                    self.strip.set_pixel_color(zone_id, pixel_index, r, g, b, show=False)
+                    zone_pixels_buffer.setdefault(zone_id, {})[pixel_index] = (r, g, b)
                 elif len(frame) == 4:
+                    # Zone-level: (zone_id, r, g, b)
                     zone_id, r, g, b = frame
-                    self.strip.set_zone_color(zone_id, r, g, b, show=False)
+                    zone_colors_buffer[zone_id] = (r, g, b)
 
                 yields_collected += 1
 
                 # Small delay to collect batch of yields for first frame
-                # (most animations yield all zones/pixels quickly, then sleep)
                 await asyncio.sleep(0.005)
 
                 # Break after collecting adequate yields
-                # Most animations yield ~10 times per frame, but wait for at least 15 to be safe
                 if yields_collected >= 15:
                     break
 
@@ -342,17 +379,39 @@ class AnimationEngine:
                     break
 
             # Stop the generator
-            await gen.aclose() # type: ignore
+            await gen.aclose()
 
-            # Return current buffer state
-            frame = self.strip.get_frame() if hasattr(self.strip, 'get_frame') else []
+            # Convert to PixelFrame format
+            zone_pixels_dict: Dict[ZoneID, List[Tuple[int, int, int]]] = {}
+
+            # Process zone-level updates
+            for zone_id, color in zone_colors_buffer.items():
+                zone_length = self.zone_lengths.get(zone_id, 0)
+                zone_pixels_dict[zone_id] = [color] * zone_length
+
+            # Process pixel-level updates (overwrites zone colors if present)
+            for zone_id, pixels_dict in zone_pixels_buffer.items():
+                zone_length = self.zone_lengths.get(zone_id, 0)
+                # Start with zone color if present, else black
+                if zone_id in zone_pixels_dict:
+                    pixels_list = zone_pixels_dict[zone_id].copy()
+                else:
+                    pixels_list = [(0, 0, 0)] * zone_length
+
+                # Overlay pixel updates
+                for pixel_idx, color in pixels_dict.items():
+                    if 0 <= pixel_idx < zone_length:
+                        pixels_list[pixel_idx] = color
+
+                zone_pixels_dict[zone_id] = pixels_list
+
             elapsed_ms = (time.perf_counter() - start_time) * 1000
-            log.debug(f"First frame rendered: {yields_collected} yields in {elapsed_ms:.1f}ms")
-            return frame
+            log.debug(f"First frame built: {yields_collected} yields in {elapsed_ms:.1f}ms")
+            return zone_pixels_dict
 
         except Exception as e:
-            log.error(f"Failed to get first frame: {e}")
-            return []
+            log.error(f"Failed to build first frame: {e}")
+            return {}
 
     async def _run_loop(self):
         """Main loop — consumes frames from the running animation"""

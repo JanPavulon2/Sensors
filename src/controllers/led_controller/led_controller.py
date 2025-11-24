@@ -270,11 +270,11 @@ class LEDController:
             
     def _handle_selector_click(self):
         """
-        Selector click: Route based on currently selected zone's mode.
+        Selector click: Toggle zone mode or start/stop animation.
 
         Per-zone mode: Selector click behavior depends on zone's mode
-        - STATIC zone: Ignored (no click action in STATIC mode)
-        - ANIMATION zone: Start/stop animation
+        - STATIC zone: Toggle to ANIMATION mode (with auto-select first animation)
+        - ANIMATION zone: Toggle to STATIC mode
         - OFF zone: Ignored
         """
         current_zone = self.zone_service.get_selected_zone()
@@ -282,10 +282,11 @@ class LEDController:
             log.warn("No zone selected for selector click")
             return
 
-        if current_zone.state.mode == ZoneMode.ANIMATION:
-            asyncio.create_task(self.animation_mode_controller.toggle_animation())
+        if current_zone.state.mode == ZoneMode.OFF:
+            log.info("Selector click ignored for OFF zone")
         else:
-            log.info(f"Selector click ignored for {current_zone.state.mode.name} zone")
+            # Toggle STATIC ↔ ANIMATION mode
+            asyncio.create_task(self._toggle_zone_mode())
             
     def _handle_modulator_rotation(self, delta: int):
         """
@@ -389,7 +390,7 @@ class LEDController:
             self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color,)
 
             # Sync preview
-            self.static_mode_controller._sync_preview()
+            # self.static_mode_controller._sync_preview()
             if self.edit_mode:
                 self.static_mode_controller._start_pulse()
 

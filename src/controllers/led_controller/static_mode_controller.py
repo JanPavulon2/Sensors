@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID
+from models.enums import ParamID, FramePriority
 from models.domain import ZoneCombined
 from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
@@ -175,6 +175,14 @@ class StaticModeController:
         #     self.preview_panel_controller.show_color(rgb, brightness)
 
     def _start_pulse(self):
+        # DEBUG: Skip pulse if testing static mode only
+        try:
+            from main_asyncio import DEBUG_NOPULSE
+            if DEBUG_NOPULSE:
+                return
+        except ImportError:
+            pass
+
         if not self.pulse_active:
             self.pulse_active = True
             self.pulse_task = asyncio.create_task(self._pulse_task())
@@ -218,7 +226,10 @@ class StaticModeController:
                 # Calculate brightness factor (0.5 to 1.0)
                 scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
                 pulse_brightness = int(base * scale)
-                self.strip_controller.submit_all_zones_frame({current_zone.id: (current_zone.state.color, pulse_brightness)})
+                self.strip_controller.submit_all_zones_frame(
+                    {current_zone.config.id: (current_zone.state.color, pulse_brightness)},
+                    priority=FramePriority.PULSE
+                )
 
                 await asyncio.sleep(cycle / steps)  
                 

@@ -20,6 +20,7 @@ from utils.logger import get_category_logger
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import FullStripFrame, ZoneFrame, PixelFrame
+from zone_layer.zone_strip import ZoneStrip
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
@@ -221,13 +222,14 @@ class FramePlaybackController:
     def _blank_full_state(self) -> Dict:
         """
         Create empty full-frame state for all zones.
-        Uses ZoneID enums as keys (not string zone names)."""
+        Uses ZoneID enums as keys.
+        """
         state = {}
 
         # Find first ZoneStrip (skip PreviewPanel and other strip types)
         strip = None
         for s in self.frame_manager.main_strips:
-            if hasattr(s, 'zone_indices'):
+            if isinstance(s, ZoneStrip):
                 strip = s
                 break
 
@@ -235,15 +237,10 @@ class FramePlaybackController:
             log.error("No ZoneStrip found in main_strips")
             return {}
 
-        # strip.zone_indices = { "TOP": [0,1,2], "LAMP": [3,4,5,...] }
-        # Convert string keys to ZoneID enums
-        for zone_name, physical_indices in strip.zone_indices.items():
-            try:
-                zone_id = ZoneID[zone_name]
-                pixel_count = len(physical_indices)
-                state[zone_id] = [(0, 0, 0)] * pixel_count
-            except KeyError:
-                log.error(f"Unknown zone name: {zone_name}")
+        # Initialize all zones with black
+        for zone_id in strip.mapper.all_zone_ids():
+            pixel_count = strip.mapper.get_zone_length(zone_id)
+            state[zone_id] = [(0, 0, 0)] * pixel_count
 
         return state
 
