@@ -6,7 +6,7 @@ Simple button with debouncing. Registers GPIO pins via GPIOManager.
 
 import RPi.GPIO as GPIO
 import time
-from infrastructure import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from models.enums import GPIOPullMode
 
 
@@ -32,12 +32,9 @@ class Button:
         self.pin = pin
         self.debounce_time = debounce_time
 
-        # Register GPIO pin via manager (pull-up for buttons)
-        gpio_manager.register_input(
-            pin=pin,
-            component=f"Button({pin})",
-            pull_mode=GPIOPullMode.PULL_UP
-        )
+        # NOTE: GPIO registration is handled by HardwareManager
+        # This component receives already-registered pins, just uses them for input reading
+        # Do NOT register pins here to avoid conflicts
 
         # State tracking
         self._last_state = GPIO.HIGH

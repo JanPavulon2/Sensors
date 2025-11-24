@@ -1,0 +1,60 @@
+# Zone-to-Hardware Mapping
+# =========================
+# Maps logical zones to physical LED strip hardware
+#
+# Purpose:
+# --------
+# This file establishes the explicit connection between:
+# - Logical zones (defined in zones.yaml)
+# - Physical hardware strips (defined in hardware.yaml)
+#
+# How It Works:
+# -------------
+# 1. Define physical LED strips in hardware.yaml (GPIO pins, LED types, counts)
+# 2. Define logical zones in zones.yaml (names, pixel counts, parameters)
+# 3. Map zones to hardware strips HERE (explicit zone→hardware connection)
+# 4. ConfigManager reads this file during startup and auto-assigns GPIO to each zone
+#
+# Benefits:
+# ---------
+# - Single place to see which zones are on which GPIO
+# - Easy to add new GPIO pins (just add hardware_id entry)
+# - No GPIO hardcoding scattered through zones.yaml
+# - Clear separation of concerns (hardware vs. domain logic)
+#
+# Example: Adding a Third GPIO Pin
+# ---------------------------------
+# 1. Add strip to hardware.yaml:
+#      - id: GPIO_21_STRIP
+#        gpio: 21
+#        type: WS2812
+#        color_order: RGB
+#        count: 100
+#
+# 2. Add mapping here:
+#      - hardware_id: GPIO_21_STRIP
+#        zones:
+#          - NEW_ZONE_1
+#          - NEW_ZONE_2
+#
+# 3. Define zones in zones.yaml (GPIO auto-assigned!)
+#
+# ConfigManager Implementation:
+# ------------------------------
+# See src/managers/config_manager.py:277-308 for GPIO assignment logic
+
+hardware_mappings:
+  - hardware_id: MAIN_12V
+    zones:
+      - FLOOR
+      - LEFT
+      - TOP
+      - RIGHT
+      - BOTTOM
+      - LAMP
+
+  - hardware_id: AUX_5V
+    zones:
+      - PIXEL
+      - PIXEL2
+      - PREVIEW

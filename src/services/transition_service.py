@@ -147,13 +147,20 @@ class TransitionService:
         """
         Convert frame to zone-based pixel dictionary.
 
-        Handles both ZoneStrip (has zones) and PreviewPanel (single zone).
+        Handles both ZoneStrip (has zone_indices) and PreviewPanel (single zone).
+        Uses ZoneID enums as keys (not string zone names).
         """
-        if hasattr(self.strip, 'zones') and self.strip.zones:
-            # ZoneStrip: distribute pixels across zones
+        if hasattr(self.strip, 'zone_indices') and self.strip.zone_indices:
+            # ZoneStrip: distribute pixels using zone_indices mapping
             zone_pixels_dict = {}
-            for zone_id, (start, end) in self.strip.zones.items():
-                zone_pixels = frame[start:end]
+            for zone_name, pixel_indices in self.strip.zone_indices.items():
+                # Convert string zone_name to ZoneID enum
+                try:
+                    zone_id = ZoneID[zone_name]
+                except KeyError:
+                    log.error(f"Unknown zone name: {zone_name}")
+                    continue
+                zone_pixels = [frame[idx] if idx < len(frame) else (0, 0, 0) for idx in pixel_indices]
                 if zone_pixels:
                     zone_pixels_dict[zone_id] = zone_pixels
             return zone_pixels_dict

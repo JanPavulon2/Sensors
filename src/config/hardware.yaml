@@ -1,25 +1,75 @@
 # Hardware Configuration
+# ====================
+# Defines physical hardware components and their GPIO connections
+#
+# This is the source of truth for:
+# - Which GPIO pins are used for each component
+# - LED strip types and electrical properties (voltage, color order)
+# - Physical pixel counts per LED strip
+#
+# LED strips defined here are mapped to logical zones via zone_mapping.yaml
+# ConfigManager reads this file during startup to initialize hardware drivers
+#
 # GPIO pin assignments for encoders, buttons, and LED strips
 
 encoders:
-  selector:
+  - id: selector
     clk: 5
     dt: 6
     sw: 13
 
-  modulator:
+  - id: modulator
     clk: 16
     dt: 20
     sw: 21
 
-buttons: [22, 26, 23, 24]
+buttons: 
+  - id: BTN1
+    gpio: 22
+    
+  - id: BTN2
+    gpio: 26
 
-leds:
-  preview:
-    gpio: 19
-    count: 8
-    color_order: GRB
+  - id: BTN3
+    gpio: 23
 
-  zone_strip:
-    gpio: 18
-    color_order: BRG
+  - id: BTN4
+    gpio: 24
+
+led_strips:
+  # LED Strip Definitions
+  # ---------------------
+  # Each entry defines a physical LED strip connected to a specific GPIO pin
+  #
+  # Fields:
+  #   id:          Unique hardware identifier (referenced in zone_mapping.yaml)
+  #   gpio:        BCM GPIO pin number (18, 19, etc.)
+  #   type:        LED chip type (WS2811_12V, WS2812_5V, etc.)
+  #   color_order: Pixel color channel order (BGR, GRB, RGB)
+  #   count:       Total number of addressable pixels on this strip
+  #   voltage:     Operating voltage (5V or 12V)
+  #
+  # Multi-GPIO Support:
+  # - The system supports multiple LED strips on different GPIO pins
+  # - Each strip is controlled independently via DMA
+  # - Zones are assigned to strips via zone_mapping.yaml
+  # - FrameManager routes pixel data to the correct strip based on zone.config.gpio
+  #
+  # Adding a new GPIO:
+  # 1. Add a new entry here with unique id and gpio pin
+  # 2. Add zone mappings in zone_mapping.yaml
+  # 3. ConfigManager will automatically assign GPIO to zones
+
+  - id: MAIN_12V
+    gpio: 18                # Primary LED chain (main display zones)
+    type: WS2811_12V
+    color_order: BGR        # WS2811 12V strips use BGR order
+    count: 51               # Total pixels: FLOOR(18) + LEFT(4) + TOP(3) + RIGHT(4) + BOTTOM(3) + LAMP(19)
+    voltage: 12
+
+  - id: AUX_5V
+    gpio: 19                # Auxiliary LED chain (pixel strips + preview)
+    type: WS2812_5V
+    color_order: GRB        # WS2812 5V strips use GRB order
+    count: 68               # Total pixels: PIXEL(30) + PIXEL2(30) + PREVIEW(8)
+    voltage: 5

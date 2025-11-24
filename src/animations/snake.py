@@ -53,20 +53,19 @@ class SnakeAnimation(BaseAnimation):
         self.length = max(1, min(4, length))  # Clamp 1-20 pixels
 
         # Build zone pixel map for navigation
-        # Sort active zones by physical position (start index) not alphabetically
-        # zone_items = [(zone_id, start, end) for zone_id, (start, end) in self.active_zones.items()]
-        zone_items = [(z.config.id, z.config.start_index, z.config.end_index) for z in zones]
+        # Use only active zones (already filtered in BaseAnimation.__init__)
+        zone_items = [(z.config.id, z.config.start_index, z.config.end_index) for z in self.active_zone_objects]
         zone_items.sort(key=lambda x: x[1])
 
         self.zone_order = [zone_id for zone_id, _, _ in zone_items]
         self.zone_pixel_counts = {zone_id: (end - start + 1) for zone_id, start, end in zone_items}
         self.total_pixels = sum(self.zone_pixel_counts.values())
 
-        if self.total_pixels == 0:
-            raise ValueError(
-                f"SnakeAnimation requires at least one zone with pixels. "
-                f"Got {len(zones)} zones with total {self.total_pixels} pixels."
-            )
+        # if self.total_pixels == 0:
+        #     raise ValueError(
+        #         f"SnakeAnimation requires at least one zone with pixels. "
+        #         f"Got {len(zones)} zones with total {self.total_pixels} pixels."
+        #     )
 
         self.current_position = 0
 

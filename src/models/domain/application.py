@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional
-from models.enums import MainMode, ParamID
+from models.enums import ParamID
 
 
 @dataclass
@@ -25,7 +25,6 @@ class ApplicationState:
     """
 
     # === Mode State ===
-    main_mode: MainMode = MainMode.STATIC  # STATIC or ANIMATION mode
     edit_mode: bool = True  # Enable/disable editing
     lamp_white_mode: bool = False  # Desk lamp mode (locks lamp to warm white)
     lamp_white_saved_state: Optional[dict] = None  # Saved state for lamp mode restore

@@ -5,23 +5,19 @@ Enums for LED Controller state machine
 from enum import Enum, auto
 
 
-class MainMode(Enum):
+class ZoneMode(Enum):
     """
-    Two main operating modes (toggle with BTN4)
+    Per-zone operating modes (replaces global MainMode)
 
-    STATIC: Zone editing mode
-      - Encoder 1 rotate: Change zone
-      - Encoder 2 rotate: Adjust parameter value
-      - Encoder 2 click: Cycle parameter (COLOR → BRIGHTNESS)
+    Each zone independently operates in one of these modes:
 
-    ANIMATION: Animation control mode
-      - Encoder 1 rotate: Select animation
-      - Encoder 1 click: Start/Stop animation
-      - Encoder 2 rotate: Adjust parameter value
-      - Encoder 2 click: Cycle parameter (SPEED → INTENSITY → ...)
+    STATIC: Zone displays static color (zone editing mode)
+    ANIMATION: Zone displays animation
+    OFF: Zone is powered off (disabled)
     """
-    STATIC = auto()      # Zone editing (default)
-    ANIMATION = auto()   # Animation control
+    STATIC = auto()
+    ANIMATION = auto()
+    OFF = auto()
 
 
 class PreviewMode(Enum):
@@ -46,6 +42,11 @@ class KeyboardSource(Enum):
     EVDEV = auto(),
     STDIN = auto()
     
+class EncoderID(Enum):
+    """Encoder identifiers for event sources"""
+    SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)
+    MODULATOR = auto()  # Parameter value modulator encoder
+
 class ButtonID(Enum):
     """Button identifiers"""
     BTN1 = auto()  # Toggle edit mode
@@ -62,8 +63,26 @@ class ZoneID(Enum):
     RIGHT = auto()
     BOTTOM = auto()
     LAMP = auto()
+    PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
+    PIXEL2 = auto()        # 30-pixel custom LED strip on GPIO 19
+    PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
     BACK = auto()
     DESK = auto()
+
+
+class LEDStripID(Enum):
+    """LED Strip identifiers (by chip type and GPIO)"""
+    MAIN_12V = auto()       # GPIO 18: WS2811 12V strip (FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP)
+    AUX_5V = auto()       # GPIO 19: WS2812 5V strip (PIXEL zone + PREVIEW zone)
+
+
+class LEDStripType(Enum):
+    """Typ fizycznego paska LED — używamy enumów, nie stringów."""
+    WS2811_12V = "WS2811_12V"
+    WS2812_5V = "WS2812_5V"
+    WS2813 = "WS2813"
+    APA102 = "APA102"
+    SK6812 = "SK6812"
 
 class AnimationID(Enum):
     """Animation identifiers"""
@@ -147,6 +166,7 @@ class LogCategory(Enum):
 
     RENDER_ENGINE = auto()
 
+    GENERAL = auto()    # Default general category
 
 class FramePriority(Enum):
     """

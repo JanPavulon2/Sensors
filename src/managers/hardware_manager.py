@@ -1,243 +1,315 @@
 """
-Hardware Manager
+HardwareManager v3
+==================
 
-Loads hardware configuration and provides access to GPIO pin assignments.
-Returns simple dicts compatible with existing component constructors.
+!!! THIS VERSION MATCHES ConfigManager ARCHITECTURE EXACTLY !!!
+
+- Does NOT load YAML.
+- ConfigManager assigns raw dict via .data
+- HardwareManager converts dict → typed HardwareConfig
+- Registers GPIO pins through GPIOManager
+- No dependency on zones
 """
 
-import yaml
-from pathlib import Path
-from typing import Dict, List, Optional, Any
+from __future__ import annotations
 
+from typing import Dict, Any, Optional, List
+
+from models.hardware import (
+    HardwareConfig,
+    EncodersConfig,
+    EncoderConfig,
+    ButtonConfig,
+    ButtonsConfig,
+    LEDStripsConfig,
+    LEDStripConfig,
+)
+from models.enums import LEDStripID, LEDStripType, ButtonID, EncoderID
+
+from hardware.gpio.gpio_manager import GPIOManager
+from utils.logger import get_logger, LogCategory
+from utils.serialization import Serializer
+
+log = get_logger().for_category(LogCategory.HARDWARE)
+
+WS281X_ALLOWED_PINS = [10, 12, 18, 21, 19]  # 19 works on many boards
 
 class HardwareManager:
     """
-    Manages hardware configuration from hardware.yaml
+    HardwareManager v3:
 
-    Provides access to:
-    - Encoder GPIO configurations (as dicts)
-    - Button GPIO pins
-    - LED strip specifications (as dicts)
-
-    Example:
-        hw_mgr = HardwareManager()
-        hw_mgr.load()
-
-        # Get encoder pins
-        zone_enc = hw_mgr.get_encoder("zone_selector")
-        # Returns: {"clk": 5, "dt": 6, "sw": 13}
-        encoder = RotaryEncoder(**zone_enc)  # Unpack directly
-
-        # Get button pins
-        buttons = hw_mgr.button_pins  # [22, 26, 23, 24]
-
-        # Get LED strip config
-        strip_cfg = hw_mgr.get_led_strip("strip")
-        # Returns: {"gpio": 18, "count": 45, "color_order": "BRG", "brightness": 255}
+    - Receives raw dict (ConfigManager.data)
+    - Parses ONLY hardware-related sections
+    - Produces HardwareConfig dataclass
+    - Registers all GPIO pins
     """
 
-    def __init__(self, config_path="config/hardware.yaml"):
+    def __init__(self, data: Dict[str, Any], gpio_manager: GPIOManager):
+        self.data = data
+        self.gpio = gpio_manager
+        self.config: Optional[HardwareConfig] = None
+
+        self.config = self._process_data()
+    # ------------------------------------------------------
+    # ENTRY POINT
+    # ------------------------------------------------------
+
+    def _process_data(self) -> HardwareConfig:
         """
-        Initialize HardwareManager
+        Called once by ConfigManager._initialize_managers().
+
+        Steps:
+        1. parse dict → dataclasses
+        2. validate pins
+        3. register GPIO pins
+        """
+        config = self._parse()
+        self._validate(config)
+        self._register(config)
+
+        self.config = config
+
+        log.info("HardwareManager initialized successfully")
+        return config
+    
+    # ------------------------------------------------------
+    # PARSER
+    # ------------------------------------------------------
+
+    def _parse(self) -> HardwareConfig:
+        raw_enc_list = self.data.get("encoders", [])
+        raw_buttons_list = self.data.get("buttons", [])
+        raw_strips = self.data.get("led_strips", [])
+
+        # Parse encoders (new format: list with id field)
+        selector_enc = None
+        modulator_enc = None
+        for enc_entry in raw_enc_list:
+            enc_id_str = enc_entry.get("id").upper()
+            enc_id = Serializer.str_to_enum(enc_id_str, EncoderID)
+            if enc_id == EncoderID.SELECTOR:
+                selector_enc = self._parse_encoder(enc_entry, enc_id)
+            elif enc_id == EncoderID.MODULATOR:
+                modulator_enc = self._parse_encoder(enc_entry, enc_id)
+
+        enc_cfg = EncodersConfig(
+            selector=selector_enc,
+            modulator=modulator_enc,
+        )
+
+        # Parse buttons (new format: list with id and gpio)
+        button_list = []
+        for btn_entry in raw_buttons_list:
+            try:
+                btn_id = ButtonID[btn_entry["id"]]
+                button_list.append(
+                    ButtonConfig(
+                        id=btn_id,
+                        gpio=btn_entry["gpio"],
+                    )
+                )
+            except KeyError as e:
+                log.warn(f"Invalid button entry: {btn_entry}, error: {e}")
+
+        button_cfg = ButtonsConfig(buttons=button_list)
+
+        # Parse LED strips
+        strip_list: List[LEDStripConfig] = []
+        for entry in raw_strips:
+            try:
+                strip_list.append(
+                    LEDStripConfig(
+                        id=LEDStripID[entry["id"]],
+                        type=LEDStripType(entry["type"]),
+                        gpio=entry["gpio"],
+                        color_order=entry["color_order"],
+                        count=entry.get("count"),
+                        voltage=entry.get("voltage", 5.0),
+                    )
+                )
+            except (KeyError, ValueError) as e:
+                log.warn(f"Invalid LED strip entry: {entry}, error: {e}")
+
+        led_cfg = LEDStripsConfig(strips=strip_list)
+
+        return HardwareConfig(
+            encoders=enc_cfg,
+            buttons=button_cfg,
+            led_strips=led_cfg,
+        )
+        
+    def _parse_encoder(self, entry: Optional[Dict[str, Any]], encoder_id: EncoderID) -> Optional[EncoderConfig]:
+        if entry is None:
+            return None
+        try:
+            return EncoderConfig(
+                id=encoder_id,
+                clk=entry["clk"],
+                dt=entry["dt"],
+                sw=entry.get("sw")
+            )
+        except KeyError as e:
+            log.warn(f"Invalid encoder entry for {encoder_id.name}: missing key {e}")
+            return None
+        
+    # ------------------------------------------------------
+    # VALIDATION
+    # ------------------------------------------------------
+
+    def _validate(self, cfg: HardwareConfig) -> None:
+        used = {}
+
+        # encoders
+        for name, enc in [
+            ("selector", cfg.encoders.selector),
+            ("modulator", cfg.encoders.modulator),
+        ]:
+            if enc:
+                for field, pin in [("clk", enc.clk), ("dt", enc.dt), ("sw", enc.sw)]:
+                    if pin is None:
+                        continue
+
+                    if pin in used:
+                        raise ValueError(
+                            f"GPIO conflict: encoder {name}.{field} pin {pin} "
+                            f"already used by {used[pin]}"
+                        )
+                    used[pin] = f"encoder.{name}.{field}"
+
+        # buttons
+        for i, btn in enumerate(cfg.buttons.buttons):
+            if btn.gpio in used:
+                raise ValueError(
+                    f"GPIO conflict: button[{i}] pin {btn.gpio} already used by {used[btn.gpio]}"
+                )
+            used[btn.gpio] = f"button[{i}]"
+
+        # LED strips
+        for strip in cfg.led_strips.strips:
+            pin = strip.gpio
+            if pin in used:
+                raise ValueError(
+                    f"GPIO conflict: LED strip {strip.id.name} pin {pin} "
+                    f"already used by {used[pin]}"
+                )
+            used[pin] = f"led_strip.{strip.id.name}"
+
+            if pin not in WS281X_ALLOWED_PINS:
+                log.warn(
+                    f"WS281x strip '{strip.id.name}' uses GPIO {pin}, "
+                    f"not officially recommended. Allowed: {WS281X_ALLOWED_PINS}"
+                )
+
+
+    
+    # ------------------------------------------------------
+    # REGISTRATION
+    # ------------------------------------------------------
+
+    def _register(self, cfg: HardwareConfig) -> None:
+
+        # encoders
+        for name, enc in [
+            ("selector", cfg.encoders.selector),
+            ("modulator", cfg.encoders.modulator),
+        ]:
+            if enc:
+                self.gpio.register_input(enc.clk, f"Encoder({name}).clk")
+                self.gpio.register_input(enc.dt, f"Encoder({name}).dt")
+                if enc.sw is not None:
+                    self.gpio.register_input(enc.sw, f"Encoder({name}).sw")
+
+        # buttons
+        for i, btn in enumerate(cfg.buttons.buttons):
+            self.gpio.register_input(btn.gpio, f"Button[{i}]")
+
+        # LED strips (WS281x)
+        for strip in cfg.led_strips.strips:
+            self.gpio.register_ws281x(strip.gpio, f"WS281xStrip({strip.id.name})")
+
+    # ------------------------------------------------------
+    # ACCESSORS
+    # ------------------------------------------------------
+
+    def get_encoder(self, encoder_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get encoder config by name (selector or modulator)
 
         Args:
-            config_path: Path to hardware.yaml (relative to src/ directory)
-        """
-        self.config_path = Path(config_path)
-        self.data = {}
-
-    def load(self):
-        """
-        Load hardware configuration from YAML
-
-        Raises:
-            FileNotFoundError: If hardware.yaml doesn't exist
-            ValueError: If configuration is malformed
-        """
-        # Resolve path relative to src/ directory
-        src_dir = Path(__file__).parent.parent
-        full_path = src_dir / self.config_path
-
-        if not full_path.exists():
-            raise FileNotFoundError(f"Hardware config not found: {full_path}")
-
-        # Load YAML
-        with open(full_path, 'r', encoding='utf-8') as f:
-            self.data = yaml.safe_load(f)
-
-        return self.data
-
-    # ===== Encoder Access =====
-
-    def get_encoder(self, name: str) -> Optional[Dict[str, int]]:
-        """
-        Get encoder GPIO configuration by name
-
-        Args:
-            name: Encoder name (e.g., "zone_selector", "modulator")
+            encoder_id: "selector" or "modulator"
 
         Returns:
-            Dict with keys: clk, dt, sw (GPIO pin numbers)
-            None if not found
-
-        Example:
-            enc = hw_mgr.get_encoder("zone_selector")
-            # {"clk": 5, "dt": 6, "sw": 13}
-            encoder = RotaryEncoder(**enc)
+            Dict with clk, dt, sw keys or None if not found
         """
-        encoders = self.data.get('encoders', {})
-        return encoders.get(name)
+        if not self.config:
+            raise RuntimeError("HardwareManager not initialized")
 
-    @property
-    def encoders(self) -> Dict[str, Dict[str, int]]:
-        """
-        Get all encoder configurations
+        encoder = None
+        if encoder_id == "selector":
+            encoder = self.config.encoders.selector
+        elif encoder_id == "modulator":
+            encoder = self.config.encoders.modulator
 
-        Returns:
-            Dict mapping encoder name to pin config
-        """
-        return self.data.get('encoders', {})
+        if encoder is None:
+            return None
 
-    # ===== Button Access =====
+        return {
+            "clk": encoder.clk,
+            "dt": encoder.dt,
+            "sw": encoder.sw,
+        }
 
     @property
     def button_pins(self) -> List[int]:
         """
-        Get list of button GPIO pins
+        Get list of GPIO pins for all buttons
 
         Returns:
-            List of GPIO pin numbers (e.g., [22, 26, 23, 24])
+            List of GPIO pin numbers
         """
-        return self.data.get('buttons', [])
+        if not self.config:
+            raise RuntimeError("HardwareManager not initialized")
 
-    def get_button_pin(self, index: int) -> Optional[int]:
+        return [btn.gpio for btn in self.config.buttons.buttons]
+
+    def get_strip(self, strip_id: LEDStripID) -> LEDStripConfig:
+        if not self.config:
+            raise RuntimeError("HardwareManager not initialized")
+
+        for strip in self.config.led_strips.strips:
+            if strip.id == strip_id:
+                return strip
+
+        raise KeyError(f"LED strip not found: {strip_id.name}")
+
+    def get_gpio_to_zones_mapping(self) -> List[Dict[str, Any]]:
         """
-        Get button GPIO pin by index
-
-        Args:
-            index: Button index (0-based)
+        Get GPIO-to-zones mapping for multi-GPIO strip support
 
         Returns:
-            GPIO pin number or None if index out of range
-        """
-        pins = self.button_pins
-        if 0 <= index < len(pins):
-            return pins[index]
-        return None
-
-    # ===== LED Strip Access =====
-
-    def get_led_strip(self, name: str) -> Optional[Dict[str, Any]]:
-        """
-        Get LED strip configuration by name
-
-        Args:
-            name: Strip name (e.g., "strip", "preview")
-
-        Returns:
-            Dict with keys: gpio, count, color_order, brightness
-            None if not found
+            List of dicts describing each LED strip: gpio, type, color_order, count, voltage, id
 
         Example:
-            strip_cfg = hw_mgr.get_led_strip("strip")
-            # {"gpio": 18, "count": 45, "color_order": "BRG", "brightness": 255}
+            mapping = hw_mgr.get_gpio_to_zones_mapping()
+            # [
+            #   {"gpio": 18, "type": "WS2811_12V", "color_order": "BRG", "count": 100, "voltage": 12, "id": "MAIN_12V"},
+            #   {"gpio": 19, "type": "WS2812_5V", "color_order": "GRB", "count": 38, "voltage": 5, "id": "AUX_5V"}
+            # ]
         """
-        leds = self.data.get('leds', {})
-        return leds.get(name)
+        if not self.config:
+            raise RuntimeError("HardwareManager not initialized")
 
-    @property
-    def led_strips(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Get all LED strip configurations
+        return [
+            {
+                "gpio": strip.gpio,
+                "type": strip.type.value,
+                "color_order": strip.color_order,
+                "count": strip.count,
+                "voltage": strip.voltage,
+                "id": strip.id.name,
+            }
+            for strip in self.config.led_strips.strips
+        ]
 
-        Returns:
-            Dict mapping strip name to config dict
-        """
-        return self.data.get('leds', {})
-
-    # ===== Validation =====
-
-    def validate_gpio_pins(self) -> List[str]:
-        """
-        Validate GPIO pin assignments and detect conflicts
-
-        Returns:
-            List of warning/error messages (empty if no issues)
-
-        Checks:
-        - WS281x GPIO compatibility (only 10, 12, 18, 21 supported)
-        - Pin conflicts (same GPIO used multiple times)
-        """
-        warnings = []
-        used_pins = {}
-
-        # Check encoder pins
-        for enc_name, enc_cfg in self.encoders.items():
-            for pin_name in ['clk', 'dt', 'sw']:
-                pin = enc_cfg.get(pin_name)
-                if pin in used_pins:
-                    warnings.append(
-                        f"GPIO {pin} conflict: {enc_name}.{pin_name} and {used_pins[pin]}"
-                    )
-                used_pins[pin] = f"{enc_name}.{pin_name}"
-
-        # Check button pins
-        for idx, pin in enumerate(self.button_pins):
-            if pin in used_pins:
-                warnings.append(
-                    f"GPIO {pin} conflict: button[{idx}] and {used_pins[pin]}"
-                )
-            used_pins[pin] = f"button[{idx}]"
-
-        # Check LED strip pins
-        WS281X_SUPPORTED_PINS = [10, 12, 18, 21]
-        for strip_name, strip_cfg in self.led_strips.items():
-            pin = strip_cfg.get('gpio')
-
-            if pin in used_pins:
-                warnings.append(
-                    f"GPIO {pin} conflict: LED strip '{strip_name}' and {used_pins[pin]}"
-                )
-            used_pins[pin] = f"LED strip '{strip_name}'"
-
-            # WS281x library check (warning only, not error)
-            if pin not in WS281X_SUPPORTED_PINS:
-                warnings.append(
-                    f"LED strip '{strip_name}' uses GPIO {pin} which is not officially "
-                    f"supported by rpi_ws281x (supported: {WS281X_SUPPORTED_PINS}). "
-                    f"May work depending on library version."
-                )
-
-        return warnings
-
-    # ===== Debug Output =====
-
-    def print_summary(self):
-        """Print hardware configuration summary"""
-        print("=" * 70)
-        print("HARDWARE CONFIGURATION")
-        print("=" * 70)
-
-        print("\nEncoders:")
-        for name, cfg in self.encoders.items():
-            print(f"  {name:15} CLK={cfg['clk']}, DT={cfg['dt']}, SW={cfg['sw']}")
-
-        print(f"\nButtons: {self.button_pins}")
-        for idx, pin in enumerate(self.button_pins):
-            print(f"  BTN{idx+1} (index {idx}): GPIO {pin}")
-
-        print("\nLED Strips:")
-        for name, cfg in self.led_strips.items():
-            count_str = f"{cfg['count']} px" if 'count' in cfg else "auto-calc"
-            print(f"  {name:10} GPIO {cfg['gpio']}: {count_str}, {cfg['color_order']}")
-
-        # Validation warnings
-        warnings = self.validate_gpio_pins()
-        if warnings:
-            print("\n�  GPIO WARNINGS:")
-            for warning in warnings:
-                print(f"  - {warning}")
-        else:
-            print("\n GPIO validation passed (no conflicts)")
-
-        print("=" * 70)
+    def cleanup(self):
+        self.gpio.cleanup()

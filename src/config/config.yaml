@@ -5,6 +5,7 @@
 include:
   - hardware.yaml
   - zones.yaml
+  - zone_mapping.yaml
   - parameters.yaml
   - animations.yaml
   - colors.yaml

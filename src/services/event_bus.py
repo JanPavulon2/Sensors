@@ -11,7 +11,7 @@ import asyncio
 from typing import Callable, List, Dict, Optional, TypeVar, Any
 from dataclasses import dataclass
 from models.events import Event, EventType
-from utils.logger2 import get_logger, LogCategory
+from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.EVENT)
 
@@ -157,10 +157,7 @@ class EventBus:
             event = EncoderRotateEvent("selector", 1)
             await bus.publish(event)
         """
-        log.info(
-            "Event: ",
-            event_type=event.type.name
-        )
+        log.debug("Event: ", event_type=event.type.name)
         
         # Apply middleware pipeline
         for middleware in self._middleware:

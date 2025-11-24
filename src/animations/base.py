@@ -43,6 +43,12 @@ class BaseAnimation:
             if zone.config.id not in self.excluded_zones
         }
 
+        # Store only active zones for animations that need sequential access
+        self.active_zone_objects: List[ZoneCombined] = [
+            zone for zone in zones
+            if zone.config.id not in self.excluded_zones
+        ]
+
     async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
         """
         Main animation loop - yields (zone_id, r, g, b) tuples

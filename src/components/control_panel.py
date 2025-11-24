@@ -11,10 +11,10 @@ Publishes events to EventBus instead of using callbacks.
 import asyncio
 from components import RotaryEncoder, Button, PreviewPanel
 from managers.hardware_manager import HardwareManager
-from infrastructure import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from services.event_bus import EventBus
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
-from models.enums import EncoderSource, ButtonID
+from models.enums import EncoderSource, ButtonID, LEDStripID
 
 
 class ControlPanel:
@@ -68,12 +68,10 @@ class ControlPanel:
         button_pins = hardware_manager.button_pins
         self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
 
-        # Preview Panel (CJMCU-2812-8)
-        preview_cfg = hardware_manager.get_led_strip("preview")
-        self.preview_panel = PreviewPanel(
-            gpio=preview_cfg["gpio"], # type: ignore
-            gpio_manager=gpio_manager
-        )
+        # Preview Panel - initialized later in main_asyncio.py after zone_strips are created
+        # PreviewPanel is a logical view of PREVIEW zone within ZoneStrip(GPIO 19)
+        # It will be passed the zone_strip instance that contains both PIXEL and PREVIEW zones
+        self.preview_panel = None
 
 
 

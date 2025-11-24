@@ -276,7 +276,11 @@ class Color:
             int(g * brightness / 100),
             int(b * brightness / 100),
         )
-
+        
+    @staticmethod
+    def black() -> 'Color':
+        return Color.from_rgb(0, 0, 0)
+    
     # === STRING REPRESENTATION ===
 
     def __str__(self) -> str:

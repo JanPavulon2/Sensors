@@ -62,6 +62,7 @@ class PixelFrame(BaseFrame):
     """
 
     zone_pixels: Dict[ZoneID, List[Tuple[int, int, int]]] = field(default_factory=dict)  # zone_id -> [(r, g, b), ...]
+    clear_other_zones: bool = False
 
 
 @dataclass

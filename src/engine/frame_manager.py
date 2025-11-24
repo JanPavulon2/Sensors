@@ -13,15 +13,30 @@ Priority System:
 
 Only the highest-priority frame is rendered. When high-priority sources stop,
 rendering automatically falls back to lower priorities.
+
+FrameManager v2
+---------------
+Wielokanałowy renderer LED wspierający:
+- wiele GPIO
+- wiele fizycznych stripów
+- strefy rozłożone na kilku GPIO
+- preview + główne paski
+- odwracanie stref (reversed)
+- animacje i tryb statyczny
+
+Warstwa: RENDER / INFRASTRUCTURE
 """
 
+
+from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque
+from typing import Dict, List, Optional, Deque, Callable
 from collections import deque
 
-from utils.logger2 import get_logger
-from models.enums import LogCategory, FramePriority
+from utils.logger import get_logger
+from utils.serialization import Serializer
+from models.enums import LogCategory, FramePriority, ZoneID
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame, AnyFrame
@@ -96,7 +111,7 @@ class FrameManager:
         # Registered render targets
         self.main_strips: List = []  # ZoneStrip instances
         self.preview_strips: List = []  # PreviewPanel instances
-
+        
         # Runtime state
         self.running = False
         self.paused = False
@@ -389,11 +404,17 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         r, g, b = frame.color
-        for zone_name in getattr(strip, "zones", {}).keys():
-            try:
-                strip.set_zone_color(zone_name, r, g, b, show=False)
-            except Exception as e:
-                log.error(f"Error setting zone {zone_name}: {e}")
+        # Note: ZoneStrip doesn't expose zones list, so this renders via zone_indices
+        if hasattr(strip, 'zone_indices'):
+            for zone_key in strip.zone_indices.keys():
+                try:
+                    # zone_key is already a string, but set_zone_color expects ZoneID
+                    # We need to convert string back to ZoneID enum
+                    from models.enums import ZoneID
+                    zone_id = ZoneID[zone_key]
+                    strip.set_zone_color(zone_id, r, g, b, show=False)
+                except (KeyError, ValueError) as e:
+                    log.error(f"Error setting zone {zone_key}: {e}")
         strip.show()
 
     def _render_zone_frame(self, frame: ZoneFrame, strip) -> None:
@@ -405,30 +426,51 @@ class FrameManager:
             strip: ZoneStrip instance
         """
         for zone_id, (r, g, b) in frame.zone_colors.items():
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
             try:
-                strip.set_zone_color(zone_name, r, g, b, show=False)
+                strip.set_zone_color(zone_id, r, g, b, show=False)
             except Exception as e:
-                log.error(f"Error setting zone {zone_name}: {e}")
+                log.error(f"Error setting zone {Serializer.enum_to_str(zone_id)}: {e}")
         strip.show()
 
     def _render_pixel_frame(self, frame: PixelFrame, strip) -> None:
         """
-        Render per-pixel colors.
-
-        Args:
-            frame: PixelFrame with zone_pixels dict
-            strip: ZoneStrip instance
+        Render per-pixel colors using full-buffer overwrite.
+        Ensures correct clearing when stepping backward in animations.
         """
-        for zone_id, pixels in frame.zone_pixels.items():
-            zone_name = zone_id.name if hasattr(zone_id, "name") else str(zone_id)
-            try:
-                for pixel_idx, (r, g, b) in enumerate(pixels):
-                    strip.set_pixel_color(zone_name, pixel_idx, r, g, b, show=False)
-            except Exception as e:
-                log.error(f"Error setting pixel in zone {zone_name}: {e}")
-        strip.show()
 
+        try:
+            cleaned = {}
+
+            # Use zone_indices if available (ZoneStrip), otherwise skip validation
+            zone_map = getattr(strip, 'zone_indices', {})
+
+            for zone_id, pixels in frame.zone_pixels.items():
+                # Normalize to string key for zone_map lookup (zone_indices has string keys)
+                zone_key = zone_id.name if isinstance(zone_id, ZoneID) else zone_id
+
+                # If we have zone mapping, validate; otherwise accept as-is
+                if zone_map and zone_key not in zone_map:
+                    continue
+
+                if zone_map:
+                    expected_len = len(zone_map[zone_key])
+
+                    # extend or trim
+                    if len(pixels) != expected_len:
+                        fixed = list(pixels[:expected_len])
+                        if len(fixed) < expected_len:
+                            fixed += [(0, 0, 0)] * (expected_len - len(fixed))
+                        cleaned[zone_id] = fixed
+                    else:
+                        cleaned[zone_id] = list(pixels)
+                else:
+                    cleaned[zone_id] = list(pixels)
+
+            strip.show_full_pixel_frame(cleaned)
+
+        except Exception as e:
+            log.error(f"Error rendering pixel frame to {strip}: {e}")
+    
     # === Cleanup ===
 
     def clear_all(self) -> None:
@@ -438,6 +480,32 @@ class FrameManager:
         for queue in self.preview_queues.values():
             queue.clear()
         log.info("FrameManager queues cleared")
+
+    def clear_below_priority(self, min_priority: FramePriority) -> None:
+        """
+        Clear all frames below a specified priority level.
+
+        Used by frame-by-frame debugging to remove animation frames
+        before entering debug mode, preventing animation flicker.
+
+        Args:
+            min_priority: Frames below this priority are cleared
+        """
+        min_value = min_priority.value if isinstance(min_priority.value, int) else 0
+
+        cleared_count = 0
+        for priority_value, queue in list(self.main_queues.items()):
+            if priority_value < min_value:
+                cleared_count += len(queue)
+                queue.clear()
+
+        for priority_value, queue in list(self.preview_queues.items()):
+            if priority_value < min_value:
+                cleared_count += len(queue)
+                queue.clear()
+
+        if cleared_count > 0:
+            log.debug(f"Cleared {cleared_count} frames below priority {min_priority.name}")
 
     def __repr__(self) -> str:
         metrics = self.get_metrics()

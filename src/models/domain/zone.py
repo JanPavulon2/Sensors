@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from models.color import Color
-from models.enums import ParamID, ZoneID
+from models.enums import ParamID, ZoneID, ZoneMode, AnimationID
 from models.domain.parameter import ParameterCombined
 from typing import Dict, Any, Optional
 from utils.enum_helper import EnumHelper 
@@ -18,6 +18,7 @@ class ZoneConfig:
     order: int
     start_index: int
     end_index: int
+    gpio: int = 18       # GPIO pin for this zone's LED strip (default: 18)
 
     @property
     def tag(self) -> str:
@@ -35,6 +36,8 @@ class ZoneState:
     """Mutable zone state from JSON"""
     id: ZoneID
     color: Color
+    mode: ZoneMode = ZoneMode.STATIC
+    animation_id: Optional[AnimationID] = None
     
 
 @dataclass
@@ -112,3 +115,16 @@ class ZoneCombined:
             int(g * brightness_factor),
             int(b * brightness_factor)
         )
+        
+    def get_color(self) -> Color:
+        """
+        Get current color 
+
+        Returns black if zone is disabled, otherwise returns color.
+        """
+        # Disabled zones are always black
+        if not self.config.enabled:
+            return Color.black()
+
+        color = self.state.color
+        return color

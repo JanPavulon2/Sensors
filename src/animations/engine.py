@@ -23,10 +23,10 @@ from services.transition_service import TransitionService
 from services import AnimationService
 from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
-from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource
+from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneMode
 from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
-from components import ZoneStrip
+from zone_layer.zone_strip import ZoneStrip
 
 log = get_category_logger(LogCategory.ANIMATION)
 
@@ -81,7 +81,7 @@ class AnimationEngine:
         # Transition service for smooth animation switches
         self.frame_manager = frame_manager
         self.transition_service = TransitionService(strip, frame_manager)
-        
+
         # Pixel buffer: zone_id -> pixel_index -> (r, g, b) for pixel-level animations
         self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
         # Zone color buffer: zone_id -> (r, g, b) for zone-level animations
@@ -89,7 +89,10 @@ class AnimationEngine:
         self.zone_lengths: dict[ZoneID, int] = {
             z.config.id: z.config.pixel_count for z in zones
         }
-        
+
+        # Frame-by-frame debugging: when frozen, animation continues running but doesn't submit frames
+        self._frozen: bool = False
+
         log.info("AnimationEngine initialized", animations=list(self.ANIMATIONS.keys()))
 
     
@@ -171,7 +174,7 @@ class AnimationEngine:
 
         # Step 4: Cache current zone colors
         for zone in self.zones:
-            color = self.strip.get_zone_color(zone.config.tag)
+            color = self.strip.get_zone_color(zone.config.id)
             if color:
                 self.current_animation.set_zone_color_cache(zone.config.id, *color)
 
@@ -264,6 +267,27 @@ class AnimationEngine:
         """Get name of currently running animation"""
         return self.current_animation if self.is_running() else None
 
+    def freeze(self) -> None:
+        """
+        Freeze animation frame submission for frame-by-frame debugging.
+
+        Animation loop continues running internally, but frames are not
+        submitted to FrameManager. This allows manual frame stepping without
+        animation flicker.
+
+        Used by FramePlaybackController when entering frame-by-frame mode.
+        """
+        self._frozen = True
+        log.info(f"AnimationEngine: Froze animation {self.current_id.name if self.current_id else '?'}")
+
+    def unfreeze(self) -> None:
+        """
+        Unfreeze animation frame submission after frame-by-frame debugging.
+
+        Resumes normal frame submission to FrameManager.
+        """
+        self._frozen = False
+        log.info(f"AnimationEngine: Unfroze animation {self.current_id.name if self.current_id else '?'}")
 
     # ------------------------------------------------------------------
     # INTERNAL LOOP
@@ -293,14 +317,14 @@ class AnimationEngine:
             yields_collected = 0
             start_time = time.perf_counter()
 
-            async for frame in gen:
+            async for frame in gen: # type: ignore
                 # Apply to buffer (show=False)
                 if len(frame) == 5:
                     zone_id, pixel_index, r, g, b = frame
-                    self.strip.set_pixel_color(zone_id.name, pixel_index, r, g, b, show=False)
+                    self.strip.set_pixel_color(zone_id, pixel_index, r, g, b, show=False)
                 elif len(frame) == 4:
                     zone_id, r, g, b = frame
-                    self.strip.set_zone_color(zone_id.name, r, g, b, show=False)
+                    self.strip.set_zone_color(zone_id, r, g, b, show=False)
 
                 yields_collected += 1
 
@@ -318,7 +342,7 @@ class AnimationEngine:
                     break
 
             # Stop the generator
-            await gen.aclose()
+            await gen.aclose() # type: ignore
 
             # Return current buffer state
             frame = self.strip.get_frame() if hasattr(self.strip, 'get_frame') else []
@@ -340,7 +364,7 @@ class AnimationEngine:
 
         try:
 
-            async for frame in self.current_animation.run():
+            async for frame in self.current_animation.run(): # type: ignore
                 frame_count += 1
 
                 if not frame:
@@ -405,20 +429,40 @@ class AnimationEngine:
                                 pixels_list[i] = pix_dict[i]
                         zone_pixels_dict[zone_id] = pixels_list
 
-                if zone_pixels_dict:
-                    try:
-                        frame = PixelFrame(
-                            priority=FramePriority.ANIMATION,
-                            source=FrameSource.ANIMATION,
-                            zone_pixels=zone_pixels_dict
+                # === Merge static zones into frame ===
+                # Before submitting, add all STATIC zones to the frame
+                for zone in self.zones:
+                    zone_id = zone.config.id
+                    # Skip if this zone is already in the animated frame or is OFF
+                    if zone_id in zone_pixels_dict or zone.state.mode == ZoneMode.OFF:
+                        continue
+
+                    # If zone is STATIC, add its current color
+                    if zone.state.mode == ZoneMode.STATIC:
+                        rgb = zone.get_rgb()
+                        zone_length = self.zone_lengths.get(zone_id, 0)
+                        # Fill entire zone with static color
+                        zone_pixels_dict[zone_id] = [rgb] * zone_length
+                        log.debug(
+                            f"[Frame {frame_count}] Merged static zone: {zone_id.name} color={rgb}"
                         )
-                        await self.frame_manager.submit_pixel_frame(frame)
-                        if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
-                            log.debug(
-                                f"[FrameManager] PixelFrame submitted #{frame_count}"
+
+                if zone_pixels_dict:
+                    # Skip frame submission if frozen (frame-by-frame debugging)
+                    if not self._frozen:
+                        try:
+                            frame = PixelFrame(
+                                priority=FramePriority.ANIMATION,
+                                source=FrameSource.ANIMATION,
+                                zone_pixels=zone_pixels_dict
                             )
-                    except Exception as e:
-                        log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
+                            await self.frame_manager.submit_pixel_frame(frame)
+                            if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
+                                log.debug(
+                                    f"[FrameManager] PixelFrame submitted #{frame_count}"
+                                )
+                        except Exception as e:
+                            log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
 
                 # Yield to event loop
                 await asyncio.sleep(0)

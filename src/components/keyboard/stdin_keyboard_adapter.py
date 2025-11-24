@@ -7,7 +7,7 @@ from services.event_bus import EventBus
 from models.events import KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.EVENT)
 
 class StdinKeyboardAdapter:
     """
@@ -48,7 +48,7 @@ class StdinKeyboardAdapter:
         This is a limitation of blocking stdin.read() in executor.
         Use evdev mode (physical keyboard) for instant shutdown.
         """
-        log.info(LogCategory.HARDWARE, "Using STDIN keyboard input (SSH/VSCode terminal)")
+        log.info("Using STDIN keyboard input (SSH/VSCode terminal)")
 
         loop = asyncio.get_running_loop()
 
@@ -120,13 +120,13 @@ class StdinKeyboardAdapter:
                         await self._publish_key(char.upper())
 
         except asyncio.CancelledError:
-            log.info(LogCategory.HARDWARE, "STDIN keyboard input cancelled - shutting down")
+            log.info("STDIN keyboard input cancelled - shutting down")
             raise  # Re-raise to propagate cancellation
         finally:
             # Restore terminal settings (always runs, even on cancellation)
             if self._old_settings:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old_settings)
-                log.debug(LogCategory.HARDWARE, "Terminal settings restored")
+                log.debug("Terminal settings restored")
 
     async def _handle_escape_sequence(self, loop) -> None:
         """
@@ -164,10 +164,7 @@ class StdinKeyboardAdapter:
                 if key:
                     await self._publish_key(key)
                 else:
-                    log.debug(
-                        LogCategory.EVENT,
-                        f"Unknown CSI sequence: ESC[{direction}"
-                    )
+                    log.debug(f"Unknown CSI sequence: ESC[{direction}")
             else:
                 # Standalone ESC or unknown sequence
                 await self._publish_key('ESCAPE')
@@ -185,9 +182,7 @@ class StdinKeyboardAdapter:
             modifiers: List of modifier keys (e.g., ["CTRL", "SHIFT"])
         """
         log.debug(
-            LogCategory.EVENT,
-            "Keyboard key pressed",
-            key=key,
+            f"Keyboard key pressed: {key}",
             modifiers=modifiers if modifiers else None
         )
 
