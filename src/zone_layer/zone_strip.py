@@ -228,13 +228,20 @@ class ZoneStrip:
         """
         Build absolute frame from zone colors (for transitions).
 
+        Supports both complete and partial frames:
+        - Complete frame: zone_colors contains all zones → rendered as-is
+        - Partial frame: zone_colors contains some zones → preserves pixels from previous frame for missing zones
+
         Args:
-            zone_colors: {ZoneID: color}
+            zone_colors: {ZoneID: color} (may be partial)
 
         Returns:
-            List of (r, g, b) tuples (length = pixel_count)
+            List of Color objects (length = pixel_count)
         """
-        frame = [Color.black()] * self.pixel_count
+        # Start with existing pixels (preserves zones not in zone_colors)
+        frame = [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
+
+        # Update only the zones provided in zone_colors
         for zone, color in zone_colors.items():
             indices = self.mapper.get_indices(zone)
             for phys_idx in indices:

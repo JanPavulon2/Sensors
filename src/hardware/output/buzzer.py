@@ -91,7 +91,10 @@ class Buzzer:
         """
         if self.active:
             raise RuntimeError("Active buzzer cannot play tones. Use beep().")
-
+        
+        if self._pwm is None:
+            raise ValueError("No PWM provided")
+        
         if not self._pwm_started:
             self._pwm.start(self.duty_cycle)
             self._pwm_started = True
