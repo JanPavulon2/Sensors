@@ -6,6 +6,7 @@ Coordinates between static, animation, and lamp/power modes.
 import asyncio
 from typing import TYPE_CHECKING
 from animations.engine import AnimationEngine
+from hardware.output.buzzer import Buzzer
 from models.color import Color
 from models.enums import ButtonID, EncoderSource, AnimationID, ZoneRenderMode
 from models.events import EventType
@@ -126,6 +127,12 @@ class LEDController:
         # Initialize zones based on per-zone modes
         self._initialize_zones()
 
+        # bz = Buzzer(pin=12, active=True)
+        # bz.beep(0.1)
+
+        bz = Buzzer(pin=12, active=False)
+        bz.play_tone(440, 0.3)
+        
         log.info("LEDController initialized")
 
     # ------------------------------------------------------------------
@@ -268,9 +275,9 @@ class LEDController:
         - ANIMATION zone: Rotate to cycle through animations
         - OFF zone: Rotate to select different zones
         """
-        if not self.edit_mode:
-            log.info("Selector rotation ignored when not in edit mode")
-            return
+        # if not self.edit_mode:
+        #     log.info("Selector rotation ignored when not in edit mode")
+        #     return
 
         
         
@@ -285,7 +292,7 @@ class LEDController:
         #     self.animation_mode_controller.select_animation(delta)
         # else:
             # In STATIC or OFF mode: rotate to select zones
-        self.static_mode_controller.change_zone(delta)
+        self._cycle_zone_selection(delta)
             
     def _handle_selector_click(self):
         """
@@ -402,6 +409,38 @@ class LEDController:
 
         elif target_mode == ZoneRenderMode.OFF:
             await self._apply_off_mode(current_zone)
+
+    def _cycle_zone_selection(self, delta: int):
+        """
+        Cycle to next/previous zone and render all STATIC zones.
+
+        Implements zone selection logic (moved from StaticModeController to honor SRP).
+        Delegates rendering to StaticModeController.
+
+        Args:
+            delta: +1 for next zone, -1 for previous zone
+        """
+        zones = self.zone_service.get_all()
+        if not zones:
+            log.warn("No zones available for cycling")
+            return
+
+        # Get current zone index from app state
+        current_state = self.app_state_service.get_state()
+        current_index = current_state.current_zone_index
+
+        # Cycle to next/previous zone
+        new_index = (current_index + delta) % len(zones)
+        old_zone_id = zones[current_index].config.id
+        new_zone_id = zones[new_index].config.id
+
+        # Update app state with new zone index
+        self.app_state_service.set_current_zone_index(new_index)
+        log.info("Cycled zone selection", from_zone=old_zone_id.name, to_zone=new_zone_id.name)
+
+        # Render all STATIC zones so none are blacked out when cycling
+        # self.static_mode_controller.render_all_static_zones()
+        self.static_mode_controller._sync_preview()
 
     async def _cycle_zone_mode_async(self):
         """

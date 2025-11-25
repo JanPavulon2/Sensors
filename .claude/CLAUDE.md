@@ -524,10 +524,6 @@ strip_controller.render_zone_combined(lamp)  # Submits @ MANUAL pri (10)
    - Update file headers with date and changes
    - Update `project/todo.md` if completing tasks
 
-### Git Workflow
-
-**Current Branch**: `claude/claude-md-mi6dznm0vhuwbem8-01BZ7yTjfT9EwCCBztC3cUKK`
-
 #### Committing Changes
 ```bash
 # Check status

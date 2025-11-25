@@ -12,6 +12,10 @@
 #
 # GPIO pin assignments for encoders, buttons, and LED strips
 
+buzzers:
+  - id: PASSIVE
+    gpio: 12
+
 encoders:
   - id: selector
     clk: 5
@@ -37,6 +41,19 @@ buttons:
     gpio: 24
 
 led_strips:
+  - id: MAIN_12V
+    gpio: 18                # Primary LED chain (main display zones)
+    type: WS2811_12V
+    color_order: BGR        # WS2811 12V strips use BGR order
+    count: 51               # Total pixels: FLOOR(18) + LEFT(4) + TOP(3) + RIGHT(4) + BOTTOM(3) + LAMP(19)
+    voltage: 12
+
+  - id: AUX_5V
+    gpio: 19                # Auxiliary LED chain (pixel strips + preview)
+    type: WS2812_5V
+    color_order: GRB        # WS2812 5V strips use GRB order
+    count: 68               # Total pixels: PIXEL(30) + PIXEL2(30) + PREVIEW(8)
+    voltage: 5
   # LED Strip Definitions
   # ---------------------
   # Each entry defines a physical LED strip connected to a specific GPIO pin
@@ -59,17 +76,3 @@ led_strips:
   # 1. Add a new entry here with unique id and gpio pin
   # 2. Add zone mappings in zone_mapping.yaml
   # 3. ConfigManager will automatically assign GPIO to zones
-
-  - id: MAIN_12V
-    gpio: 18                # Primary LED chain (main display zones)
-    type: WS2811_12V
-    color_order: BGR        # WS2811 12V strips use BGR order
-    count: 51               # Total pixels: FLOOR(18) + LEFT(4) + TOP(3) + RIGHT(4) + BOTTOM(3) + LAMP(19)
-    voltage: 12
-
-  - id: AUX_5V
-    gpio: 19                # Auxiliary LED chain (pixel strips + preview)
-    type: WS2812_5V
-    color_order: GRB        # WS2812 5V strips use GRB order
-    count: 68               # Total pixels: PIXEL(30) + PIXEL2(30) + PREVIEW(8)
-    voltage: 5

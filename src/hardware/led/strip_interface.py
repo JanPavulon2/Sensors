@@ -39,7 +39,11 @@ class IPhysicalStrip(Protocol):
     def get_pixel(self, index: int) -> Color:
         """Read buffered pixel color (for transitions)."""
         ...
-
+        
+    def get_frame(self) -> List[Color]:
+        """Read buffered pixel frame (for transitions)."""
+        ...
+        
     def apply_frame(self, pixels: List[Color]) -> None:
         """
         Atomic push of entire frame to hardware (single DMA transfer).

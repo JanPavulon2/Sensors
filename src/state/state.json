@@ -60,10 +60,10 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "warm_white"
+        "preset_name": "hot_pink"
       },
-      "brightness": 100,
-      "mode": "ANIMATION"
+      "brightness": 0,
+      "mode": "STATIC"
     },
     "back": {
       "color": {
@@ -114,12 +114,12 @@
         "preset_name": "cool_white"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     },
     "preview": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "cyan"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -130,7 +130,7 @@
         "preset_name": "orange"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     }
   },
   "current_animation": {
@@ -142,11 +142,11 @@
     }
   },
   "application": {
-    "edit_mode_on": true,
+    "edit_mode_on": false,
     "lamp_white_mode_on": false,
     "lamp_white_saved_state": null,
     "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 8,
+    "selected_zone_index": 0,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

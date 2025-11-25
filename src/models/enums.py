@@ -42,6 +42,11 @@ class KeyboardSource(Enum):
     EVDEV = auto(),
     STDIN = auto()
     
+class BuzzerID(Enum):
+    """Buzzer identifiers"""
+    ACTIVE = auto()   # 
+    PASSIVE = auto()  # 
+
 class EncoderID(Enum):
     """Encoder identifiers for event sources"""
     SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)

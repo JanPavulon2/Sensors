@@ -1,7 +1,7 @@
 """Zone service - Business logic for zones"""
 
 from typing import List, Optional, Any
-from models.enums import ZoneID, ParamID
+from models.enums import ZoneID, ParamID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
 from services.data_assembler import DataAssembler
@@ -56,6 +56,10 @@ class ZoneService:
     def get_enabled(self) -> List[ZoneCombined]:
         """Get only enabled zones"""
         return [zone for zone in self.zones if zone.config.enabled]
+
+    def get_by_render_mode(self, mode: ZoneRenderMode) -> List[ZoneCombined]:
+        """Get zones filtered by render mode"""
+        return [zone for zone in self.zones if zone.state.mode == mode]
 
     def get_total_pixel_count(self) -> int:
         """Get total pixel count from all enabled zones"""

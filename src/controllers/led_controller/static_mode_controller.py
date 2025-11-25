@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID, FramePriority
+from models.enums import ParamID, FramePriority, ZoneRenderMode
 from models.domain import ZoneCombined
 from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
@@ -103,14 +103,19 @@ class StaticModeController:
             self._stop_pulse()    
             
     
-    def change_zone(self, delta: int):
-        old_zone = self.zone_ids[self.current_zone_index]
-        self.current_zone_index = (self.current_zone_index + delta) % len(self.zone_ids)
-        new_zone = self.zone_ids[self.current_zone_index]
-        self.app_state_service.set_current_zone_index(self.current_zone_index)
+    def render_all_static_zones(self):
+        """
+        Render all zones in STATIC mode.
+        Called by LEDController when cycling zones to prevent others from being blacked out.
+        """
+        static_zones = {
+            z.config.id: (z.state.color, z.brightness)
+            for z in self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
+        }
 
-        log.info("Changed zone", from_zone=old_zone.name, to_zone=new_zone.name)
-        self._sync_preview()
+        if static_zones:
+            self.strip_controller.submit_all_zones_frame(static_zones)
+            log.debug(f"Rendered {len(static_zones)} STATIC zones")
         
     # --- Parameter Adjustment ---
 

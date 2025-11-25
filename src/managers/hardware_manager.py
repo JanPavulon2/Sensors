@@ -17,6 +17,8 @@ from typing import Dict, Any, Optional, List
 
 from models.hardware import (
     HardwareConfig,
+    BuzzersConfig,
+    BuzzerConfig,
     EncodersConfig,
     EncoderConfig,
     ButtonConfig,
@@ -24,7 +26,7 @@ from models.hardware import (
     LEDStripsConfig,
     LEDStripConfig,
 )
-from models.enums import LEDStripID, LEDStripType, ButtonID, EncoderID
+from models.enums import BuzzerID, LEDStripID, LEDStripType, ButtonID, EncoderID
 
 from hardware.gpio.gpio_manager import GPIOManager
 from utils.logger import get_logger, LogCategory
@@ -50,6 +52,7 @@ class HardwareManager:
         self.config: Optional[HardwareConfig] = None
 
         self.config = self._process_data()
+        
     # ------------------------------------------------------
     # ENTRY POINT
     # ------------------------------------------------------
@@ -77,10 +80,27 @@ class HardwareManager:
     # ------------------------------------------------------
 
     def _parse(self) -> HardwareConfig:
+        raw_buzz_list = self.data.get("buzzers", [])
         raw_enc_list = self.data.get("encoders", [])
         raw_buttons_list = self.data.get("buttons", [])
         raw_strips = self.data.get("led_strips", [])
 
+        # Parse buzzers
+        active_buzz = None
+        passive_buzz = None
+        for buzz_entry in raw_buzz_list:
+            buzz_id_str = buzz_entry.get("id").upper()
+            buzz_id = Serializer.str_to_enum(buzz_id_str, BuzzerID)
+            if buzz_id == BuzzerID.ACTIVE:
+                active_buzz = self._parse_buzzer(buzz_entry, buzz_id)
+            elif buzz_id == BuzzerID.PASSIVE:
+                passive_buzz = self._parse_buzzer(buzz_entry, buzz_id)
+
+        buzz_cfg = BuzzersConfig(
+            active=active_buzz,
+            passive=passive_buzz
+        )
+        
         # Parse encoders (new format: list with id field)
         selector_enc = None
         modulator_enc = None
@@ -133,6 +153,7 @@ class HardwareManager:
         led_cfg = LEDStripsConfig(strips=strip_list)
 
         return HardwareConfig(
+            buzzers=buzz_cfg,
             encoders=enc_cfg,
             buttons=button_cfg,
             led_strips=led_cfg,
@@ -150,6 +171,18 @@ class HardwareManager:
             )
         except KeyError as e:
             log.warn(f"Invalid encoder entry for {encoder_id.name}: missing key {e}")
+            return None
+        
+    def _parse_buzzer(self, entry: Optional[Dict[str, Any]], buzzer_id: BuzzerID) -> Optional[BuzzerConfig]:
+        if entry is None:
+            return None
+        try:
+            return BuzzerConfig(
+                id=buzzer_id,
+                gpio=entry["gpio"]
+            )
+        except KeyError as e:
+            log.warn(f"Invalid buzzer entry for {buzzer_id.name}: missing key {e}")
             return None
         
     # ------------------------------------------------------
@@ -227,6 +260,14 @@ class HardwareManager:
         for strip in cfg.led_strips.strips:
             self.gpio.register_ws281x(strip.gpio, f"WS281xStrip({strip.id.name})")
 
+        # buzzer
+        for name, buzz in [
+            ("active", cfg.buzzers.active),
+            ("passive", cfg.buzzers.passive),
+        ]:
+            if buzz:
+                self.gpio.register_output(buzz.gpio, f"Buzzer({name}).gpio")
+                
     # ------------------------------------------------------
     # ACCESSORS
     # ------------------------------------------------------

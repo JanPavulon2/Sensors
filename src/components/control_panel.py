@@ -9,7 +9,9 @@ Publishes events to EventBus instead of using callbacks.
 """
 
 import asyncio
-from components import RotaryEncoder, Button, PreviewPanel
+from components import RotaryEncoder, PreviewPanel
+#from hardware.input.button import Button
+from hardware import Button
 from managers.hardware_manager import HardwareManager
 from hardware.gpio.gpio_manager import GPIOManager
 from services.event_bus import EventBus

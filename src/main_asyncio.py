@@ -163,15 +163,14 @@ async def cleanup_application(
 
     # Fade out
     # log.info("Performing shutdown transition...")
-    # await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
+    await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
     # Clear LEDs (ALL strips, not just GPIO 18)
     log.info("Clearing LEDs on all GPIO strips...")
     led_controller.clear_all()
     for gpio_pin, strip in zone_strips.items():
-        if gpio_pin != 18:  # GPIO 18 already cleared by led_controller
-            log.info(f"Clearing GPIO {gpio_pin}...")
-            strip.clear()
+        log.info(f"Clearing GPIO {gpio_pin}...")
+        strip.clear()
 
     # Cleanup GPIO
     log.info("Cleaning up GPIO...")

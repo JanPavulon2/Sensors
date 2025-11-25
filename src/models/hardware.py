@@ -14,7 +14,28 @@ from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Literal, Optional
-from models.enums import EncoderID, LEDStripID, LEDStripType, ButtonID, ColorMode
+from models.enums import BuzzerID, EncoderID, LEDStripID, LEDStripType, ButtonID, ColorMode
+
+
+# ============================================================
+#  Buzzers
+# ============================================================
+
+@dataclass(frozen=True)
+class BuzzerConfig:
+    """Single buzzer"""
+    id: BuzzerID
+    gpio: int
+    
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+    
+@dataclass(frozen=True)
+class BuzzersConfig:
+    """All encoders defined in hardware.yaml"""
+    active: Optional[BuzzerConfig] = None
+    passive: Optional[BuzzerConfig] = None
+
 
 # ============================================================
 #  Encoders
@@ -113,6 +134,7 @@ class HardwareConfig:
     Mirrors YAML exactly and contains no behavior.
     """
 
+    buzzers: BuzzersConfig
     encoders: EncodersConfig
     buttons: ButtonsConfig
     led_strips: LEDStripsConfig
