@@ -24,7 +24,7 @@ from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, Zone
 from models.frame import PixelFrame
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
-
+from models.color import Color
 log = get_category_logger(LogCategory.SYSTEM)
 
 # WS2811 timing constraint: minimum 2.75ms between frames
@@ -144,7 +144,7 @@ class TransitionService:
     # Core transition methods
     # ============================================================
 
-    def _get_zone_pixels_dict(self, frame: List[Tuple[int, int, int]]) -> Dict[ZoneID, List[Tuple[int, int, int]]]:
+    def _get_zone_pixels_dict(self, frame: List[Color]) -> Dict[ZoneID, List[Color]]:
         """
         Convert frame to zone-based pixel dictionary.
 
@@ -156,7 +156,7 @@ class TransitionService:
             zone_pixels_dict = {}
             for zone_id in self.strip.mapper.all_zone_ids():
                 pixel_indices = self.strip.mapper.get_indices(zone_id)
-                zone_pixels = [frame[idx] if idx < len(frame) else (0, 0, 0) for idx in pixel_indices]
+                zone_pixels = [frame[idx] if idx < len(frame) else Color.black() for idx in pixel_indices]
                 if zone_pixels:
                     zone_pixels_dict[zone_id] = zone_pixels
             return zone_pixels_dict
@@ -211,10 +211,10 @@ class TransitionService:
             if elapsed < MIN_FRAME_TIME_MS:
                 await asyncio.sleep((MIN_FRAME_TIME_MS - elapsed) / 1000)
 
-            # Create faded frame
+            # Create faded frame - apply brightness factor to each Color
             faded_frame = [
-                (int(r * factor), int(g * factor), int(b * factor))
-                for r, g, b in current_frame
+                color.with_brightness(int(factor * 100))
+                for color in current_frame
             ]
 
             # Submit to FrameManager (no direct show() calls - prevents race conditions)
@@ -260,7 +260,7 @@ class TransitionService:
 
     async def fade_in(
         self,
-        target_frame: List[Tuple[int, int, int]],
+        target_frame: List[Color],
         config: Optional[TransitionConfig] = None
     ):
         """
@@ -323,10 +323,10 @@ class TransitionService:
                 if elapsed < MIN_FRAME_TIME_MS:
                     await asyncio.sleep((MIN_FRAME_TIME_MS - elapsed) / 1000)
 
-                # Create faded frame for this step
+                # Create faded frame for this step - apply brightness factor to each Color
                 faded_frame = [
-                    (int(r * factor), int(g * factor), int(b * factor))
-                    for r, g, b in target_frame
+                    color.with_brightness(int(factor * 100))
+                    for color in target_frame
                 ]
 
                 # Submit to FrameManager (no direct show())
@@ -379,7 +379,7 @@ class TransitionService:
         # Clear to black (with timing protection)
         async with self._transition_lock:
             if self.frame_manager:
-                black_frame = [(0, 0, 0)] * len(target_frame)
+                black_frame = [Color.black()] * len(target_frame)
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
                 pixel_frame = PixelFrame(
                     priority=FramePriority.TRANSITION,
@@ -427,7 +427,7 @@ class TransitionService:
             if new_frame:
                 # Clear to black and fade in
                 if self.frame_manager:
-                    black_frame = [(0, 0, 0)] * len(new_frame)
+                    black_frame = [Color.black()] * len(new_frame)
                     zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
                     pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
@@ -439,8 +439,8 @@ class TransitionService:
 
     async def crossfade(
         self,
-        from_frame: List[Tuple[int, int, int]],
-        to_frame: List[Tuple[int, int, int]],
+        from_frame: List[Color],
+        to_frame: List[Color],
         config: Optional[TransitionConfig] = None
     ):
         """
@@ -505,13 +505,20 @@ class TransitionService:
                 progress = step / config.steps
                 factor = config.ease_function(progress)
 
-                # Interpolate between frames
+                # Interpolate between Color frames
                 interpolated_frame = []
-                for (r1, g1, b1), (r2, g2, b2) in zip(from_frame, to_frame):
+                for color1, color2 in zip(from_frame, to_frame):
+                    # Get RGB for both colors
+                    r1, g1, b1 = color1.to_rgb()
+                    r2, g2, b2 = color2.to_rgb()
+
+                    # Interpolate RGB values
                     r = int(r1 + (r2 - r1) * factor)
                     g = int(g1 + (g2 - g1) * factor)
                     b = int(b1 + (b2 - b1) * factor)
-                    interpolated_frame.append((r, g, b))
+
+                    # Create Color from interpolated RGB
+                    interpolated_frame.append(Color.from_rgb(r, g, b))
 
                 # Submit to FrameManager (no direct show())
                 if self.frame_manager:
@@ -552,8 +559,8 @@ class TransitionService:
         async with self._transition_lock:
             log.debug(f"Cut transition: {config.duration_ms}ms black")
             if isinstance(self.strip, ZoneStrip) and self.frame_manager:
-                # Submit black frame via FrameManager
-                black_frame = [(0, 0, 0)] * self.strip.pixel_count
+                # Submit black frame via FrameManager (as Color objects)
+                black_frame = [Color.black()] * self.strip.pixel_count
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
                 pixel_frame = PixelFrame(
                     priority=FramePriority.TRANSITION,

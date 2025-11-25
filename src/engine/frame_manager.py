@@ -42,6 +42,7 @@ from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame, AnyFrame
 )
+from zone_layer.zone_strip import ZoneStrip
 
 log = get_logger().for_category(LogCategory.RENDER_ENGINE)
 
@@ -398,39 +399,56 @@ class FrameManager:
 
     def _render_full_strip(self, frame: FullStripFrame, strip) -> None:
         """
-        Render single color to all zones.
+        Render single color to all zones using atomic approach.
+
+        Converts FullStripFrame (one color for all zones) to full pixel frame,
+        then renders atomically with single DMA transfer (no flicker).
 
         Args:
-            frame: FullStripFrame with single (r, g, b)
+            frame: FullStripFrame with single (r, g, b) color for all zones
             strip: ZoneStrip instance
         """
-        r, g, b = frame.color
-        color = Color.from_rgb(r, g, b)
+        try:
+            r, g, b = frame.color
+            color = Color.from_rgb(r, g, b)
 
-        for zone_id in strip.mapper.all_zone_ids():
-            try:
-                strip.set_zone_color(zone_id, color, show=False)
-            except Exception as e:
-                log.error(f"Error setting zone {zone_id.name}: {e}")
-        strip.show()
+            # Build zone colors dict: all zones same color (as Color objects)
+            zone_colors = {zone_id: color for zone_id in strip.mapper.all_zone_ids()}
 
-    def _render_zone_frame(self, frame: ZoneFrame, strip) -> None:
+            # Convert to full pixel frame and render atomically
+            full_frame = strip.build_frame_from_zones(zone_colors)
+            strip.apply_pixel_frame(full_frame)
+
+        except Exception as e:
+            log.error(f"Error rendering full strip frame to {strip}: {e}")
+
+    def _render_zone_frame(self, frame: ZoneFrame, strip: ZoneStrip) -> None:
         """
-        Render per-zone colors.
+        Render per-zone colors using atomic full-buffer approach.
+
+        Converts zone-level colors to full pixel frame, then renders atomically
+        with single DMA transfer (no flicker). Uses same atomic path as PixelFrame.
 
         Args:
-            frame: ZoneFrame with zone_colors dict
+            frame: ZoneFrame with zone_colors dict (per-zone RGB tuples)
             strip: ZoneStrip instance
         """
-        for zone_id, (r, g, b) in frame.zone_colors.items():
-            try:
-                color = Color.from_rgb(r, g, b)
-                strip.set_zone_color(zone_id, color, show=False)
-            except Exception as e:
-                log.error(f"Error setting zone {Serializer.enum_to_str(zone_id)}: {e}")
-        strip.show()
+        try:
+            # Convert per-zone colors to full pixel buffer
+            # zone_colors: {ZoneID.FLOOR: (255, 0, 0), ZoneID.LEFT: (0, 255, 0), ...}
+            # Returns: [(255,0,0), (255,0,0), ..., (0,255,0), (0,255,0), ...]
+            #          [-----FLOOR pixels----]  [----LEFT pixels----]
+            
+            # strip.set_zone_color(zone_id, color, show=False)
+            full_frame = strip.build_frame_from_zones(frame.zone_colors)
 
-    def _render_pixel_frame(self, frame: PixelFrame, strip) -> None:
+            # Render atomically (single DMA transfer via apply_frame)
+            strip.apply_pixel_frame(full_frame)
+
+        except Exception as e:
+            log.error(f"Error rendering zone frame to {strip}: {e}")
+
+    def _render_pixel_frame(self, frame: PixelFrame, strip: ZoneStrip) -> None:
         """
         Render per-pixel colors using full-buffer overwrite.
         Ensures correct clearing when stepping backward in animations.
@@ -449,7 +467,7 @@ class FrameManager:
                 if len(pixels) != expected_len:
                     fixed = list(pixels[:expected_len])
                     if len(fixed) < expected_len:
-                        fixed += [(0, 0, 0)] * (expected_len - len(fixed))
+                        fixed += [Color.black()] * (expected_len - len(fixed))
                     cleaned[zone_id] = fixed
                 else:
                     cleaned[zone_id] = list(pixels)

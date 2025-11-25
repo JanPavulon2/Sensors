@@ -98,15 +98,14 @@ class ZoneStrip:
         if show:
             self.hardware.show()
 
-    def set_multiple_zones(self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]) -> None:
+    def set_multiple_zones(self, zone_colors: Dict[ZoneID, Color]) -> None:
         """
         Batch update multiple zones (single show() call).
 
         Args:
             zone_colors: {ZoneID: (r, g, b), ...}
         """
-        for zone, rgb in zone_colors.items():
-            color = Color.from_rgb(*rgb) if isinstance(rgb, tuple) else rgb
+        for zone, color in zone_colors.items():
             indices = self.mapper.get_indices(zone)
             for phys_idx in indices:
                 self.hardware.set_pixel(phys_idx, color)
@@ -119,9 +118,7 @@ class ZoneStrip:
         self,
         zone: ZoneID,
         pixel_index: int,
-        r: int,
-        g: int,
-        b: int,
+        color: Color,
         show: bool = True,
     ) -> None:
         """
@@ -130,13 +127,12 @@ class ZoneStrip:
         Args:
             zone: ZoneID
             pixel_index: Logical index within zone (0-based)
-            r, g, b: RGB values (0-255)
+            color: Color object
             show: If True, push to hardware
         """
         indices = self.mapper.get_indices(zone)
         if 0 <= pixel_index < len(indices):
             phys_idx = indices[pixel_index]
-            color = Color.from_rgb(r, g, b)
             self.hardware.set_pixel(phys_idx, color)
 
             if show:
@@ -150,24 +146,24 @@ class ZoneStrip:
 
     # ==================== Getters ====================
 
-    def get_zone_color(self, zone: ZoneID) -> Optional[Tuple[int, int, int]]:
+    def get_zone_color(self, zone: ZoneID) -> Optional[Color]:
         """
         Get cached color for zone (used by AnimationEngine).
 
         Returns:
-            (r, g, b) tuple or None if zone never set
+            Color or None if zone never set
         """
         color = self._zone_color_cache.get(zone)
-        return color.to_rgb() if color else None
+        return color if color else None
 
-    def get_frame(self) -> List[Tuple[int, int, int]]:
+    def get_frame(self) -> List[Color]:
         """
         Read current full-strip state from hardware (for TransitionService).
 
         Returns:
             List of (r, g, b) tuples (length = pixel_count)
         """
-        return [self.hardware.get_pixel(i).to_rgb() for i in range(self.pixel_count)]
+        return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
     def get_zone_buffer(self, zone: ZoneID) -> List[Color]:
         """Get zone pixels as Color list (logical order)."""
@@ -176,9 +172,25 @@ class ZoneStrip:
 
     # ==================== Frame Rendering ====================
 
-    def show_full_pixel_frame(
-        self, zone_pixels_dict: Dict[ZoneID, List[Tuple[int, int, int]]]
-    ) -> None:
+    def apply_pixel_frame(self, pixel_frame: List[Color]) -> None:
+        """
+        Atomic render of full pixel frame (List[Color]).
+
+        Simple atomic push for pre-built frames (single DMA transfer).
+
+        Args:
+            pixel_frame: List[Color] with length = pixel_count
+        """
+        try:
+            self.hardware.apply_frame(pixel_frame)
+        except Exception as ex:
+            # Fallback: per-pixel set + show (slower but compatible)
+            log.warn("apply_frame failed, using fallback", error=str(ex))
+            for i, color in enumerate(pixel_frame):
+                self.hardware.set_pixel(i, color)
+            self.hardware.show()
+
+    def show_full_pixel_frame(self, zone_pixels_dict: Dict[ZoneID, List[Color]]) -> None:
         """
         Atomic render of full frame from zone-pixel dict.
 
@@ -195,12 +207,12 @@ class ZoneStrip:
 
         for zone, pixels in zone_pixels_dict.items():
             indices = self.mapper.get_indices(zone)
-            for logical_idx, (r, g, b) in enumerate(pixels):
+            for logical_idx, color in enumerate(pixels):
                 if logical_idx >= len(indices):
                     break
                 phys_idx = indices[logical_idx]
                 if 0 <= phys_idx < self.pixel_count:
-                    full_frame[phys_idx] = Color.from_rgb(r, g, b)
+                    full_frame[phys_idx] = color
 
         # Atomic push (single DMA transfer - no flicker)
         try:
@@ -212,24 +224,22 @@ class ZoneStrip:
                 self.hardware.set_pixel(i, color)
             self.hardware.show()
 
-    def build_frame_from_zones(
-        self, zone_colors: Dict[ZoneID, Tuple[int, int, int]]
-    ) -> List[Tuple[int, int, int]]:
+    def build_frame_from_zones(self, zone_colors: Dict[ZoneID, Color]) -> List[Color]:
         """
         Build absolute frame from zone colors (for transitions).
 
         Args:
-            zone_colors: {ZoneID: (r, g, b), ...}
+            zone_colors: {ZoneID: color}
 
         Returns:
             List of (r, g, b) tuples (length = pixel_count)
         """
-        frame = [(0, 0, 0)] * self.pixel_count
-        for zone, (r, g, b) in zone_colors.items():
+        frame = [Color.black()] * self.pixel_count
+        for zone, color in zone_colors.items():
             indices = self.mapper.get_indices(zone)
             for phys_idx in indices:
                 if 0 <= phys_idx < self.pixel_count:
-                    frame[phys_idx] = (int(r), int(g), int(b))
+                    frame[phys_idx] = color
         return frame
 
     def get_full_frame(self) -> List[Color]:
@@ -260,11 +270,6 @@ class ZoneStrip:
         self.clear()
 
     # ==================== Utility ====================
-
-    @property
-    def led_count(self) -> int:
-        """Total pixel count (alias for compatibility)."""
-        return self.pixel_count
 
     def __repr__(self) -> str:
         zones = len(self.mapper.all_zone_ids())

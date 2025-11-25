@@ -276,7 +276,56 @@ class Color:
             int(g * brightness / 100),
             int(b * brightness / 100),
         )
-        
+
+    def with_brightness(self, brightness: int) -> 'Color':
+        """
+        Return new Color with brightness applied (preserves color mode).
+
+        Unlike apply_brightness() static method which works on RGB tuples,
+        this instance method preserves the original color mode (HUE/PRESET).
+
+        Args:
+            brightness: Brightness percentage (0-100, will be clamped)
+
+        Returns:
+            New Color object with brightness applied and mode preserved
+
+        Example:
+            >>> red_hue = Color.from_hue(0)  # HUE mode
+            >>> dimmed = red_hue.with_brightness(50)
+            >>> dimmed.mode  # Still ColorMode.HUE (not RGB!)
+            >>> dimmed.to_rgb()  # (127, 0, 0) - 50% brightness
+
+            >>> warm = Color.from_preset("warm_white", color_manager)
+            >>> dimmed = warm.with_brightness(80)
+            >>> dimmed.mode  # Still ColorMode.PRESET
+        """
+        # Get base RGB values
+        r, g, b = self.to_rgb()
+
+        # Apply brightness scaling
+        r_scaled, g_scaled, b_scaled = Color.apply_brightness(r, g, b, brightness)
+
+        # Preserve original mode when creating scaled color
+        if self.mode == ColorMode.HUE:
+            # HUE mode: keep hue reference, cache scaled RGB
+            return Color(
+                _hue=self._hue,
+                _rgb=(r_scaled, g_scaled, b_scaled),
+                mode=ColorMode.HUE
+            )
+        elif self.mode == ColorMode.PRESET:
+            # PRESET mode: keep preset name + hue, cache scaled RGB
+            return Color(
+                _preset_name=self._preset_name,
+                _hue=self._hue,
+                _rgb=(r_scaled, g_scaled, b_scaled),
+                mode=ColorMode.PRESET
+            )
+        else:
+            # RGB mode: just scale RGB
+            return Color.from_rgb(r_scaled, g_scaled, b_scaled)
+
     @staticmethod
     def black() -> 'Color':
         return Color.from_rgb(0, 0, 0)

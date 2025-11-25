@@ -162,8 +162,8 @@ async def cleanup_application(
     await asyncio.sleep(0.05)
 
     # Fade out
-    log.info("Performing shutdown transition...")
-    await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
+    # log.info("Performing shutdown transition...")
+    # await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
     # Clear LEDs (ALL strips, not just GPIO 18)
     log.info("Clearing LEDs on all GPIO strips...")
@@ -313,7 +313,8 @@ async def main():
     # ========================================================================
     
     log.info("Performing startup transition...")
-    await zone_strip_controller.startup_fade_in(zone_service, zone_strip_transition_service.STARTUP)
+    zones = zone_service.get_all()
+    await zone_strip_controller.startup_fade_in(zones, zone_strip_transition_service.STARTUP)
 
     # ========================================================================
     # RUN LOOPS

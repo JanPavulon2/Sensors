@@ -296,16 +296,17 @@ class LEDController:
         - ANIMATION zone: Toggle to STATIC mode
         - OFF zone: Ignored
         """
-        current_zone = self.zone_service.get_selected_zone()
-        if not current_zone:
-            log.warn("No zone selected for selector click")
-            return
+        
+        # current_zone = self.zone_service.get_selected_zone()
+        # if not current_zone:
+        #     log.warn("No zone selected for selector click")
+        #     return
 
-        if current_zone.state.mode == ZoneRenderMode.OFF:
-            log.info("Selector click ignored for OFF zone")
-        else:
-            # Toggle STATIC ↔ ANIMATION mode
-            asyncio.create_task(self._toggle_zone_mode())
+        # if current_zone.state.mode == ZoneRenderMode.OFF:
+        #     log.info("Selector click ignored for OFF zone")
+        # else:
+        #     # Toggle STATIC ↔ ANIMATION mode
+        #     asyncio.create_task(self._toggle_zone_mode())
             
     def _handle_modulator_rotation(self, delta: int):
         """
@@ -363,63 +364,7 @@ class LEDController:
         # Notify controllers of edit mode change (per-zone mode aware)
         self.static_mode_controller.on_edit_mode_change(self.edit_mode)
         self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
-    
-    async def _apply_static_mode(self, zone):
-        zone_id = zone.config.id
-        color = zone.get_color()
-
-        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color, show=True)
-
-        log.debug(f"Zone {zone_id.name}: Applied STATIC mode")
-
-        if self.edit_mode:
-            # Sync preview
-            # self.static_mode_controller._sync_preview()
-            self.static_mode_controller._start_pulse()
-    
-    async def _apply_animation_mode(self, zone):
-        zone_id = zone.config.id
-
-        self.static_mode_controller._stop_pulse()
-
-        current_anim = self.animation_service.get_current()
-
-        # If no animation selected → auto-select first one
-        if not current_anim:
-            all_anims = self.animation_service.get_all()
-            if not all_anims:
-                log.warn("No animations available; cannot enter ANIMATION mode.")
-                return
-
-            first = all_anims[0].config.id
-            self.animation_service.set_current(first)
-            current_anim = self.animation_service.get_current()
-            log.info(f"Auto-selected animation: {first.name}")
-
-        anim_id = current_anim.config.id
-        params = current_anim.build_params_for_engine()
-        safe_params = Serializer.params_enum_to_str(params)
-
-        excluded_zones = [
-            z.config.id
-            for z in self.zone_service.get_all()
-            if z.config.id != zone_id
-        ]
-
-        log.debug(f"Starting ANIMATION mode on {zone_id.name}, anim={anim_id.name}")
-        await self.animation_engine.start(
-            anim_id,
-            excluded_zones=excluded_zones,
-            **safe_params
-        )
-
-        self.animation_mode_controller._sync_preview()
-            
-    async def _apply_off_mode(self, zone):
-        zone_id = zone.config.id
-        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, Color.black(), show=True)
-        log.debug(f"Zone {zone_id.name}: Applied OFF mode")
-        
+       
     async def _set_zone_mode_async(self, target_mode: ZoneRenderMode):
         """
         Set the render mode of the currently selected zone.
@@ -486,6 +431,63 @@ class LEDController:
 
         await self._set_zone_mode_async(next_mode)
         
+    async def _apply_static_mode(self, zone):
+        zone_id = zone.config.id
+        color = zone.get_color()
+
+        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color, show=True)
+
+        log.debug(f"Zone {zone_id.name}: Applied STATIC mode")
+
+        if self.edit_mode:
+            # Sync preview
+            # self.static_mode_controller._sync_preview()
+            self.static_mode_controller._start_pulse()
+    
+    async def _apply_animation_mode(self, zone):
+        zone_id = zone.config.id
+
+        self.static_mode_controller._stop_pulse()
+
+        current_anim = self.animation_service.get_current()
+
+        # If no animation selected → auto-select first one
+        if not current_anim:
+            all_anims = self.animation_service.get_all()
+            if not all_anims:
+                log.warn("No animations available; cannot enter ANIMATION mode.")
+                return
+
+            first = all_anims[0].config.id
+            self.animation_service.set_current(first)
+            current_anim = self.animation_service.get_current()
+            log.info(f"Auto-selected animation: {first.name}")
+
+        anim_id = current_anim.config.id
+        params = current_anim.build_params_for_engine()
+        safe_params = Serializer.params_enum_to_str(params)
+
+        excluded_zones = [
+            z.config.id
+            for z in self.zone_service.get_all()
+            if z.config.id != zone_id
+        ]
+
+        log.debug(f"Starting ANIMATION mode on {zone_id.name}, anim={anim_id.name}")
+        await self.animation_engine.start(
+            anim_id,
+            excluded_zones=excluded_zones,
+            **safe_params
+        )
+
+        self.animation_mode_controller._sync_preview()
+            
+    async def _apply_off_mode(self, zone):
+        zone_id = zone.config.id
+        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, Color.black(), show=True)
+        log.debug(f"Zone {zone_id.name}: Applied OFF mode")
+     
+     
     async def _toggle_zone_mode(self):
         """
         Toggle currently selected zone between STATIC ↔ ANIMATION mode.

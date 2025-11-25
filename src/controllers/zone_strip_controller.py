@@ -19,7 +19,7 @@ Does NOT:
     - Handle user input (that's ControlPanelController L2)
 """
 
-from typing import Dict, Tuple, TYPE_CHECKING
+from typing import Dict, Tuple, List, TYPE_CHECKING
 import asyncio
 from zone_layer.zone_strip import ZoneStrip
 from models import Color
@@ -70,31 +70,46 @@ class ZoneStripController:
         log.info("ZoneStripController initialized")
 
     # -----------------------------------------------------------------------
-    # Rendering
+    # Rendering (PURE FRAME-BASED - All rendering through FrameManager)
     # -----------------------------------------------------------------------
 
     def submit_all_zones_frame(self, zones_colors: Dict[ZoneID, Tuple[Color, int]], priority: FramePriority = FramePriority.MANUAL) -> None:
         """
-        Submit zones colors to FrameManager.
+        Submit zones colors to FrameManager (UNIFIED RENDERING PATH - FIRE AND FORGET).
 
         Each zone gets (Color, brightness) and is converted to RGB with brightness applied.
+        This is the ONLY rendering method - all LED updates go through FrameManager.
+
+        Async task runs in background. Caller does not wait for completion.
 
         Args:
             zones_colors: Dict of ZoneID → (Color, brightness) tuples
-            priority: Frame priority level (default MANUAL for static, use PULSE for pulsing)
+            priority: Frame priority level (default MANUAL=10 for static, PULSE=20 for pulsing)
+
+        Example:
+            zone_colors = {ZoneID.FLOOR: (Color.red(), 75), ZoneID.LEFT: (Color.blue(), 100)}
+            strip_controller.submit_all_zones_frame(zone_colors, priority=FramePriority.PULSE)
         """
         asyncio.create_task(self._submit_all_zones_frame(zones_colors, priority))
 
     async def _submit_all_zones_frame(self, zone_colors: Dict[ZoneID, Tuple[Color, int]], priority: FramePriority = FramePriority.MANUAL) -> None:
-        """Convert zones to RGB frame and submit to FrameManager."""
-        rgb_colors = {}
+        """
+        Async implementation: Apply brightness to Color objects and submit to FrameManager.
+
+        Applies brightness scaling while preserving color mode (HUE/PRESET).
+        Wraps in ZoneFrame and submits to FrameManager priority queue for 60 FPS render loop.
+
+        Args:
+            zone_colors: Zone ID → (Color, brightness) mapping
+            priority: Frame priority level for queue selection
+        """
+        brightness_applied = {}
         for zone_id, (color, brightness) in zone_colors.items():
-            r, g, b = color.to_rgb()
-            r, g, b = Color.apply_brightness(r, g, b, brightness)
-            rgb_colors[zone_id] = (r, g, b)
+            # ✅ FIXED: Use with_brightness() to preserve color mode
+            brightness_applied[zone_id] = color.with_brightness(brightness)
 
         frame = ZoneFrame(
-            zone_colors=rgb_colors,
+            zone_colors=brightness_applied,
             priority=priority,
             source=FrameSource.STATIC,
             ttl=1.5
@@ -102,71 +117,23 @@ class ZoneStripController:
 
         await self.frame_manager.submit_zone_frame(frame)
 
-    def render_zone(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
-        """
-        Render single zone with color and brightness
-
-        Args:
-            zone_id: ZoneID enum value representing the zone
-            color: Color object (HUE, PRESET, RGB, or WHITE mode)
-            brightness: Brightness percentage (0-100)
-
-        Example:
-            color = Color.from_hue(240)  # Blue
-            controller.render_zone(ZoneID.LAMP, color, brightness=75)
-        """
-        r, g, b = color.to_rgb()
-
-        # Apply brightness scaling
-        r = int(r * brightness / 100)
-        g = int(g * brightness / 100)
-        b = int(b * brightness / 100)
-
-        # self.zone_strip.set_zone_color(zone_id, r, g, b)
-        self.zone_strip.set_zone_color(zone_id, color, False)
-        
-        log.debug(f"Rendered zone {zone_id.name}: RGB({r},{g},{b}) @ {brightness}%")
-
     def render_zone_combined(self, zone: ZoneCombined) -> None:
         """
-        Render a zone directly from ZoneCombined domain object.
-        """
-        self.render_zone(zone.config.id, zone.state.color, zone.brightness)
+        Render a single zone from ZoneCombined domain object (SYNC - FIRE AND FORGET).
 
-    def render_all_zones(self, zone_states: Dict[ZoneID, Tuple[Color, int]]) -> None:
-        """
-        Render all zones at once (batch update)
-
-        More efficient than calling render_zone() multiple times
-        because it only calls show() once at the end.
+        Submits zone color+brightness through FrameManager priority queue.
+        Async task runs in background - caller doesn't wait.
+        Used by LampWhiteModeController for immediate zone updates.
 
         Args:
-            zone_states: Dict mapping ZoneID to (Color, brightness) tuples
+            zone: ZoneCombined with id, color, and brightness
 
         Example:
-            states = {
-                ZoneID.LAMP: (Color.from_hue(0), 100),
-                ZoneID.TOP: (Color.from_hue(120), 80),
-                ZoneID.STRIP: (Color.from_hue(240), 60)
-            }
-            controller.render_all_zones(states)
+            lamp = zone_service.get_zone(ZoneID.LAMP)
+            strip_controller.render_zone_combined(lamp)  # No await needed
         """
-        # Build dict with ZoneID enums and RGB colors
-        colors_dict: Dict[ZoneID, Tuple[int, int, int]] = {}
-
-        for zone_id, (color, brightness) in zone_states.items():
-            r, g, b = color.to_rgb()
-
-            colors_dict[zone_id] = (
-            # Apply brightness scaling
-                int(r * brightness / 100),
-                int(g * brightness / 100),
-                int(b * brightness / 100)
-            )
-
-        # Set all zones at once (efficient - single show() call)
-        self.zone_strip.set_multiple_zones(colors_dict)
-        log.debug(f"Rendered {len(zone_states)} zones (batch)")
+        self.submit_all_zones_frame({zone.config.id: (zone.state.color, zone.brightness)})
+        log.debug(f"Rendered zone {zone.config.id.name} (brightness={zone.brightness})")
 
     # -----------------------------------------------------------------------
     # Power & Clear
@@ -181,43 +148,23 @@ class ZoneStripController:
 
     def power_on(self, zone_states: Dict[ZoneID, Tuple[Color, int]]) -> None:
         """
-        Restore all zones to saved state (power on)
+        Restore all zones to saved state (power on).
 
-        Same as render_all_zones() but semantically represents
-        restoring from power-off state.
+        Use submit_all_zones_frame() for normal operation.
 
         Args:
             zone_states: Dict mapping ZoneID to (Color, brightness) tuples
         """
-        # self.render_all_zones(zone_states)
-        log.info("Power ON - restored all zones")
+        log.info("Power ON - use submit_all_zones_frame() to render zones")
 
     def power_off(self) -> None:
         """
-        Turn off all zones (power off)
+        Turn off all zones (power off).
 
-        Same as clear_all() but semantically represents
-        entering power-off state.
+        Same as clear_all() but semantically represents entering power-off state.
         """
         self.clear_all()
         log.info("Power OFF - cleared all zones")
-
-    # -----------------------------------------------------------------------
-    # Brightness-only updates
-    # -----------------------------------------------------------------------
-
-    def update_brightness(self, zone_id: ZoneID, color: Color, brightness: int) -> None:
-        """
-        Update zone brightness (keeps same color)
-
-        Convenience method for brightness-only updates.
-
-        Args:
-            zone_id: Zone identifier enum
-            color: Current zone color
-            brightness: New brightness percentage (0-100)
-        """
-        self.render_zone(zone_id, color, brightness)
 
     # -----------------------------------------------------------------------
     # Transitions
@@ -233,7 +180,7 @@ class ZoneStripController:
         current_frame = self.zone_strip.get_frame()
         
         #await self.transition_service.fade_out(current_frame, config)
-        await self.transition_service.fade_out(config)
+        # await self.transition_service.fade_out(config)
         log.info(f"Faded out all zones ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)
 
     async def fade_in_all(self, target_frame, config) -> None:
@@ -244,26 +191,24 @@ class ZoneStripController:
             target_frame: List of RGB tuples (one per pixel)
             config: TransitionConfig
         """
-        await self.transition_service.fade_in(target_frame, config)
+        # await self.transition_service.fade_in(target_frame, config)
         log.info(f"Faded in all zones ({config.duration_ms}ms)", LogCategory=LogCategory.TRANSITION)
 
-    async def startup_fade_in(self, zone_service, config) -> None:
+    async def startup_fade_in(self, zones: List[ZoneCombined], config) -> None:
         """
         Fade in from black to current zone states (app startup)
 
-        Builds target frame from zone service WITHOUT rendering to strip,
+        Builds target frame from zone list WITHOUT rendering to strip,
         then performs smooth fade-in transition. No flash.
 
         Args:
-            zone_service: ZoneService instance to read zone colors from
+            zones: List of ZoneCombined objects with current color and brightness
             config: TransitionConfig for fade timing
         """
-        from utils.enum_helper import EnumHelper
-
-        # Build target frame from zone states (no rendering yet)
+        # Build target frame from zone states with brightness applied
         color_map = {
-            z.config.id: z.get_rgb()
-            for z in zone_service.get_all()
+            z.config.id: z.state.color.with_brightness(z.brightness)
+            for z in zones
         }
         target_frame = self.zone_strip.build_frame_from_zones(color_map)
 

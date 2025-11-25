@@ -115,8 +115,9 @@ class PowerToggleController:
         transition_config = TransitionConfig(duration_ms=1700, steps=20)
 
         # Build target frame with restored brightness (static zones only)
-        color_map: Dict[ZoneID, Tuple[int, int, int]] = {
-            z.config.id: z.get_rgb()
+        # Use Color objects with brightness applied (preserves color mode)
+        color_map = {
+            z.config.id: z.state.color.with_brightness(z.brightness)
             for z in zones
             if z.state.mode == ZoneRenderMode.STATIC  # Only include static zones
         }

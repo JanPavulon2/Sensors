@@ -5,15 +5,15 @@ from models.enums import ZoneID, ParamID
 from models.domain import ZoneCombined
 from models.color import Color
 from services.data_assembler import DataAssembler
+from services.application_state_service import ApplicationStateService
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.ZONE)
 
-
 class ZoneService:
     """High-level zone operations"""
 
-    def __init__(self, assembler: DataAssembler, app_state_service=None):
+    def __init__(self, assembler: DataAssembler, app_state_service: ApplicationStateService):
         self.assembler = assembler
         self.zones = assembler.build_zones()
         self._by_id = {zone.config.id: zone for zone in self.zones}

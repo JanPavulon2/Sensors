@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 from models.enums import ZoneID, FramePriority, FrameSource
-
+from models.color import Color
 
 @dataclass
 class BaseFrame:
@@ -49,7 +49,7 @@ class ZoneFrame(BaseFrame):
     Yield Format: (zone_id, r, g, b) OR dict of zone_id -> (r, g, b)
     """
 
-    zone_colors: Dict[ZoneID, Tuple[int, int, int]] = field(default_factory=dict)  # zone_id -> (r, g, b)
+    zone_colors: Dict[ZoneID, Color] = field(default_factory=dict)  # zone_id -> (r, g, b)
 
 
 @dataclass
@@ -61,7 +61,8 @@ class PixelFrame(BaseFrame):
     Yield Format: (zone_id, pixel_index, r, g, b) OR dict of zone_id -> [pixels]
     """
 
-    zone_pixels: Dict[ZoneID, List[Tuple[int, int, int]]] = field(default_factory=dict)  # zone_id -> [(r, g, b), ...]
+    # zone_id -> list of Color (logical pixel order inside zone)
+    zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict) 
     clear_other_zones: bool = False
 
 

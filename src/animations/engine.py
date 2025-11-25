@@ -19,6 +19,7 @@ from animations.color_snake import ColorSnakeAnimation
 from animations.color_cycle import ColorCycleAnimation
 
 from models.domain.zone import ZoneCombined
+from models.color import Color
 from services.transition_service import TransitionService
 from services import AnimationService
 from engine import FrameManager
@@ -184,7 +185,7 @@ class AnimationEngine:
         for zone in self.zones:
             color = self.strip.get_zone_color(zone.config.id)
             if color:
-                self.current_animation.set_zone_color_cache(zone.config.id, *color)
+                self.current_animation.set_zone_color_cache(zone.config.id, color)
 
         # Step 5: Keep old frame visible while building first frame
         # Submit old frame with low priority to prevent black flash during _get_first_frame()
@@ -204,17 +205,18 @@ class AnimationEngine:
 
         # Step 7: Convert zone_pixels dict to absolute frame for transitions
         # (strip knows how to map zone pixels to physical indices)
+        # Build as Color objects (transitions expect List[Color])
         first_frame = []
         if zone_pixels_dict:
-            # Build full frame from zone pixels
-            first_frame = [(0, 0, 0)] * self.strip.pixel_count
+            # Build full frame from zone pixels using Color objects
+            first_frame = [Color.black()] * self.strip.pixel_count
             for zone_id, pixels in zone_pixels_dict.items():
                 indices = self.strip.mapper.get_indices(zone_id)
                 for logical_idx, (r, g, b) in enumerate(pixels):
                     if logical_idx < len(indices):
                         phys_idx = indices[logical_idx]
                         if 0 <= phys_idx < self.strip.pixel_count:
-                            first_frame[phys_idx] = (r, g, b)
+                            first_frame[phys_idx] = Color.from_rgb(r, g, b)
 
         # Step 8: CROSSFADE from old to new (or fade_in if no old frame)
         if first_frame:
@@ -251,8 +253,8 @@ class AnimationEngine:
         log.info(f"AnimEngine: Stopping animation {self.current_id} (skip_fade={skip_fade})")
 
         # Fade out (fade_out handles its own locking)
-        if not skip_fade:
-            await self.transition_service.fade_out(transition)
+        # if not skip_fade:
+        #    await self.transition_service.fade_out(transition)
 
         # Stop animation task
         self.current_animation.stop()

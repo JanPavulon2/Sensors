@@ -20,6 +20,7 @@ from utils.logger import get_category_logger
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import FullStripFrame, ZoneFrame, PixelFrame
+from models.color import Color
 from zone_layer.zone_strip import ZoneStrip
 
 if TYPE_CHECKING:
@@ -315,10 +316,10 @@ class FramePlaybackController:
 
             elif len(frame_data) == 4:
                 # Zone-based: (zone_id, r, g, b)
-                # Create ZoneFrame preserving zone-level structure
+                # Create ZoneFrame preserving zone-level structure with Color objects
                 zone_id, r, g, b = frame_data
                 return ZoneFrame(
-                    zone_colors={zone_id: (r, g, b)},
+                    zone_colors={zone_id: Color.from_rgb(r, g, b)},
                     priority=FramePriority.DEBUG,
                     source=FrameSource.DEBUG,
                     ttl=10.0
@@ -326,13 +327,13 @@ class FramePlaybackController:
 
             elif len(frame_data) == 5:
                 # Pixel-based: (zone_id, pixel_idx, r, g, b)
-                # Create PixelFrame preserving pixel-level structure
+                # Create PixelFrame preserving pixel-level structure with Color objects
                 zone_id, pixel_idx, r, g, b = frame_data
                 # Build pixel array for this zone with only this pixel lit
                 # Note: We don't know exact zone pixel count here, so we build
                 # a list large enough to contain this pixel
-                pixels = [(0, 0, 0)] * (pixel_idx + 1)
-                pixels[pixel_idx] = (r, g, b)
+                pixels = [Color.black()] * (pixel_idx + 1)
+                pixels[pixel_idx] = Color.from_rgb(r, g, b)
 
                 return PixelFrame(
                     zone_pixels={zone_id: pixels},

@@ -401,6 +401,104 @@ For detailed architecture documentation, see `.claude/context/architecture/multi
 
 ---
 
+## 📋 Frame-Based Rendering Architecture (Phase 6 - PURE)
+
+**Updated: 2025-11-25 - Option A Implementation Complete**
+
+All LED rendering goes through **FrameManager's priority queue system**. No component may call `strip.show()` or manipulate pixels directly.
+
+### Frame Priority Levels
+
+```
+Priority  Name         Source                    Purpose
+────────  ────────────  ────────────────────────  ──────────────────────
+50        DEBUG        FramePlaybackController   Frame-by-frame debugging
+40        TRANSITION   TransitionService        Fade in/out animations
+30        ANIMATION    AnimationEngine          Running animations
+20        PULSE        StaticModeController     Static mode brightness pulse
+10        MANUAL       ZoneStripController      Manual static color
+0         IDLE         (no frame)               Default/off state
+```
+
+**Selection Rule**: FrameManager @ 60 FPS selects the HIGHEST priority non-expired frame from each queue.
+
+### Rendering Paths (Updated - ATOMIC Only)
+
+**All rendering is now ATOMIC** (single DMA transfer, no flicker):
+
+```
+ZoneStripController.submit_all_zones_frame()
+  └─→ Async task: Convert Color → RGB, create ZoneFrame
+  └─→ await FrameManager.submit_zone_frame(frame)
+  └─→ Frame appended to main_queues[priority]
+  └─→ (Caller returns immediately - fire and forget)
+
+FrameManager.start() render loop (60 FPS)
+  └─→ _select_main_frame_by_priority()
+  └─→ _render_atomic() based on frame type:
+      ├─→ FullStripFrame: build_frame_from_zones → show_full_pixel_frame() (ATOMIC)
+      ├─→ ZoneFrame: build_frame_from_zones → show_full_pixel_frame() (ATOMIC)
+      └─→ PixelFrame: show_full_pixel_frame() directly (ATOMIC)
+  └─→ ZoneStrip.show_full_pixel_frame(pixel_dict)
+  └─→ WS281xStrip.apply_frame() (single DMA)
+  └─→ GPIO hardware latches pixels
+```
+
+**Key Implementation Details**:
+- `ZoneStripController.render_zone_combined()` - Sync, fire-and-forget (used by LampWhiteModeController)
+- `ZoneStripController.submit_all_zones_frame()` - Sync, fire-and-forget (used by StaticModeController pulse)
+- `FrameManager._render_zone_frame()` - Now uses atomic approach (no longer calls set_zone_color per zone)
+- `FrameManager._render_full_strip()` - Now uses atomic approach
+- `FrameManager._render_pixel_frame()` - Already atomic (unchanged)
+
+### Frame Submission Examples
+
+**Static Mode (Pulsing - PULSE priority)**:
+```python
+# StaticModeController._pulse_task()
+for step in range(steps):
+    pulse_brightness = int(base * scale)  # 0.2-1.0 sine wave
+    strip_controller.submit_all_zones_frame(
+        {current_zone.config.id: (current_zone.state.color, pulse_brightness)},
+        priority=FramePriority.PULSE  # Pri 20
+    )
+    await asyncio.sleep(cycle / steps)
+```
+
+**Animation Mode (ANIMATION priority)**:
+```python
+# AnimationEngine yields frames
+frame = PixelFrame(
+    zone_pixels={ZoneID.FLOOR: [(255,0,0), (200,0,0), ...]},
+    priority=FramePriority.ANIMATION,  # Pri 30
+    ttl=0.2
+)
+await frame_manager.submit_pixel_frame(frame)
+```
+
+**Lamp White Mode (MANUAL priority)**:
+```python
+# LampWhiteModeController.toggle()
+lamp = zone_service.get_zone(ZoneID.LAMP)
+strip_controller.render_zone_combined(lamp)  # Submits @ MANUAL pri (10)
+```
+
+### IMPORTANT: What Changed in Phase 6
+
+✅ **BEFORE (Architecture Violation)**:
+- `render_zone()` called `zone_strip.set_zone_color()` directly (BYPASSED FrameManager)
+- `render_all_zones()` called `zone_strip.set_multiple_zones()` directly (BYPASSED FrameManager)
+- `_render_zone_frame()` called `set_zone_color()` per zone (non-atomic)
+
+✅ **AFTER (Pure Frame-Based)**:
+- Removed `render_zone()` entirely
+- Made `render_zone_combined()` call `submit_all_zones_frame()` (goes through FrameManager)
+- All rendering methods use `show_full_pixel_frame()` (atomic DMA)
+- Frame priority system always enforced
+- No direct hardware calls outside FrameManager render loop
+
+---
+
 ## 🔄 Development Workflow
 
 ### Starting Work on a Task
