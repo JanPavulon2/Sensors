@@ -28,7 +28,7 @@ class Button:
                 print("Button pressed!")
     """
 
-    def __init__(self, pin: int, gpio_manager: GPIOManager, debounce_time: float = 0.3):
+    def __init__(self, pin: int, debounce_time: float = 0.3):
         self.pin = pin
         self.debounce_time = debounce_time
 

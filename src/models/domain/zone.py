@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from models.color import Color
-from models.enums import ParamID, ZoneID, ZoneMode, AnimationID
+from models.enums import ParamID, ZoneID, ZoneRenderMode, AnimationID
 from models.domain.parameter import ParameterCombined
 from typing import Dict, Any, Optional
 from utils.enum_helper import EnumHelper 
@@ -36,7 +36,7 @@ class ZoneState:
     """Mutable zone state from JSON"""
     id: ZoneID
     color: Color
-    mode: ZoneMode = ZoneMode.STATIC
+    mode: ZoneRenderMode = ZoneRenderMode.STATIC
     animation_id: Optional[AnimationID] = None
     
 

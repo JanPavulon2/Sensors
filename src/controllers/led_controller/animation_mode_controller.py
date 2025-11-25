@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID, PreviewMode, ZoneMode
+from models.enums import ParamID, PreviewMode, ZoneRenderMode
 from utils.logger import get_logger, LogCategory, LogLevel
 from utils.serialization import Serializer
 from services import ServiceContainer

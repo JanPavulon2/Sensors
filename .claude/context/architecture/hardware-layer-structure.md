@@ -14,8 +14,8 @@ Your codebase has **excellent separation of concerns** across three distinct lay
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ LAYER 3: APPLICATION (Stateless, User-Facing)                  │
-│ ────────────────────────────────────────────────────────────── │
+│ LAYER 3: APPLICATION (Stateless, User-Facing)                   │
+│ ──────────────────────────────────────────────────────────────  │
 │  - LEDController (main orchestrator)                            │
 │  - Mode controllers (animation, static, power, etc.)            │
 │  - Domain services (ZoneService, AnimationService, etc.)        │
@@ -23,13 +23,13 @@ Your codebase has **excellent separation of concerns** across three distinct lay
 └─────────────────────────────────────────────────────────────────┘
                               ↓ (uses)
 ┌─────────────────────────────────────────────────────────────────┐
-│ LAYER 2: CONTROL (Request Processing & Coordination)           │
-│ ────────────────────────────────────────────────────────────── │
-│  - ZoneStripController (delegates rendering to FrameManager)   │
-│  - PreviewPanelController (preview display logic)              │
-│  - ControlPanelController (input polling → events)             │
-│  - TransitionService (fade effects, frame transitions)         │
-│  - FrameManager (async frame render loop)                      │
+│ LAYER 2: CONTROL (Request Processing & Coordination)            │
+│ ──────────────────────────────────────────────────────────────  │
+│  - ZoneStripController (delegates rendering to FrameManager)    │
+│  - PreviewPanelController (preview display logic)               │
+│  - ControlPanelController (input polling → events)              │
+│  - TransitionService (fade effects, frame transitions)          │
+│  - FrameManager (async frame render loop)                       │
 └─────────────────────────────────────────────────────────────────┘
                               ↓ (uses)
 ┌─────────────────────────────────────────────────────────────────┐

@@ -66,7 +66,7 @@ class ControlPanel:
 
         # Buttons
         button_pins = hardware_manager.button_pins
-        self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
+        self.buttons = [Button(pin) for pin in button_pins]
 
         # Preview Panel - initialized later in main_asyncio.py after zone_strips are created
         # PreviewPanel is a logical view of PREVIEW zone within ZoneStrip(GPIO 19)

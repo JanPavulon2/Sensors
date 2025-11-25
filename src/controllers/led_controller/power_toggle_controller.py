@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Dict, Tuple
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from models.transition import TransitionConfig
-from models.enums import ZoneID, ZoneMode
+from models.enums import ZoneID, ZoneRenderMode
 from services import ServiceContainer
 
 if TYPE_CHECKING:
@@ -118,7 +118,7 @@ class PowerToggleController:
         color_map: Dict[ZoneID, Tuple[int, int, int]] = {
             z.config.id: z.get_rgb()
             for z in zones
-            if z.state.mode == ZoneMode.STATIC  # Only include static zones
+            if z.state.mode == ZoneRenderMode.STATIC  # Only include static zones
         }
 
         log.info("Power ON - fading in all GPIO strips and preview")
@@ -126,7 +126,7 @@ class PowerToggleController:
         # Per-zone mode architecture:
         # - Static zones: fade in their saved colors
         # - Animated zones: restart their animations with fade in
-        has_animated_zones = any(z.state.mode == ZoneMode.ANIMATION for z in zones)
+        has_animated_zones = any(z.state.mode == ZoneRenderMode.ANIMATION for z in zones)
 
         # Fade in each GPIO strip (each strip renders only its own zones)
         fades = []

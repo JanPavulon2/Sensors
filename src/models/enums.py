@@ -5,7 +5,7 @@ Enums for LED Controller state machine
 from enum import Enum, auto
 
 
-class ZoneMode(Enum):
+class ZoneRenderMode(Enum):
     """
     Per-zone operating modes (replaces global MainMode)
 

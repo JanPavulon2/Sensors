@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from models.enums import ParamID, AnimationID, ZoneID, ZoneMode
+from models.enums import ParamID, AnimationID, ZoneID, ZoneRenderMode
 from models.domain import (
     ParameterConfig, ParameterState, ParameterCombined,
     AnimationConfig, AnimationState, AnimationCombined,
@@ -200,7 +200,7 @@ class DataAssembler:
                     log.warn(f"No state found for zone {zone_config.tag}, using defaults")
                     color = Color.from_hue(0)
                     brightness = 100
-                    mode = ZoneMode.STATIC
+                    mode = ZoneRenderMode.STATIC
                     animation_id = None
                 else:
                     color_dict = zone_state_data.get("color", {"mode": "HUE", "hue": 0})
@@ -209,13 +209,13 @@ class DataAssembler:
 
                     # Load zone mode using EnumHelper with fallback to STATIC
                     try:
-                        mode = EnumHelper.to_enum(ZoneMode, zone_state_data.get("mode", "STATIC"))
+                        mode = EnumHelper.to_enum(ZoneRenderMode, zone_state_data.get("mode", "STATIC"))
                     except (ValueError, TypeError):
-                        mode = ZoneMode.STATIC
+                        mode = ZoneRenderMode.STATIC
 
                     # Load animation_id if zone is in ANIMATION mode
                     animation_id = None
-                    if mode == ZoneMode.ANIMATION:
+                    if mode == ZoneRenderMode.ANIMATION:
                         anim_id_str = zone_state_data.get("animation_id")
                         if anim_id_str:
                             try:

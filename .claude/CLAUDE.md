@@ -1,9 +1,11 @@
 # Diuna Project - AI Assistant Guide
 
-**Last Updated**: 2025-11-19
+**Last Updated**: 2025-11-25
 **Version**: 0.3-dev
 **Current Phase**: Phase 6 Complete (Unified Rendering + Type Safety)
 **Purpose**: Central guide for AI agents working on this codebase
+
+**Latest Addition**: Complete rendering system documentation with user/agent split + TODO system
 
 ---
 
@@ -15,7 +17,7 @@
 4. **UPDATE FILE HEADERS** when modifying documentation (date + changes)
 5. **ONE FILE PER TOPIC** - no duplicate documentation
 6. **FOLLOW CODE STYLE RULES** - see Code Style Requirements section below
-
+7. **ALL RENDERING THROUGH FRAMEMANAGER** - No component/controller may call `strip.show()` or directly manipulate pixels. All LED updates must be submitted as frames to FrameManager via `submit_zone_frame()` or `submit_pixel_frame()`
 ---
 
 ## 📊 Project Overview
@@ -103,9 +105,23 @@ Sensors/
 
 ## 🗂️ Documentation Index
 
+### ⭐ NEW: Rendering System Documentation (Phase 6)
+**Start here for complete rendering system overview:**
+- **User Documentation** (for understanding the system):
+  - [.documentation/1_rendering_system/user/0_overview.md](.claude/context/.documentation/1_rendering_system/user/0_overview.md) - System concepts & architecture
+  - [User Guide Files](.claude/context/.documentation/1_rendering_system/user/) - 6 comprehensive guides
+
+- **Agent Documentation** (for implementing changes):
+  - [.documentation/1_rendering_system/agent/0_agent_overview.md](.claude/context/.documentation/1_rendering_system/agent/0_agent_overview.md) - Agent-specific details
+  - [Agent Guide Files](.claude/context/.documentation/1_rendering_system/agent/) - 5 implementation guides
+
+- **TODO System** (tracking issues):
+  - [.todo/rendering_system.md](.claude/context/.todo/rendering_system.md) - Rendering issues & tasks
+  - [.todo/controllers.md](.claude/context/.todo/controllers.md) - Controller improvements
+
 ### Essential Reading (START HERE)
 1. **[.claude/context/INDEX.md]** - Complete documentation index with navigation
-2. **[.claude/context/architecture/rendering-system.md]** - Complete rendering architecture
+2. **[.claude/context/.documentation/1_rendering_system/user/0_overview.md]** - **NEW**: Rendering system overview
 3. **[.claude/context/project/todo.md]** - Current tasks & project status
 4. **[.claude/context/development/coding-standards.md]** - Code style & patterns
 

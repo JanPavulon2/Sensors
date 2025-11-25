@@ -23,7 +23,7 @@ from services.transition_service import TransitionService
 from services import AnimationService
 from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
-from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneMode
+from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneRenderMode
 from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
@@ -493,11 +493,11 @@ class AnimationEngine:
                 for zone in self.zones:
                     zone_id = zone.config.id
                     # Skip if this zone is already in the animated frame or is OFF
-                    if zone_id in zone_pixels_dict or zone.state.mode == ZoneMode.OFF:
+                    if zone_id in zone_pixels_dict or zone.state.mode == ZoneRenderMode.OFF:
                         continue
 
                     # If zone is STATIC, add its current color
-                    if zone.state.mode == ZoneMode.STATIC:
+                    if zone.state.mode == ZoneRenderMode.STATIC:
                         rgb = zone.get_rgb()
                         zone_length = self.zone_lengths.get(zone_id, 0)
                         # Fill entire zone with static color

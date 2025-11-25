@@ -11,7 +11,7 @@ Single source of truth for frontend JSON API compatibility.
 from typing import TypeVar, Type, Any, Dict, Optional
 from enum import Enum
 
-from models.enums import ZoneID, AnimationID, ParamID, ColorMode, ZoneMode
+from models.enums import ZoneID, AnimationID, ParamID, ColorMode, ZoneRenderMode
 from models.color import Color
 from utils.logger import get_logger, LogCategory
 
@@ -183,14 +183,14 @@ class Serializer:
     # ========================================================================
 
     @staticmethod
-    def zone_mode_to_str(mode: ZoneMode) -> str:
-        """Convert ZoneMode enum to string"""
+    def zone_render_mode_to_str(mode: ZoneRenderMode) -> str:
+        """Convert ZoneRenderMode enum to string"""
         return mode.name
 
     @staticmethod
-    def str_to_zone_mode(value: str) -> ZoneMode:
-        """Convert string to ZoneMode enum"""
+    def str_to_zone_render_mode(value: str) -> ZoneRenderMode:
+        """Convert string to ZoneRenderMode enum"""
         try:
-            return ZoneMode[value]
+            return ZoneRenderMode[value]
         except KeyError:
-            raise ValueError(f"Invalid ZoneMode: {value}")
+            raise ValueError(f"Invalid ZoneRenderMode: {value}")
