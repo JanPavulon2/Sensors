@@ -472,9 +472,9 @@ class LEDController:
         
     async def _apply_static_mode(self, zone):
         zone_id = zone.config.id
-        color = zone.get_color()
 
-        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color, show=True)
+        # Submit frame through FrameManager (not directly to hardware)
+        self.zone_strip_controller.render_zone_combined(zone)
 
         log.debug(f"Zone {zone_id.name}: Applied STATIC mode")
 
@@ -523,7 +523,17 @@ class LEDController:
             
     async def _apply_off_mode(self, zone):
         zone_id = zone.config.id
-        self.zone_strip_controller.zone_strip.set_zone_color(zone_id, Color.black(), show=True)
+
+        # Temporarily set color to black for rendering
+        original_color = zone.state.color
+        zone.state.color = Color.black()
+
+        # Submit frame through FrameManager (not directly to hardware)
+        self.zone_strip_controller.render_zone_combined(zone)
+
+        # Restore original color to state (so next render has correct value)
+        zone.state.color = original_color
+
         log.debug(f"Zone {zone_id.name}: Applied OFF mode")
      
      
@@ -567,9 +577,9 @@ class LEDController:
         # 4. Handle mode-specific setup
         if next_mode == ZoneRenderMode.STATIC:
             log.debug(f"Zone {zone_id.name}: Switching to STATIC mode")
-            # Just render the static color - frame merging will handle it
-            color = current_zone.get_color()
-            self.zone_strip_controller.zone_strip.set_zone_color(zone_id, color,)
+
+            # Submit frame through FrameManager (not directly to hardware)
+            self.zone_strip_controller.render_zone_combined(current_zone)
 
             # Sync preview
             # self.static_mode_controller._sync_preview()
