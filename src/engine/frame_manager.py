@@ -31,16 +31,15 @@ Warstwa: RENDER / INFRASTRUCTURE
 from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque, Callable
+from typing import Dict, List, Optional, Deque
 from collections import deque
 
 from utils.logger import get_logger
-from utils.serialization import Serializer
 from models.enums import LogCategory, FramePriority, ZoneID
 from models.color import Color
 from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
-    MainStripFrame, AnyFrame
+    MainStripFrame
 )
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
@@ -96,6 +95,7 @@ class FrameManager:
         Args:
             fps: Target render frequency (1-240, default 60)
         """
+        
         self.fps = max(1, min(fps, 240))
 
         # Dual queue system (separate for main strip and preview)
@@ -112,7 +112,7 @@ class FrameManager:
         }
 
         # Registered render targets
-        self.main_strips: List = []  # ZoneStrip instances
+        self.main_strips: List[ZoneStrip] = []  # ZoneStrip instances
         self.preview_strips: List = []  # PreviewPanel instances
 
         # Runtime state
@@ -413,17 +413,77 @@ class FrameManager:
             self._render_preview_frame(preview_frame)
 
     def _render_main_frame(self, frame: MainStripFrame) -> None:
-        """Render main strip frame (type dispatch)."""
+        """
+        Unified render pipeline:
+        1. Frame → logical zone update (as_zone_update)
+        2. Normalize to actual pixel counts
+        3. Update ZoneRenderState
+        4. Apply to hardware via ZoneStrip
+        """
         for strip in self.main_strips:
             try:
-                if isinstance(frame, FullStripFrame):
-                    self._render_full_strip(frame, strip)
-                elif isinstance(frame, ZoneFrame):
-                    self._render_zone_frame(frame, strip)
-                elif isinstance(frame, PixelFrame):
-                    self._render_pixel_frame(frame, strip)
+                # 1) Frame → logical representation
+                updates = frame.as_zone_update()
+
+                # 1b) Filter to only zones that exist on this strip
+                # (FullStripFrame returns all ZoneID enum members, but each strip only has specific zones)
+                valid_zone_ids = set(strip.mapper.all_zone_ids())
+                filtered_updates = {
+                    zone_id: color
+                    for zone_id, color in updates.items()
+                    if zone_id in valid_zone_ids
+                }
+
+                # 2) Normalize logical → physical pixel lists
+                normalized = self._normalize_to_zone_lengths(filtered_updates, strip.mapper)
+
+                # 3) Update ZoneRenderState
+                self._apply_zone_state(normalized, frame.source)
+
+                # 4) Send to hardware (atomic: single DMA transfer)
+                strip.show_full_pixel_frame(normalized)
+
             except Exception as e:
                 log.error(f"Error rendering main frame to {strip}: {e}")
+                
+    def _apply_zone_state(self, normalized_frame, source):
+        """
+        Update ZoneRenderState with the full normalized per-zone pixel lists.
+        """
+        for zone_id, pixels in normalized_frame.items():
+            zr = self.zone_render_states.get(zone_id)
+            if zr:
+                zr.update_pixels(pixels, source)
+
+    def _normalize_to_zone_lengths(self, updates, mapper):
+        """
+        Normalize logical frame updates into full pixel lists based on actual
+        physical zone lengths from mapper.
+
+        updates:
+            ZoneID -> Color   (FullStripFrame / ZoneFrame)
+            ZoneID -> [Color] (PixelFrame)
+        """
+        expanded = {}
+
+        for zone_id, value in updates.items():
+            length = mapper.get_zone_length(zone_id)
+
+            if length == 0:
+                continue
+
+            if isinstance(value, Color):
+                # Logical single color → expand to full zone
+                expanded[zone_id] = [value] * length
+
+            else:
+                # List of Colors → trim or pad
+                pix = list(value[:length])
+                if len(pix) < length:
+                    pix += [Color.black()] * (length - len(pix))
+                expanded[zone_id] = pix
+
+        return expanded
 
     def _render_preview_frame(self, frame: PreviewFrame) -> None:
         """Render preview panel frame."""
@@ -433,86 +493,6 @@ class FrameManager:
             except Exception as e:
                 log.error(f"Error rendering preview frame to {strip}: {e}")
 
-    def _render_full_strip(self, frame: FullStripFrame, strip) -> None:
-        """
-        Render single color to all zones using atomic approach.
-
-        Converts FullStripFrame (one color for all zones) to full pixel frame,
-        then renders atomically with single DMA transfer (no flicker).
-
-        Args:
-            frame: FullStripFrame with single (r, g, b) color for all zones
-            strip: ZoneStrip instance
-        """
-        try:
-            r, g, b = frame.color
-            color = Color.from_rgb(r, g, b)
-
-            # Build zone colors dict: all zones same color (as Color objects)
-            zone_colors = {zone_id: color for zone_id in strip.mapper.all_zone_ids()}
-
-            # Convert to full pixel frame and render atomically
-            full_frame = strip.build_frame_from_zones(zone_colors)
-            strip.apply_pixel_frame(full_frame)
-
-        except Exception as e:
-            log.error(f"Error rendering full strip frame to {strip}: {e}")
-
-    def _render_zone_frame(self, frame: ZoneFrame, strip: ZoneStrip) -> None:
-        """
-        Render per-zone colors using atomic full-buffer approach.
-
-        Converts zone-level colors to full pixel frame, then renders atomically
-        with single DMA transfer (no flicker). Uses same atomic path as PixelFrame.
-
-        Args:
-            frame: ZoneFrame with zone_colors dict (per-zone RGB tuples)
-            strip: ZoneStrip instance
-        """
-        try:
-            # Convert per-zone colors to full pixel buffer
-            # zone_colors: {ZoneID.FLOOR: (255, 0, 0), ZoneID.LEFT: (0, 255, 0), ...}
-            # Returns: [(255,0,0), (255,0,0), ..., (0,255,0), (0,255,0), ...]
-            #          [-----FLOOR pixels----]  [----LEFT pixels----]
-            
-            # strip.set_zone_color(zone_id, color, show=False)
-            full_frame = strip.build_frame_from_zones(frame.zone_colors)
-
-            # Render atomically (single DMA transfer via apply_frame)
-            strip.apply_pixel_frame(full_frame)
-
-        except Exception as e:
-            log.error(f"Error rendering zone frame to {strip}: {e}")
-
-    def _render_pixel_frame(self, frame: PixelFrame, strip: ZoneStrip) -> None:
-        """
-        Render per-pixel colors using full-buffer overwrite.
-        Ensures correct clearing when stepping backward in animations.
-        """
-
-        try:
-            cleaned = {}
-
-            for zone_id, pixels in frame.zone_pixels.items():
-                # Validate zone exists
-                expected_len = strip.mapper.get_zone_length(zone_id)
-                if expected_len == 0:
-                    continue
-
-                # Trim or extend pixel list to match zone length
-                if len(pixels) != expected_len:
-                    fixed = list(pixels[:expected_len])
-                    if len(fixed) < expected_len:
-                        fixed += [Color.black()] * (expected_len - len(fixed))
-                    cleaned[zone_id] = fixed
-                else:
-                    cleaned[zone_id] = list(pixels)
-
-            strip.show_full_pixel_frame(cleaned)
-
-        except Exception as e:
-            log.error(f"Error rendering pixel frame to {strip}: {e}")
-    
     # === Cleanup ===
 
     def clear_all(self) -> None:

@@ -65,9 +65,9 @@ zones:
   - id: PREVIEW
     name: Preview
     tag: preview
-    pixel_count: 9      # 8-pixel preview panel on GPIO 19 (mounted upside down)
+    pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
     enabled: true
-    order: 8
+    order: 9
     reversed: true
 
   # - id: DESK
