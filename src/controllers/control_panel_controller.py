@@ -1,11 +1,11 @@
 import asyncio
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
-from models.enums import EncoderSource, ButtonID
+from models.enums import EncoderSource, ButtonID, LogCategory
 from components.control_panel import ControlPanel
 from services.event_bus import EventBus
-from utils.logger import get_logger, LogCategory
+from utils.logger import get_logger
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.HARDWARE)
 
 class ControlPanelController:
     """
@@ -34,7 +34,7 @@ class ControlPanelController:
             interval: Polling interval in seconds (default 0.02s = 50Hz)
         """
         self._running = True
-        log.info(LogCategory.HARDWARE, "ControlPanelController started polling loop")
+        log.info("ControlPanelController started polling loop")
         
         while self._running:
             self._poll_encoders()
@@ -78,4 +78,4 @@ class ControlPanelController:
         Stop the control panel polling loop
         """
         self._running = False
-        log.info(LogCategory.HARDWARE, "ControlPanelController stopped polling loop")
+        log.info("ControlPanelController stopped polling loop")

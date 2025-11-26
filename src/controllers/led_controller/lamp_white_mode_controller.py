@@ -1,11 +1,18 @@
 """LampWhiteModeController - desk lamp white mode feature"""
 
-import asyncio
-from models.enums import ZoneID
-from models import Color
-from utils.logger import get_logger, LogCategory
+from __future__ import annotations
 
-log = get_logger()
+import asyncio
+from typing import TYPE_CHECKING
+from models.enums import ZoneID
+from models.color import Color
+from utils.logger import get_logger, LogCategory
+from services import ServiceContainer
+
+if TYPE_CHECKING:
+    from controllers.zone_strip_controller import ZoneStripController
+
+log = get_logger().for_category(LogCategory.GENERAL)
 
 
 class LampWhiteModeController:
@@ -18,12 +25,18 @@ class LampWhiteModeController:
     - Exclude lamp from zone selector when active
     """
 
-    def __init__(self, parent):
-        self.parent = parent
-        self.zone_service = parent.zone_service
-        self.strip_controller = parent.zone_strip_controller
-        self.app_state = parent.app_state_service
-        self.color_manager = parent.config_manager.color_manager
+    def __init__(self, services: ServiceContainer, strip_controller: ZoneStripController):
+        """
+        Initialize lamp white mode controller with dependency injection.
+
+        Args:
+            services: ServiceContainer with all core services and managers
+            strip_controller: ZoneStripController for rendering
+        """
+        self.zone_service = services.zone_service
+        self.app_state = services.app_state_service
+        self.color_manager = services.color_manager
+        self.strip_controller = strip_controller
 
         self.lamp_white_mode = self.app_state.get_state().lamp_white_mode
         self.lamp_white_saved_state = self.app_state.get_state().lamp_white_saved_state
@@ -44,11 +57,11 @@ class LampWhiteModeController:
             self.zone_service.set_color(ZoneID.LAMP, warm)
             self.zone_service.set_brightness(ZoneID.LAMP, 100)
 
-            # Refresh lamp after service changes
+            # Refresh lamp after service changes and render
             lamp = self.zone_service.get_zone(ZoneID.LAMP)
             self.strip_controller.render_zone_combined(lamp)
 
-            log.info(LogCategory.SYSTEM, "Lamp white mode ON")
+            log.info("Lamp white mode ON")
         else:
             # Disable: restore saved state
             if self.lamp_white_saved_state:
@@ -65,7 +78,7 @@ class LampWhiteModeController:
 
             self.lamp_white_saved_state = None
             self.lamp_white_mode = False
-            log.info(LogCategory.SYSTEM, "Lamp white mode OFF")
+            log.info("Lamp white mode OFF")
 
         self.app_state.set_lamp_white_mode(self.lamp_white_mode)
         self.app_state.set_lamp_white_saved_state(self.lamp_white_saved_state)

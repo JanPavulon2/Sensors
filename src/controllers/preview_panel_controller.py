@@ -9,14 +9,14 @@ import asyncio
 from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
-from models import Color
+from models.color import Color
 from models.enums import AnimationID
 from services.transition_service import TransitionService
 
 if TYPE_CHECKING:
     from animations.base import BaseAnimation
 
-log = get_logger()
+log = get_logger().for_category(LogCategory.HARDWARE)
 
 
 class PreviewPanelController:
@@ -333,7 +333,7 @@ class PreviewPanelController:
             self._animation_running = True
             self._animation_task = asyncio.create_task(self._run_preview_loop())
 
-            log.debug(LogCategory.ANIMATION, f"Preview: {animation_id} @ {speed}")
+            log.debug(f"Preview: {animation_id} @ {speed}")
 
         except Exception as e:
             log.log(LogCategory.SYSTEM, "Failed to start preview animation",
@@ -505,7 +505,7 @@ class PreviewPanelController:
                 await asyncio.sleep(step_delay)
 
             self.preview_panel.clear()
-            log.debug(LogCategory.TRANSITION, "Preview panel faded out")
+            log.debug("Preview panel faded out")
 
         except Exception as e:
             log.log(LogCategory.TRANSITION, "Preview fade-out failed",
@@ -524,15 +524,15 @@ class PreviewPanelController:
         """
         try:
             # Import here to avoid circular dependency
-            from models.enums import MainMode
+            from models.enums import ZoneRenderMode
 
             # Build target frame based on current mode
             if hasattr(self, '_parent_controller'):
                 # If we have parent reference
                 parent = self._parent_controller
-                if parent.main_mode == MainMode.STATIC:
+                current_zone = parent.zone_service.get_selected_zone()
+                if current_zone and current_zone.state.mode == ZoneRenderMode.STATIC:
                     # Static mode: show current zone color
-                    current_zone = parent.static_mode_controller._get_current_zone()
                     r, g, b = current_zone.state.color.to_rgb()
                     brightness = current_zone.brightness
                     r = int(r * brightness / 100)
@@ -558,7 +558,7 @@ class PreviewPanelController:
                 self.preview_panel.show_frame(faded_frame)
                 await asyncio.sleep(step_delay)
 
-            log.debug(LogCategory.TRANSITION, "Preview panel faded in")
+            log.debug("Preview panel faded in")
 
         except Exception as e:
             log.log(LogCategory.TRANSITION, "Preview fade-in failed",

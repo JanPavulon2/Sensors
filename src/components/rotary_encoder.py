@@ -10,7 +10,7 @@ Registers all GPIO pins via GPIOManager.
 
 import RPi.GPIO as GPIO
 import time
-from infrastructure import GPIOManager
+from hardware.gpio.gpio_manager import GPIOManager
 from models.enums import GPIOPullMode
 
 
@@ -51,22 +51,9 @@ class RotaryEncoder:
         self.sw_pin = sw
         self.debounce_time = debounce_time
 
-        # Register GPIO pins via manager (pull-up for all encoder pins)
-        gpio_manager.register_input(
-            pin=clk,
-            component=f"RotaryEncoder({clk},{dt},{sw}).CLK",
-            pull_mode=GPIOPullMode.PULL_UP
-        )
-        gpio_manager.register_input(
-            pin=dt,
-            component=f"RotaryEncoder({clk},{dt},{sw}).DT",
-            pull_mode=GPIOPullMode.PULL_UP
-        )
-        gpio_manager.register_input(
-            pin=sw,
-            component=f"RotaryEncoder({clk},{dt},{sw}).SW",
-            pull_mode=GPIOPullMode.PULL_UP
-        )
+        # NOTE: GPIO registration is handled by HardwareManager
+        # This component receives already-registered pins, just uses them for input reading
+        # Do NOT register pins here to avoid conflicts
 
         # State tracking
         self._last_clk = GPIO.input(clk)

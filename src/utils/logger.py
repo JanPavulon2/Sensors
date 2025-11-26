@@ -1,24 +1,15 @@
-"""
-Structured logging system for LED Control Station
-
-Provides compact, readable logging with color coding and consistent formatting.
-Max 3-4 lines per action for readability on terminal.
-"""
-
-from enum import Enum, auto
-from typing import Optional, Any
 from datetime import datetime
-from functools import partial
+from typing import Optional
 from models.enums import LogLevel, LogCategory
 
 
-# ANSI color codes for terminal output
+# === ANSI COLORS ===
 class Colors:
     """ANSI escape codes for colored terminal output"""
     RESET = '\033[0m'
     BOLD = '\033[1m'
     DIM = '\033[2m'
-
+    
     # Foreground colors
     BLACK = '\033[30m'
     RED = '\033[31m'
@@ -28,7 +19,7 @@ class Colors:
     MAGENTA = '\033[35m'
     CYAN = '\033[36m'
     WHITE = '\033[37m'
-
+    
     # Bright foreground colors
     BRIGHT_BLACK = '\033[90m'
     BRIGHT_RED = '\033[91m'
@@ -40,7 +31,6 @@ class Colors:
     BRIGHT_WHITE = '\033[97m'
 
 
-# Category colors (for visual grouping)
 CATEGORY_COLORS = {
     LogCategory.CONFIG: Colors.CYAN,
     LogCategory.HARDWARE: Colors.BRIGHT_BLUE,
@@ -50,9 +40,10 @@ CATEGORY_COLORS = {
     LogCategory.ZONE: Colors.BRIGHT_GREEN,
     LogCategory.SYSTEM: Colors.BRIGHT_WHITE,
     LogCategory.TRANSITION: Colors.MAGENTA,
+    LogCategory.EVENT: Colors.BRIGHT_MAGENTA,
+    LogCategory.RENDER_ENGINE: Colors.MAGENTA,
 }
 
-# Level symbols
 LEVEL_SYMBOLS = {
     LogLevel.DEBUG: '·',
     LogLevel.INFO: '✓',
@@ -60,7 +51,6 @@ LEVEL_SYMBOLS = {
     LogLevel.ERROR: '✗',
 }
 
-# Level colors
 LEVEL_COLORS = {
     LogLevel.DEBUG: Colors.DIM,
     LogLevel.INFO: Colors.GREEN,
@@ -69,6 +59,7 @@ LEVEL_COLORS = {
 }
 
 
+# === CORE LOGGER ===
 class Logger:
     """
     Structured logger with compact output format
@@ -93,16 +84,16 @@ class Logger:
         """
         self.min_level = min_level
         self.use_colors = use_colors
-        self.level_priority = {
+        self._level_priority = {
             LogLevel.DEBUG: 0,
             LogLevel.INFO: 1,
             LogLevel.WARN: 2,
             LogLevel.ERROR: 3,
         }
-        
+
     def _should_log(self, level: LogLevel) -> bool:
         """Check if message should be logged based on level"""
-        return self.level_priority[level] >= self.level_priority[self.min_level]
+        return self._level_priority[level] >= self._level_priority[self.min_level]
 
     def _colorize(self, text: str, color: str) -> str:
         """Apply color to text if colors enabled"""
@@ -116,15 +107,13 @@ class Logger:
 
     def _format_category(self, category: LogCategory) -> str:
         """Format category name with color"""
-        name = category.name
         color = CATEGORY_COLORS.get(category, Colors.WHITE)
-        return self._colorize(name.ljust(9), color)  # Pad to 9 chars for alignment
+        return self._colorize(category.name.ljust(9), color)
 
     def _format_level_symbol(self, level: LogLevel) -> str:
         """Format level symbol with color"""
         symbol = LEVEL_SYMBOLS.get(level, '·')
-        color = LEVEL_COLORS.get(level, Colors.WHITE)
-        return self._colorize(symbol, color)
+        return self._colorize(symbol, LEVEL_COLORS.get(level, Colors.WHITE))
 
     def log(
         self,
@@ -163,131 +152,70 @@ class Logger:
 
         # Build main line
         timestamp = self._format_timestamp()
-        category_str = self._format_category(category)
-        symbol = self._format_level_symbol(level)
-
-        # Colorize message based on level
-        msg_color = LEVEL_COLORS.get(level, Colors.WHITE)
-        message_str = self._colorize(message, msg_color)
-
+        cat = self._format_category(category)
+        sym = self._format_level_symbol(level)
+        msg = self._colorize(message, LEVEL_COLORS.get(level, Colors.WHITE))
+        
         # Print main line
-        print(f"{timestamp} {category_str} {symbol} {message_str}")
-
-        # Build details from kwargs
-        detail_lines = details or []
+        print(f"{timestamp} {cat} {sym} {msg}")
 
         # Add kwargs as details
-        for key, value in kwargs.items():
-            detail_lines.append(f"{key}: {value}")
+        all_details = list(details or [])
+        for k, v in kwargs.items():
+            all_details.append(f"{k}: {v}")
 
         # Print details with tree structure
-        if detail_lines:
-            indent = " " * 11  # Align with category column
-            for i, detail in enumerate(detail_lines):
+        if all_details:
+            indent = " " * 11
+            for i, d in enumerate(all_details):
                 # Last item gets different tree character
-                tree_char = "└─" if i == len(detail_lines) - 1 else "├─"
-                detail_color = Colors.DIM if self.use_colors else ""
-                print(f"{indent}{self._colorize(tree_char, detail_color)} {detail}")
+                tree = "└─" if i == len(all_details) - 1 else "├─"
+                print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
 
-    # Convenience methods for each category
+    # === Level helpers (backward-compatible) ===
+    def debug(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.DEBUG, **kw)
+    def info(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.INFO, **kw)
+    def warn(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.WARN, **kw)
+    def error(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.ERROR, **kw)
 
-    def config(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log hardware event (GPIO, encoders, buttons, LEDs)"""
-        self.log(LogCategory.CONFIG, message, level, **kwargs)
+    # === Contextual logger creation ===
+    def for_category(self, category: LogCategory) -> 'BoundLogger':
+        """Return a contextual logger bound to a specific category."""
+        return BoundLogger(self, category)
 
-    def hardware(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log hardware event (GPIO, encoders, buttons, LEDs)"""
-        self.log(LogCategory.HARDWARE, message, level, **kwargs)
 
-    def state(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log state change (mode switches, edit mode toggle)"""
-        self.log(LogCategory.STATE, message, level, **kwargs)
+class BoundLogger:
+    """Logger bound to a default category, with ability to override if needed."""
 
-    def color(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log color event (adjustments, mode changes)"""
-        self.log(LogCategory.COLOR, message, level, **kwargs)
+    def __init__(self, base: Logger, category: LogCategory):
+        self._base = base
+        self._category = category
 
-    def animation(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log animation event (start/stop, parameter changes)"""
-        self.log(LogCategory.ANIMATION, message, level, **kwargs)
+    def log(self, message: str, level: LogLevel = LogLevel.INFO, category: Optional[LogCategory] = None, **kw):
+        """Allows overriding category if necessary."""
+        self._base.log(category or self._category, message, level, **kw)
 
-    def zone(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log zone event (selection, operations)"""
-        self.log(LogCategory.ZONE, message, level, **kwargs)
+    # Shortcut methods
+    def debug(self, message: str, **kw): self.log(message, LogLevel.DEBUG, **kw)
+    def info(self, message: str, **kw): self.log(message, LogLevel.INFO, **kw)
+    def warn(self, message: str, **kw): self.log(message, LogLevel.WARN, **kw)
+    def error(self, message: str, **kw): self.log(message, LogLevel.ERROR, **kw)
 
-    def system(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Log system event (startup, shutdown, errors)"""
-        self.log(LogCategory.SYSTEM, message, level, **kwargs)
+    def with_category(self, category: LogCategory) -> 'BoundLogger':
+        """Create another bound logger from this one."""
+        return BoundLogger(self._base, category)
 
-    def error(self, category: LogCategory, message: str, exception: Optional[Exception] = None):
-        """Log error with optional exception"""
-        kwargs = {}
-        if exception:
-            kwargs["error"] = str(exception)
-            kwargs["type"] = type(exception).__name__
-        self.log(category, message, LogLevel.ERROR, **kwargs)
-    
-    def warning(self, category: LogCategory, message: str, **kwargs):
-        """Log warning """
-        self.log(category, message, LogLevel.WARN, **kwargs)
-    
-    def warn(self, category: LogCategory, message: str, **kwargs):
-        """Log warning """
-        self.log(category, message, LogLevel.WARN, **kwargs)
 
-    def info(self, log_category: LogCategory, message: str, **kwargs):
-        """Log info """
-        self.log(log_category, message, LogLevel.INFO, **kwargs)
-
-    def debug(self, log_category: LogCategory, message: str, **kwargs):
-        """Log debug """
-        self.log(log_category, message, LogLevel.DEBUG, **kwargs)
-
-# Global logger instance (can be reconfigured)
+# === Global instance helpers ===
 _logger = Logger()
 
-
 def get_logger() -> Logger:
-    """Get global logger instance"""
     return _logger
 
+def get_category_logger(category: LogCategory) -> BoundLogger:
+    """Compatibility function: returns a logger bound to a specific category"""
+    return _logger.for_category(category)
 
-# def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
-#     """
-#     Reconfigure global logger
-
-#     Args:
-#         min_level: Minimum log level to display
-#         use_colors: Enable ANSI color codes
-#     """
-#     global _logger
-#     _logger = Logger(min_level=min_level, use_colors=use_colors)
-
-class CategoryLogger:
-    """Logger bound to a specific category with level methods"""
-    def __init__(self, category: LogCategory):
-        self.category = category
-        self._base = get_logger()
-
-    def __call__(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        """Allow using as function: log("msg", level=LogLevel.INFO)"""
-        self._base.log(self.category, message, level, **kwargs)
-
-    def log(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
-        self._base.log(self.category, message, level, **kwargs)
-
-    def info(self, message: str, **kwargs):
-        self._base.log(self.category, message, LogLevel.INFO, **kwargs)
-
-    def warn(self, message: str, **kwargs):
-        self._base.log(self.category, message, LogLevel.WARN, **kwargs)
-
-    def error(self, message: str, **kwargs):
-        self._base.log(self.category, message, LogLevel.ERROR, **kwargs)
-
-    def debug(self, message: str, **kwargs):
-        self._base.log(self.category, message, LogLevel.DEBUG, **kwargs)
-
-def get_category_logger(category: LogCategory):
-    """Return a CategoryLogger bound to a specific category"""
-    return CategoryLogger(category)
+def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
+    global _logger
+    _logger = Logger(min_level=min_level, use_colors=use_colors)

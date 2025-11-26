@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 from models.enums import ZoneID, FramePriority, FrameSource
-
+from models.color import Color
 
 @dataclass
 class BaseFrame:
@@ -32,14 +32,17 @@ class BaseFrame:
 class FullStripFrame(BaseFrame):
     """
     Single color for entire strip (all zones same color).
-
-    Use Case: ColorCycleAnimation - entire strip cycles through hues
-    Yield Format: (r, g, b)
     """
-
-    color: Tuple[int, int, int] = field(default=(0, 0, 0))  # (r, g, b), default black
-
-
+    color: Tuple[int, int, int] = field(default=Color.black().to_rgb()) 
+   
+    def as_zone_update(self) -> Dict[ZoneID, Color]:
+        """
+        Convert FullStripFrame → per-zone pixel lists.
+        All zones receive the same color, repeated for their length.
+        """
+        return {zone_id: Color.from_rgb(*self.color)
+            for zone_id in ZoneID}
+    
 @dataclass
 class ZoneFrame(BaseFrame):
     """
@@ -48,21 +51,21 @@ class ZoneFrame(BaseFrame):
     Use Case: BreatheAnimation - zones breathe with individual colors
     Yield Format: (zone_id, r, g, b) OR dict of zone_id -> (r, g, b)
     """
-
-    zone_colors: Dict[ZoneID, Tuple[int, int, int]] = field(default_factory=dict)  # zone_id -> (r, g, b)
-
+    zone_colors: Dict[ZoneID, Color] = field(default_factory=dict)  # zone_id -> (r, g, b)
+    
+    def as_zone_update(self) -> Dict[ZoneID, Color]:
+        return self.zone_colors
 
 @dataclass
 class PixelFrame(BaseFrame):
-    """
-    Per-pixel colors (pixel-level control).
+    # zone_pixels stores Color objects (not RGB tuples) for type consistency
+    # This matches TransitionService and AnimationEngine output
+    zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict)
+    clear_other_zones: bool = False
 
-    Use Case: SnakeAnimation - snake moves pixel by pixel
-    Yield Format: (zone_id, pixel_index, r, g, b) OR dict of zone_id -> [pixels]
-    """
-
-    zone_pixels: Dict[ZoneID, List[Tuple[int, int, int]]] = field(default_factory=dict)  # zone_id -> [(r, g, b), ...]
-
+    def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
+        # Colors already in correct format (service layer uses Color, not RGB tuples)
+        return self.zone_pixels
 
 @dataclass
 class PreviewFrame(BaseFrame):

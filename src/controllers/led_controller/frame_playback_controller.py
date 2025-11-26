@@ -17,9 +17,11 @@ import time
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from utils.logger import get_category_logger
-from models.enums import LogCategory, AnimationID, FramePriority, FrameSource
+from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
-from models.frame import FullStripFrame
+from models.frame import FullStripFrame, ZoneFrame, PixelFrame
+from models.color import Color
+from zone_layer.zone_strip import ZoneStrip
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
@@ -149,11 +151,9 @@ class FramePlaybackController:
         **animation_params
     ) -> int:
         """
-        Preload animation frames offline.
-
-        Creates animation instance and captures N frames from its generator.
-        Stores raw tuples from animation.run() for simplicity.
-
+        Preload animation frames by storing full absolute framebuffer snapshots.
+        This guarantees correct backward stepping.
+        
         Args:
             animation_id: Which animation to load
             **animation_params: Animation parameters (ANIM_SPEED, ANIM_SNAKE_LENGTH, etc.)
@@ -175,61 +175,130 @@ class FramePlaybackController:
             **animation_params
         )
 
+        
+        # Prepare full framebuffer state
+        current_state = self._blank_full_state()
+
         # Capture frames (limit to reasonable number to prevent memory issues)
         MAX_FRAMES = 1000
         load_start = time.perf_counter()
 
         try:
-            async for frame_data in anim.run():
-                self._frames.append(frame_data)
+            async for update in anim.run(): # type: ignore
+                
+                # Apply update to framebuffer
+                self._apply_update_to_state(current_state, update)
 
-                # Progress logging every 100 frames
+                # Store deep copy
+                snapshot = {
+                    zone_id: list(pixels)  # shallow copy of pixel list
+                    for zone_id, pixels in current_state.items()
+                }
+                self._frames.append(snapshot)
+                
+                # Progress logging
                 if len(self._frames) % 100 == 0:
-                    log.debug(f"  Captured {len(self._frames)} frames...")
+                    log.debug(f"  Captured {len(self._frames)} full frames...")
 
-                # Stop at limit (prevent infinite loops from infinite animations)
+                # Limit
                 if len(self._frames) >= MAX_FRAMES:
                     log.debug(f"Reached frame limit ({MAX_FRAMES})")
                     break
-
+                
         except Exception as e:
             log.error(f"Error loading frames: {e}")
             self._frames.clear()
             return 0
-
+        
         load_time = time.perf_counter() - load_start
 
         log.info(
             f"Animation frames loaded: {len(self._frames)} in {load_time:.2f}s",
             animation=animation_id.name,
-            avg_ms=f"{(load_time / len(self._frames) * 1000):.1f}ms per frame" if self._frames else "N/A"
+            avg_ms=f"{(load_time / len(self._frames) * 1000):.1f} ms/frame" if self._frames else "N/A"
         )
 
         return len(self._frames)
 
+    def _blank_full_state(self) -> Dict:
+        """
+        Create empty full-frame state for all zones.
+        Uses ZoneID enums as keys.
+        """
+        state = {}
+
+        # Find first ZoneStrip (skip PreviewPanel and other strip types)
+        strip = None
+        for s in self.frame_manager.main_strips:
+            if isinstance(s, ZoneStrip):
+                strip = s
+                break
+
+        if not strip:
+            log.error("No ZoneStrip found in main_strips")
+            return {}
+
+        # Initialize all zones with black
+        for zone_id in strip.mapper.all_zone_ids():
+            pixel_count = strip.mapper.get_zone_length(zone_id)
+            state[zone_id] = [(0, 0, 0)] * pixel_count
+
+        return state
+
+    def _apply_update_to_state(self, state: Dict, update: Any) -> None:
+        """
+        Apply a raw animation update tuple to the full framebuffer state.
+
+        Supports:
+        (r,g,b)
+        (zone_id, r,g,b)
+        (zone_id, pixel_idx, r,g,b)
+
+        State dict uses ZoneID enum keys.
+        """
+        if not isinstance(update, tuple):
+            return
+
+        # Case 1 — Full strip solid color
+        if len(update) == 3 and isinstance(update[0], int):
+            r, g, b = update
+            for zone_id in state.keys():
+                state[zone_id] = [(r, g, b)] * len(state[zone_id])
+            return
+
+        # Case 2 — Zone-level color update
+        if len(update) == 4:
+            zone_id, r, g, b = update
+            if zone_id in state:
+                state[zone_id] = [(r, g, b)] * len(state[zone_id])
+            return
+
+        # Case 3 — Pixel-level update
+        if len(update) == 5:
+            zone_id, pixel_idx, r, g, b = update
+            if zone_id in state:
+                if 0 <= pixel_idx < len(state[zone_id]):
+                    state[zone_id][pixel_idx] = (r, g, b)
+            return
+        
     # ============================================================
     # Frame Navigation
     # ============================================================
 
-    def _convert_tuple_to_frame(self, frame_data: Any) -> Optional[FullStripFrame]:
+    def _convert_tuple_to_frame(self, frame_data: Any) -> Optional[FullStripFrame | ZoneFrame | PixelFrame]:
         """
-        Convert raw animation tuple to Frame object.
+        Convert raw animation tuple to appropriate Frame object.
 
-        Supports three formats:
-        - (r, g, b) -> FullStripFrame (all zones same color)
-        - (zone_id, r, g, b) -> FullStripFrame (for now, render uniform)
-        - (zone_id, pixel_idx, r, g, b) -> FullStripFrame (for now, render uniform)
-
-        Note: We convert all to FullStripFrame for simplicity in debug mode.
-        This means individual zones/pixels get converted to a uniform color
-        (the first pixel's color). This is a limitation of frame-by-frame
-        debugging, but it's simple and works.
+        Preserves full animation detail (pixel-level or zone-level):
+        - (r, g, b) → FullStripFrame (all zones same color)
+        - (zone_id, r, g, b) → ZoneFrame (single zone colored)
+        - (zone_id, pixel_idx, r, g, b) → PixelFrame (single pixel in zone)
 
         Args:
             frame_data: Tuple from animation.run()
 
         Returns:
-            FullStripFrame ready for rendering, or None if format unknown
+            Appropriate frame type (FullStripFrame, ZoneFrame, or PixelFrame), or None if format unknown
         """
         if not isinstance(frame_data, tuple):
             return None
@@ -242,29 +311,35 @@ class FramePlaybackController:
                     color=(r, g, b),
                     priority=FramePriority.DEBUG,
                     source=FrameSource.DEBUG,
-                    ttl=10.0  # Long TTL so frame persists while user navigates
+                    ttl=10.0
                 )
 
             elif len(frame_data) == 4:
                 # Zone-based: (zone_id, r, g, b)
-                # For debug, just use the color
+                # Create ZoneFrame preserving zone-level structure with Color objects
                 zone_id, r, g, b = frame_data
-                return FullStripFrame(
-                    color=(r, g, b),
+                return ZoneFrame(
+                    zone_colors={zone_id: Color.from_rgb(r, g, b)},
                     priority=FramePriority.DEBUG,
                     source=FrameSource.DEBUG,
-                    ttl=10.0  # Long TTL so frame persists while user navigates
+                    ttl=10.0
                 )
 
             elif len(frame_data) == 5:
                 # Pixel-based: (zone_id, pixel_idx, r, g, b)
-                # For debug, just use the color
+                # Create PixelFrame preserving pixel-level structure with Color objects
                 zone_id, pixel_idx, r, g, b = frame_data
-                return FullStripFrame(
-                    color=(r, g, b),
+                # Build pixel array for this zone with only this pixel lit
+                # Note: We don't know exact zone pixel count here, so we build
+                # a list large enough to contain this pixel
+                pixels = [Color.black()] * (pixel_idx + 1)
+                pixels[pixel_idx] = Color.from_rgb(r, g, b)
+
+                return PixelFrame(
+                    zone_pixels={zone_id: pixels},
                     priority=FramePriority.DEBUG,
                     source=FrameSource.DEBUG,
-                    ttl=10.0  # Long TTL so frame persists while user navigates
+                    ttl=10.0
                 )
 
         except Exception as e:
@@ -275,59 +350,39 @@ class FramePlaybackController:
 
     async def show_current_frame(self) -> bool:
         """
-        Display current frame.
-
-        Converts raw animation tuple to Frame object and submits to FrameManager
-        for rendering to LEDs. Also logs frame info.
-
-        Returns:
-            True if frame exists, False if no frames loaded
+        Display the current full framebuffer snapshot.
         """
+        
         if not self._frames:
             log.warn("No frames loaded")
             return False
 
         frame_idx = self._current_index
-        total = len(self._frames)
-        frame_data = self._frames[frame_idx]
+        full_state = self._frames[frame_idx]
 
-        # Log frame information
+        # Logging
         status = "PLAYING" if self._playing else "PAUSED"
         log.info(
-            f"Frame {frame_idx + 1}/{total}",
+            f"Frame {frame_idx + 1}/{len(self._frames)}",
             animation=self._animation_id.name if self._animation_id else "?",
             status=status
         )
 
-        # Log frame data (raw tuple format)
-        if isinstance(frame_data, tuple):
-            if len(frame_data) == 3 and isinstance(frame_data[0], int):
-                # Full strip: (r, g, b)
-                r, g, b = frame_data
-                log.debug(f"Full strip color: RGB({r}, {g}, {b}) #{r:02x}{g:02x}{b:02x}")
+        # Render as PixelFrame (the correct absolute frame)
+        frame = PixelFrame(
+            zone_pixels={
+                zone: list(pixels)  # deep copy
+                for zone, pixels in full_state.items()},
+            priority=FramePriority.DEBUG,
+            source=FrameSource.DEBUG,
+            ttl=10.0
+        )
 
-            elif len(frame_data) == 4:
-                # Zone-based: (zone_id, r, g, b)
-                zone_id, r, g, b = frame_data
-                log.debug(f"Zone {zone_id.name}: RGB({r}, {g}, {b})")
+        await self.frame_manager.submit_pixel_frame(frame)
 
-            elif len(frame_data) == 5:
-                # Pixel-based: (zone_id, pixel_idx, r, g, b)
-                zone_id, pixel_idx, r, g, b = frame_data
-                log.debug(f"Pixel: zone={zone_id.name} idx={pixel_idx} RGB({r}, {g}, {b})")
-
-        # Convert to Frame object and render
-        frame = self._convert_tuple_to_frame(frame_data)
-        if frame:
-            await self.frame_manager.submit_full_strip_frame(frame)
-            log.debug("Frame submitted to FrameManager for rendering")
-
-            # If paused, manually step through frame
-            if self.frame_manager.paused:
-                self.frame_manager.step_frame()
-                log.debug("Frame step requested (paused mode)")
-        else:
-            log.warn(f"Could not convert frame data: {frame_data}")
+        # Step when paused
+        if self.frame_manager.paused:
+            self.frame_manager.step_frame()
 
         return True
 
@@ -455,6 +510,11 @@ class FramePlaybackController:
         self._exit_event = asyncio.Event()
 
         try:
+            
+            # KILL CURRENT RUNNING ANIMATION
+            await self.animation_engine.stop()
+            await asyncio.sleep(0)
+            
             # Load animation frames
             frame_count = await self._load_animation_frames(animation_id, **animation_params)
 
@@ -462,8 +522,16 @@ class FramePlaybackController:
                 log.error("Failed to load animation frames")
                 return
 
-            # Pause animation rendering to prevent flicker
-            # DEBUG priority won't be enough because animation frames are constantly being submitted
+            # Freeze animation engine to prevent it from submitting frames while debugging
+            # Animation continues running internally, but frames don't reach FrameManager
+            self.animation_engine.freeze()
+            log.debug("Animation engine frozen for frame-by-frame mode")
+
+            # Clear frames below DEBUG priority to remove animation/transition flicker
+            self.frame_manager.clear_below_priority(FramePriority.DEBUG)
+            log.debug("Cleared frames below DEBUG priority")
+
+            # Pause animation rendering for additional safety
             self.frame_manager.pause()
             log.debug("Animation rendering paused for frame-by-frame mode")
 
@@ -484,10 +552,19 @@ class FramePlaybackController:
             if self._playing:
                 await self.stop()
 
+            # Unfreeze animation engine to resume normal frame submission
+            self.animation_engine.unfreeze()
+            log.debug("Animation engine unfrozen, resuming normal submission")
+
             # Resume animation rendering
             self.frame_manager.resume()
             log.debug("Animation rendering resumed")
 
+            
+            await self.animation_engine.start(self._animation_id, **self._animation_params)
+
+            self.frame_manager.resume()
+            
             self._frame_by_frame_mode = False
             self._frames.clear()
             self._current_index = 0

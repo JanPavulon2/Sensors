@@ -4,9 +4,9 @@ from typing import List, Optional
 from models.enums import AnimationID, ParamID
 from models.domain import AnimationCombined
 from services.data_assembler import DataAssembler
-from utils.logger import get_category_logger, LogCategory
+from utils.logger import get_logger, LogCategory
 
-log = get_category_logger(LogCategory.ANIMATION)
+log = get_logger().for_category(LogCategory.ANIMATION)
 
 
 class AnimationService:
@@ -19,7 +19,7 @@ class AnimationService:
 
         self.available_ids: list[AnimationID] = list(self._by_id.keys())
 
-        log(f"AnimationService initialized with {len(self.animations)} animations: {[a.name for a in self.available_ids]}")
+        log.info(f"AnimationService initialized with {len(self.animations)} animations: {[a.name for a in self.available_ids]}")
 
     def get_animation(self, animation_id: AnimationID) -> AnimationCombined:
         """Get animation by ID"""
@@ -61,21 +61,21 @@ class AnimationService:
         """Stop all animations"""
         for anim in self.animations:
             anim.state.enabled = False
-        log("Stopped all animations")
+        log.info("Stopped all animations")
         self.save()
 
     def adjust_parameter(self, animation_id: AnimationID, param_id: ParamID, delta: int) -> None:
         """Adjust animation parameter by delta steps"""
         anim = self.get_animation(animation_id)
         anim.adjust_param(param_id, delta)
-        log(f"Adjusted {anim.config.display_name}.{param_id.name}: {anim.get_param_value(param_id)}")
+        log.info(f"Adjusted {anim.config.display_name}.{param_id.name}: {anim.get_param_value(param_id)}")
         self.save()
 
     def set_parameter(self, animation_id: AnimationID, param_id: ParamID, value: any) -> None:
         """Set animation parameter value directly"""
         anim = self.get_animation(animation_id)
         anim.set_param_value(param_id, value)
-        log(f"Set {anim.config.display_name}.{param_id.name} = {value}")
+        log.info(f"Set {anim.config.display_name}.{param_id.name} = {value}")
         self.save()
 
     def save(self) -> None:

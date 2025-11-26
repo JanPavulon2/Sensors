@@ -55,7 +55,7 @@ class AnimationCombined:
         """Set parameter value with validation"""
         param = self.parameters[param_id]
         if not param.config.validate(value):
-            log("Invalid value {value} for {param_id.name}, clamping")
+            log.warn(f"Invalid value {value} for {param_id.name}, clamping")
             value = param.config.clamp(value)
         param.state.value = value
 

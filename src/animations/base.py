@@ -6,6 +6,7 @@ All animations inherit from BaseAnimation and implement the run() method.
 
 import asyncio
 from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
+from models.color import Color
 from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
 
@@ -33,7 +34,7 @@ class BaseAnimation:
         self.excluded_zones = excluded_zones or []
         self.speed = max(1, min(100, speed))  # Clamp 1-100
         self.running = False
-        self.zone_colors: Dict[ZoneID, Tuple[int, int, int]] = {}  # Cache current zone colors
+        self.zone_colors: Dict[ZoneID, Color] = {}  # Cache current zone colors
         self.zone_brightness: Dict[ZoneID, int] = {}  # Cache current zone brightness
 
         # Filter out excluded zones - use ZoneID as keys
@@ -42,6 +43,12 @@ class BaseAnimation:
             for zone in zones
             if zone.config.id not in self.excluded_zones
         }
+
+        # Store only active zones for animations that need sequential access
+        self.active_zone_objects: List[ZoneCombined] = [
+            zone for zone in zones
+            if zone.config.id not in self.excluded_zones
+        ]
 
     async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
         """
@@ -69,16 +76,16 @@ class BaseAnimation:
         if hasattr(self, param):
             setattr(self, param, value)
 
-    def set_zone_color_cache(self, zone_id: ZoneID, r: int, g: int, b: int):
+    def set_zone_color_cache(self, zone_id: ZoneID, color: Color):
         """Cache zone color for animations that need current colors"""
-        self.zone_colors[zone_id] = (r, g, b)
+        self.zone_colors[zone_id] = color
 
     def set_zone_brightness_cache(self, zone_id: ZoneID, brightness: int):
         """Cache zone brightness for animations that need current brightness"""
         self.zone_brightness[zone_id] = brightness
 
-    def get_cached_color(self, zone_id: ZoneID) -> Optional[Tuple[int, int, int]]:
-        """Get cached color for zone"""
+    def get_cached_color(self, zone_id: ZoneID) -> Optional[Color]:
+        """Get cached Color object for zone"""
         return self.zone_colors.get(zone_id)
 
     def get_cached_brightness(self, zone_id: ZoneID) -> Optional[int]:

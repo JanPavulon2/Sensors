@@ -6,13 +6,13 @@ Single responsibility: Parse and provide access to parameter definitions with va
 """
 
 from typing import Dict, Optional
-from models.parameter import ParameterType
 from models.domain.parameter import ParameterConfig
-from models.enums import ParamID
-from utils.logger import get_category_logger, LogLevel, LogCategory
+from models.enums import ParamID, ParameterType
+from utils.logger import get_logger
+from models.enums import LogLevel, LogCategory
 
 # Module-level logger
-log = get_category_logger(LogCategory.CONFIG)
+log = get_logger().for_category(LogCategory.CONFIG)
 
 
 class ParameterManager:
@@ -76,9 +76,8 @@ class ParameterManager:
                 try:
                     param_id = ParamID[param_name]
                 except KeyError:
-                    log(
+                    log.warn(
                         f"Unknown parameter in {section}",
-                        LogLevel.WARN,
                         param_name=param_name
                     )
                     continue
@@ -87,9 +86,8 @@ class ParameterManager:
                 try:
                     param_type = ParameterType[param_data['type']]
                 except KeyError:
-                    log(
+                    log.warn(
                         f"Unknown ParameterType",
-                        LogLevel.WARN,
                         param=param_name,
                         type=param_data.get('type')
                     )
@@ -109,7 +107,7 @@ class ParameterManager:
                 )
                 param_count += 1
 
-        log(
+        log.info(
             "Parameters loaded",
             total=param_count,
             zone_params=len(data.get('zone_parameters', {})),
@@ -167,18 +165,18 @@ class ParameterManager:
         zone_params = self.get_zone_parameters()
         anim_params = self.get_animation_parameters()
 
-        log("=" * 80)
-        log("PARAMETERS CONFIGURATION")
-        log("=" * 80)
+        log.info("=" * 80)
+        log.info("PARAMETERS CONFIGURATION")
+        log.info("=" * 80)
 
-        log(f"\nZone Parameters ({len(zone_params)}):")
+        log.info(f"\nZone Parameters ({len(zone_params)}):")
         for param_id, param in zone_params.items():
-            log(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
+            log.info(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
 
-        log(f"\nAnimation Parameters ({len(anim_params)}):")
+        log.info(f"\nAnimation Parameters ({len(anim_params)}):")
         for param_id, param in anim_params.items():
-            log(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
+            log.info(f"  {param_id.name:20} {param.type.name:15} default={param.default}")
 
-        log("-" * 80)
-        log(f"Total parameters: {len(self.parameters)}")
-        log("=" * 80)
+        log.info("-" * 80)
+        log.info(f"Total parameters: {len(self.parameters)}")
+        log.info("=" * 80)
