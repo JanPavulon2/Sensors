@@ -13,7 +13,7 @@ This separation keeps routes clean and focused on HTTP handling.
 """
 
 from typing import List, Optional
-from models.enums import ZoneID, ColorMode
+from models.enums import ZoneID, ColorMode, LogCategory
 from models.color import Color
 from models.domain.zone import ZoneCombined
 from services.zone_service import ZoneService as DomainZoneService
@@ -28,7 +28,7 @@ from api.middleware.error_handler import ZoneNotFoundError, InvalidColorModeErro
 from utils.logger import get_logger
 from utils.enum_helper import EnumHelper
 
-log = get_logger().for_category("API")
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 class ZoneAPIService:

@@ -27,8 +27,9 @@ from api.schemas.zone import (
 from api.services.zone_service import ZoneAPIService
 from api.middleware.auth import User, get_current_user, require_scope
 from utils.logger import get_logger
+from models.enums import LogCategory
 
-log = get_logger().for_category("API")
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 # Create router for zone endpoints
 # The router is included in the main app with prefix="/api/v1"

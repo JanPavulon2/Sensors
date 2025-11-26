@@ -20,9 +20,9 @@ import uuid
 from typing import Optional
 
 from api.schemas.error import ErrorResponse, ErrorDetail, ValidationErrorResponse
-from utils.logger import get_logger
+from utils.logger import get_logger, LogCategory
 
-log = get_logger().for_category("API")
+log = get_logger().for_category(LogCategory.API)
 
 
 class DomainError(Exception):

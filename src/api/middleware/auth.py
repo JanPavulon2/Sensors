@@ -19,7 +19,8 @@ Token contains: user_id, scopes, expiration, all signed with a secret
 For now we use simple bearer tokens. Future: upgrade to JWT verification.
 """
 
-from fastapi import Header, HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, List
 import uuid
 
@@ -43,17 +44,25 @@ class User:
         return scope in self.scopes or "admin" in self.scopes
 
 
+# Configure HTTPBearer security for Swagger UI
+security = HTTPBearer()
+
 async def get_current_user(
-    authorization: Optional[str] = Header(None)
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
     """
     FastAPI dependency that validates authentication.
 
-    Extract user from Authorization header.
+    Extract user from Authorization header with Bearer token.
     Called automatically by endpoints that use: Depends(get_current_user)
 
+    This uses FastAPI's HTTPBearer which:
+    1. Automatically validates Bearer token format
+    2. Configures Swagger UI's "Authorize" button
+    3. Extracts the token from Authorization header
+
     Args:
-        authorization: "Bearer <token>" from request header
+        credentials: HTTPAuthenticationCredentials from Authorization header
 
     Returns:
         User object if valid, raises exception if not
@@ -62,24 +71,9 @@ async def get_current_user(
         HTTPException: 401 if missing/invalid token, 403 if insufficient permissions
     """
 
-    # Check if Authorization header exists
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Authorization header",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Parse "Bearer <token>" format
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Authorization header format. Expected: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = parts[1]
+    # HTTPBearer already validated "Bearer <token>" format
+    # Extract the token
+    token = credentials.credentials
 
     # TODO: Verify JWT token signature
     # try:
