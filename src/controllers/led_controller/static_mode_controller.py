@@ -201,9 +201,9 @@ class StaticModeController:
         if self.pulse_task:
             self.pulse_task.cancel()
 
-        # Restore current zone to correct brightness (not pulse state)
-        current_zone = self._get_current_zone()
-        self.strip_controller.submit_all_zones_frame({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
+        # Restore ALL static zones to prevent them from being turned off
+        # (pulse only updated selected zone, other zones need explicit re-render)
+        self.render_all_static_zones()
 
     async def _stop_pulse_async(self):
         """Stop pulse animation asynchronously (for shutdown cleanup)"""
@@ -216,9 +216,9 @@ class StaticModeController:
                 pass  # Expected when cancelling
             self.pulse_task = None
 
-        # Restore current zone to correct brightness (not pulse state)
-        current_zone = self._get_current_zone()
-        self.strip_controller.submit_all_zones_frame({current_zone.config.id: (current_zone.state.color, current_zone.brightness)})
+        # Restore ALL static zones to prevent them from being turned off
+        # (pulse only updated selected zone, other zones need explicit re-render)
+        self.render_all_static_zones()
     
     async def _pulse_task(self):
         import math

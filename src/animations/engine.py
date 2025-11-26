@@ -468,8 +468,9 @@ class AnimationEngine:
                 # Process zone-level updates (like Breathe animation)
                 for zone_id, color in self.zone_color_buffers.items():
                     zone_length = self.zone_lengths.get(zone_id, 0)
-                    # Create pixel list with all pixels set to the zone color
-                    pixels_list = [color] * zone_length
+                    # Create pixel list with all pixels set to the zone color (convert RGB tuple to Color)
+                    color_obj = Color.from_rgb(*color)
+                    pixels_list = [color_obj] * zone_length
                     zone_pixels_dict[zone_id] = pixels_list
 
                 # Process pixel-level updates (like Snake animation) - overwrites zone colors if present
@@ -481,32 +482,14 @@ class AnimationEngine:
                         if zone_id in zone_pixels_dict:
                             pixels_list = zone_pixels_dict[zone_id].copy()
                         else:
-                            # Otherwise start with black
-                            pixels_list = [(0, 0, 0)] * zone_length
+                            # Otherwise start with black (as Color objects)
+                            pixels_list = [Color.black()] * zone_length
 
-                        # Overlay pixel updates
+                        # Overlay pixel updates (convert RGB tuples to Color objects)
                         for i in range(zone_length):
                             if i in pix_dict:
-                                pixels_list[i] = pix_dict[i]
+                                pixels_list[i] = Color.from_rgb(*pix_dict[i])
                         zone_pixels_dict[zone_id] = pixels_list
-
-                # === Merge static zones into frame ===
-                # Before submitting, add all STATIC zones to the frame
-                for zone in self.zones:
-                    zone_id = zone.config.id
-                    # Skip if this zone is already in the animated frame or is OFF
-                    if zone_id in zone_pixels_dict or zone.state.mode == ZoneRenderMode.OFF:
-                        continue
-
-                    # If zone is STATIC, add its current color
-                    if zone.state.mode == ZoneRenderMode.STATIC:
-                        rgb = zone.get_rgb()
-                        zone_length = self.zone_lengths.get(zone_id, 0)
-                        # Fill entire zone with static color
-                        zone_pixels_dict[zone_id] = [rgb] * zone_length
-                        log.debug(
-                            f"[Frame {frame_count}] Merged static zone: {zone_id.name} color={rgb}"
-                        )
 
                 if zone_pixels_dict:
                     # Skip frame submission if frozen (frame-by-frame debugging)

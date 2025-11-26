@@ -58,14 +58,14 @@ class ZoneFrame(BaseFrame):
 
 @dataclass
 class PixelFrame(BaseFrame):
-    zone_pixels: Dict[ZoneID, List[Tuple[int, int, int]]] = field(default_factory=dict)
+    # zone_pixels stores Color objects (not RGB tuples) for type consistency
+    # This matches TransitionService and AnimationEngine output
+    zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict)
     clear_other_zones: bool = False
 
     def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
-        return {
-            zone_id: [Color.from_rgb(*rgb) for rgb in rgb_list]
-            for zone_id, rgb_list in self.zone_pixels.items()
-        }
+        # Colors already in correct format (service layer uses Color, not RGB tuples)
+        return self.zone_pixels
 
 @dataclass
 class PreviewFrame(BaseFrame):
