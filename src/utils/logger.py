@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Optional
 from models.enums import LogLevel, LogCategory
 
-
 # === ANSI COLORS ===
 class Colors:
     """ANSI escape codes for colored terminal output"""

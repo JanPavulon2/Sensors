@@ -168,10 +168,9 @@ class LogCategory(Enum):
     SYSTEM = auto()      # Startup, shutdown, errors
     TRANSITION = auto()  # LED state transitions
     EVENT = auto()       # Event bus events and handling
-
     RENDER_ENGINE = auto()
-
     GENERAL = auto()    # Default general category
+    API = auto()
 
 class FramePriority(Enum):
     """
