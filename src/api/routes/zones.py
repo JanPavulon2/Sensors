@@ -43,14 +43,36 @@ router = APIRouter(
 def get_zone_service() -> ZoneAPIService:
     """Dependency to get zone service instance
 
-    FastAPI calls this automatically when a route needs ZoneAPIService.
-    The dependency injection container will be initialized once in main.py
-    and cached.
-
-    TODO: In main.py, we'll set this up to use the actual services.
+    MOCK FOR PHASE 8.1: Returns stub that won't crash.
+    Phase 8.2 will replace with actual Phase 6 services via DI container.
     """
-    # Placeholder - will be set up in main.py
-    pass
+    from api.schemas.zone import ZoneListResponse
+    from api.middleware.error_handler import ZoneNotFoundError
+
+    class MockZoneService:
+        """Stub that returns empty list (real data comes in Phase 8.2)"""
+
+        def get_all_zones(self) -> ZoneListResponse:
+            """Return empty zones (Phase 8.2 will integrate real zones)"""
+            return ZoneListResponse(zones=[], count=0)
+
+        def get_zone(self, zone_id: str):
+            """Stub - not implemented yet"""
+            raise ZoneNotFoundError(zone_id)
+
+        def update_zone_color(self, zone_id: str, color_request):
+            """Stub - not implemented yet"""
+            raise ZoneNotFoundError(zone_id)
+
+        def update_zone_brightness(self, zone_id: str, brightness: int):
+            """Stub - not implemented yet"""
+            raise ZoneNotFoundError(zone_id)
+
+        def reset_zone(self, zone_id: str):
+            """Stub - not implemented yet"""
+            raise ZoneNotFoundError(zone_id)
+
+    return MockZoneService()
 
 
 # ============================================================================

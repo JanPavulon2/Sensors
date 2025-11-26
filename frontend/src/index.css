@@ -10,7 +10,7 @@
 @layer base {
   body {
     @apply bg-bg-app text-text-primary;
-    font-family: 'Inter', 'system-ui', 'sans-serif';
+    font-family: 'Courier New', 'monospace', 'system-ui', 'sans-serif';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -129,7 +129,7 @@
 
   /* Focus ring for better accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-offset-2 ring-accent-primary;
+    @apply outline-none ring-2 ring-offset-0 ring-accent-primary;
   }
 }
 

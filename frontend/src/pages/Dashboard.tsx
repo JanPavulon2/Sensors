@@ -1,3 +1,8 @@
+/**
+ * Dashboard Page
+ * Main dashboard with system metrics, zone overview, and controls
+ */
+
 import {
   Card,
   CardContent,
@@ -6,167 +11,170 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useZonesQuery, useCheckBackendConnection } from '@/hooks';
+import { ZonesList } from '@/components/zones';
 
 export function Dashboard(): JSX.Element {
+  const { data: zonesData, isLoading: zonesLoading, error: zonesError } = useZonesQuery();
+  const { isConnected, isLoading: connectionLoading } = useCheckBackendConnection();
+
+  const zones = zonesData?.zones || [];
+  const zoneCount = zones.length;
+  const totalPixels = zones.reduce((sum, zone) => sum + zone.pixel_count, 0);
+
   return (
-    <div className="space-y-6 max-w-6xl">
-      {/* Welcome Card */}
-      <Card className="bg-gradient-to-r from-bg-elevated to-bg-panel border-border-default">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">🎨</span>
-            Welcome to Diuna
-          </CardTitle>
-          <CardDescription>Real-time LED animation design and control</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-text-secondary mb-4">
-            Connect to your LED control system backend to start designing, controlling, and animating your
-            LED strips. Check out the Components page to see all available UI controls.
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-text-secondary mt-2">
+            {isConnected ? 'System connected and running' : 'Connecting to system...'}
           </p>
-          <Button>Getting Started</Button>
-        </CardContent>
-      </Card>
+        </div>
+        <Button>New Animation</Button>
+      </div>
 
-      {/* System Status Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Metric Cards Grid */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {/* Connection Status */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Connection</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Status</CardTitle>
+            <div
+              className={`h-3 w-3 rounded-sm ${
+                isConnected ? 'bg-accent-primary' : 'bg-warning'
+              }`}
+            />
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-error rounded-full animate-pulse" />
-              <span className="text-sm text-text-secondary">Disconnected</span>
+            <div className="text-2xl font-bold">
+              {connectionLoading ? 'Checking...' : isConnected ? 'Online' : 'Offline'}
             </div>
-            <Button variant="outline" size="sm" className="mt-4 w-full">
-              Connect
-            </Button>
+            <p className="text-xs text-text-tertiary mt-1">
+              {isConnected ? 'API connected' : 'Reconnecting...'}
+            </p>
           </CardContent>
         </Card>
 
+        {/* Total Zones */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Performance</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Zones</CardTitle>
+            <svg
+              className="h-4 w-4 text-accent-primary"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M12 2v20M2 12h20" />
+            </svg>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 text-sm">
-              <p className="text-text-secondary">FPS: <span className="text-text-primary font-medium">--</span></p>
-              <p className="text-text-secondary">Latency: <span className="text-text-primary font-medium">--ms</span></p>
-            </div>
+            <div className="text-2xl font-bold">{zonesLoading ? '--' : zoneCount}</div>
+            <p className="text-xs text-text-tertiary mt-1">
+              {zoneCount > 0 ? `${zoneCount} zone${zoneCount !== 1 ? 's' : ''} active` : 'No zones'}
+            </p>
           </CardContent>
         </Card>
 
+        {/* Total Pixels */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Active Zones</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Pixels</CardTitle>
+            <svg
+              className="h-4 w-4 text-accent-primary"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="5" r="1" />
+              <circle cx="5" cy="19" r="1" />
+            </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-accent-primary">0</div>
-            <p className="text-xs text-text-tertiary mt-1">No zones loaded</p>
+            <div className="text-2xl font-bold">{zonesLoading ? '--' : totalPixels}</div>
+            <p className="text-xs text-text-tertiary mt-1">
+              Total LED count
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Performance */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">FPS</CardTitle>
+            <svg
+              className="h-4 w-4 text-accent-primary"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{isConnected ? '60' : '--'}</div>
+            <p className="text-xs text-text-tertiary mt-1">
+              {isConnected ? 'Rendering' : 'Not available'}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Start Guide */}
-      <Card>
+      {/* Error State */}
+      {zonesError && (
+        <Card className="border-error bg-error/10">
+          <CardContent className="pt-6">
+            <p className="text-sm text-error">
+              Error loading zones: {zonesError instanceof Error ? zonesError.message : 'Unknown error'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Zones Section */}
+      {isConnected && zoneCount > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">LED Zones</h2>
+            <p className="text-text-secondary text-sm mt-1">
+              {zoneCount} zone{zoneCount !== 1 ? 's' : ''} configured
+            </p>
+          </div>
+          <ZonesList />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {isConnected && zoneCount === 0 && !zonesLoading && (
+        <Card className="bg-bg-elevated">
+          <CardContent className="pt-6 text-center">
+            <p className="text-text-secondary mb-4">No zones configured</p>
+            <Button variant="outline">Check Settings</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Documentation Card */}
+      <Card className="bg-bg-elevated border border-accent-primary/20">
         <CardHeader>
-          <CardTitle>Quick Start</CardTitle>
-          <CardDescription>Get up and running in 3 steps</CardDescription>
+          <CardTitle className="text-sm">Quick Start</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="step1" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="step1">1. Connect</TabsTrigger>
-              <TabsTrigger value="step2">2. Configure</TabsTrigger>
-              <TabsTrigger value="step3">3. Control</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="step1" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Connect to Backend</h4>
-                <p className="text-sm text-text-secondary">
-                  Go to Settings and configure your backend API and WebSocket URLs. Make sure your Diuna backend
-                  is running and accessible.
-                </p>
-                <Button size="sm" variant="outline">
-                  Open Settings
-                </Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="step2" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Configure Your Zones</h4>
-                <p className="text-sm text-text-secondary">
-                  Once connected, your LED zones will appear in the sidebar. Configure colors, brightness, and
-                  animations for each zone.
-                </p>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="step3" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Control & Animate</h4>
-                <p className="text-sm text-text-secondary">
-                  Use the zone controls to set colors, adjust brightness, and run animations. All changes are
-                  sent in real-time to your LED hardware.
-                </p>
-              </div>
-            </TabsContent>
-          </Tabs>
+        <CardContent className="text-sm text-text-secondary space-y-2">
+          <p>1. Configure your backend API URL in Settings</p>
+          <p>2. Zones will load automatically from the backend</p>
+          <p>3. Use zone controls to set colors and brightness</p>
+          <p>4. Create animations and preview in real-time</p>
         </CardContent>
       </Card>
-
-      {/* Feature Highlights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span>🎬</span> Real-time Preview
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-text-secondary">
-            See LED changes instantly with 60 FPS canvas rendering. Preview animations before deploying to
-            hardware.
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span>🎨</span> Color Control
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-text-secondary">
-            Set zone colors using RGB, HSV, or preset palettes. Save favorites and create custom color schemes.
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span>⚡</span> Animations
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-text-secondary">
-            Choose from built-in animations like breathing, wave, rainbow cycle, and more. Customize speed and
-            parameters.
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span>🔌</span> WebSocket Sync
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-text-secondary">
-            Real-time bidirectional communication with your backend. Control hardware instantly without latency.
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

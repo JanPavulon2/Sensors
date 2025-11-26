@@ -20,9 +20,11 @@ import uuid
 from typing import Optional
 
 from api.schemas.error import ErrorResponse, ErrorDetail, ValidationErrorResponse
-from utils.logger import get_logger, LogCategory
+from utils.logger import get_logger
+from models.enums import LogCategory
+import json
 
-log = get_logger().for_category(LogCategory.API)
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 class DomainError(Exception):
@@ -124,7 +126,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=response.dict()
+            content=json.loads(response.model_dump_json())
         )
 
     # Handle domain-specific errors (our custom exceptions)
@@ -150,7 +152,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=exc.status_code,
-            content=response.dict()
+            content=json.loads(response.model_dump_json())
         )
 
     # Handle unexpected errors (server errors)
@@ -180,5 +182,5 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=response.dict()
+            content=json.loads(response.model_dump_json())
         )

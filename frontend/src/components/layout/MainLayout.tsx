@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth, useCheckBackendConnection } from '@/hooks';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -11,10 +12,20 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
 
+  const { isAuthenticated, useDefaultTestToken } = useAuth();
+  const { isConnected } = useCheckBackendConnection();
+
+  // Initialize with test token on first load if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      useDefaultTestToken();
+    }
+  }, [isAuthenticated, useDefaultTestToken]);
+
   const navItems = [
-    { label: 'Dashboard', path: '/', icon: '📊' },
-    { label: 'Components', path: '/components', icon: '🎨' },
-    { label: 'Settings', path: '/settings', icon: '⚙️' },
+    { label: 'Dashboard', path: '/' },
+    { label: 'Components', path: '/components' },
+    { label: 'Settings', path: '/settings' },
   ];
 
   const isActive = (path: string): boolean => location.pathname === path;
@@ -51,14 +62,14 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-2 rounded-md transition-colors ${
+              className={`flex items-center justify-center px-4 py-2 rounded-md transition-colors text-sm font-medium ${
                 isActive(item.path)
-                  ? 'bg-accent-primary text-bg-app font-medium'
+                  ? 'bg-accent-primary text-bg-app'
                   : 'text-text-secondary hover:bg-bg-elevated'
               }`}
             >
-              <span className="text-lg">{item.icon}</span>
               {sidebarOpen && <span>{item.label}</span>}
+              {!sidebarOpen && <span className="w-4">{item.label.charAt(0)}</span>}
             </Link>
           ))}
         </nav>
@@ -68,10 +79,16 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border-default bg-bg-panel">
             <div className="text-xs space-y-1">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-success rounded-full" />
-                <span className="text-text-tertiary">Connected</span>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? 'bg-success' : 'bg-warning'
+                  }`}
+                />
+                <span className="text-text-tertiary">
+                  {isConnected ? 'Connected' : 'Connecting...'}
+                </span>
               </div>
-              <div className="text-text-tertiary">60 FPS</div>
+              <div className="text-text-tertiary">API Ready</div>
             </div>
           </div>
         )}
