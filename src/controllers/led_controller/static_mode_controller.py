@@ -44,7 +44,8 @@ class StaticModeController:
         self.preview_panel_controller = preview_panel
 
         self.zone_ids = [z.config.id for z in self.zone_service.get_all()]
-        self.current_zone_index = self.app_state_service.get_state().current_zone_index
+        # NOTE: Don't cache current_zone_index - read fresh from state each time
+        # This allows pulse and other effects to follow encoder selection
         self.current_param = self.app_state_service.get_state().current_param
         self.pulse_task = None
         self.pulse_active = False
@@ -120,7 +121,9 @@ class StaticModeController:
     # --- Parameter Adjustment ---
 
     def adjust_param(self, delta: int):
-        zone_id = self.zone_ids[self.current_zone_index]
+        # Read current zone index fresh from state (not cached)
+        current_index = self.app_state_service.get_state().current_zone_index
+        zone_id = self.zone_ids[current_index]
         zone = self.zone_service.get_zone(zone_id)
 
         if self.current_param == ParamID.ZONE_BRIGHTNESS:
@@ -222,11 +225,13 @@ class StaticModeController:
         cycle = 1.0
         steps = 40
         while self.pulse_active:
-            current_zone = self._get_current_zone()
-            base = current_zone.brightness
             for step in range(steps):
                 if not self.pulse_active:
                     break
+
+                # Get current zone EACH step (allows pulse to follow zone cycling)
+                current_zone = self._get_current_zone()
+                base = current_zone.brightness
 
                 # Calculate brightness factor (0.5 to 1.0)
                 scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
@@ -241,5 +246,8 @@ class StaticModeController:
     # --- Helper methods ---
 
     def _get_current_zone(self) -> ZoneCombined:
-        current_zone_id = self.zone_ids[self.current_zone_index]
+        # Read current zone index fresh from state (not cached)
+        # This allows pulse and other effects to follow encoder selection
+        current_index = self.app_state_service.get_state().current_zone_index
+        current_zone_id = self.zone_ids[current_index]
         return self.zone_service.get_zone(current_zone_id)

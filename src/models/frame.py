@@ -32,14 +32,17 @@ class BaseFrame:
 class FullStripFrame(BaseFrame):
     """
     Single color for entire strip (all zones same color).
-
-    Use Case: ColorCycleAnimation - entire strip cycles through hues
-    Yield Format: (r, g, b)
     """
-
-    color: Tuple[int, int, int] = field(default=(0, 0, 0))  # (r, g, b), default black
-
-
+    color: Tuple[int, int, int] = field(default=(0, 0, 0)) 
+   
+    def as_zone_update(self) -> Dict[ZoneID, Color]:
+        """
+        Convert FullStripFrame → per-zone pixel lists.
+        All zones receive the same color, repeated for their length.
+        """
+        return {zone_id: Color.from_rgb(*self.color)
+            for zone_id in ZoneID}
+    
 @dataclass
 class ZoneFrame(BaseFrame):
     """
@@ -48,23 +51,21 @@ class ZoneFrame(BaseFrame):
     Use Case: BreatheAnimation - zones breathe with individual colors
     Yield Format: (zone_id, r, g, b) OR dict of zone_id -> (r, g, b)
     """
-
     zone_colors: Dict[ZoneID, Color] = field(default_factory=dict)  # zone_id -> (r, g, b)
-
+    
+    def as_zone_update(self) -> Dict[ZoneID, Color]:
+        return self.zone_colors
 
 @dataclass
 class PixelFrame(BaseFrame):
-    """
-    Per-pixel colors (pixel-level control).
-
-    Use Case: SnakeAnimation - snake moves pixel by pixel
-    Yield Format: (zone_id, pixel_index, r, g, b) OR dict of zone_id -> [pixels]
-    """
-
-    # zone_id -> list of Color (logical pixel order inside zone)
-    zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict) 
+    zone_pixels: Dict[ZoneID, List[Tuple[int, int, int]]] = field(default_factory=dict)
     clear_other_zones: bool = False
 
+    def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
+        return {
+            zone_id: [Color.from_rgb(*rgb) for rgb in rgb_list]
+            for zone_id, rgb_list in self.zone_pixels.items()
+        }
 
 @dataclass
 class PreviewFrame(BaseFrame):

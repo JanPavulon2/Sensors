@@ -11,7 +11,12 @@ Responsible for:
 
 import contextlib
 import sys
+from typing import List
 
+from managers.hardware_manager import HardwareManager
+from models.domain.zone import ZoneCombined
+from services.service_container import ServiceContainer
+from models.enums import FramePriority
 
 # ---------------------------------------------------------------------------
 # UTF-8 ENCODING FIX (important for Raspberry Pi)
@@ -29,7 +34,7 @@ import atexit
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
 
-from models.enums import LogCategory, LogLevel
+from models.enums import LogCategory, LogLevel, FramePriority
 from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
 from hardware.gpio.gpio_manager import GPIOManager
 from controllers.led_controller.led_controller import LEDController
@@ -38,6 +43,9 @@ from managers import ConfigManager
 from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
+from engine.frame_manager import FrameManager
+from zone_layer.zone_strip import ZoneStrip
+from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
@@ -79,12 +87,9 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
     log.info("Shutdown complete. Goodbye!")
 
 
-def _create_zone_strips(zone_service, config_manager):
+def _create_zone_strips(all_zones: List[ZoneCombined], hardware_manager: HardwareManager):
     """Create and configure LED strip drivers for all GPIO pins."""
-    from zone_layer.zone_strip import ZoneStrip
-    from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
-
-    all_zones = zone_service.get_all()
+    
     zones_by_gpio = {}
     for zone in all_zones:
         gpio = zone.config.gpio
@@ -92,7 +97,7 @@ def _create_zone_strips(zone_service, config_manager):
             zones_by_gpio[gpio] = []
         zones_by_gpio[gpio].append(zone.config)
 
-    hardware_mappings = config_manager.hardware_manager.get_gpio_to_zones_mapping()
+    hardware_mappings = hardware_manager.get_gpio_to_zones_mapping()
     zone_strips = {}
 
     for gpio_pin in sorted(zones_by_gpio.keys()):
@@ -130,7 +135,6 @@ def _create_zone_strips(zone_service, config_manager):
 
 async def cleanup_application(
     led_controller,
-    zone_strip_transition_service,
     gpio_manager,
     keyboard_task,
     polling_task,
@@ -163,7 +167,7 @@ async def cleanup_application(
 
     # Fade out
     # log.info("Performing shutdown transition...")
-    await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
+    # await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
     # Clear LEDs (ALL strips, not just GPIO 18)
     log.info("Clearing LEDs on all GPIO strips...")
@@ -229,9 +233,7 @@ async def main():
     )
 
     log.info("Initializing LED strips...")
-    from engine.frame_manager import FrameManager
-    zone_strips = _create_zone_strips(zone_service, config_manager)
-    zone_strip = zone_strips.get(18, list(zone_strips.values())[0])
+    zone_strips = _create_zone_strips(zone_service.get_all(), config_manager.hardware_manager)
 
     # PREVIEW PANEL: TEMPORARILY DISABLED
     # Treating last 8 pixels (PREVIEW zone) as normal zone for now
@@ -249,21 +251,33 @@ async def main():
         log.info(f"Registered ZoneStrip (GPIO {gpio_pin}) with FrameManager")
 
     # ========================================================================
-    # SERVICES: TRANSITIONS
+    # SERVICES: TRANSITIONS (One per GPIO strip)
     # ========================================================================
 
-    log.info("Creating transition services...")
-    zone_strip_transition_service = TransitionService(zone_strip, frame_manager)
+    log.info("Creating transition services for each GPIO...")
+    zone_strip_transition_services = {}
+    for gpio_pin, strip in zone_strips.items():
+        transition_service = TransitionService(strip, frame_manager)
+        zone_strip_transition_services[gpio_pin] = transition_service
+        log.info(f"Created TransitionService for GPIO {gpio_pin}")
+
     # PREVIEW PANEL DISABLED - will enable after testing main LED strips
-    # preview_panel_transition_service = TransitionService(control_panel.preview_panel, frame_manager)
     preview_panel_transition_service = None
 
     # ========================================================================
-    # LAYER 2: CONTROLLERS
+    # LAYER 2: CONTROLLERS (One ZoneStripController per GPIO strip)
     # ========================================================================
 
-    log.info("Initializing controllers...")
-    zone_strip_controller = ZoneStripController(zone_strip, zone_strip_transition_service, frame_manager)
+    log.info("Initializing zone strip controllers for each GPIO...")
+    zone_strip_controllers = {}
+    for gpio_pin, strip in zone_strips.items():
+        transition_service = zone_strip_transition_services[gpio_pin]
+        controller = ZoneStripController(strip, transition_service, frame_manager)
+        zone_strip_controllers[gpio_pin] = controller
+        log.info(f"Created ZoneStripController for GPIO {gpio_pin}")
+
+    # Use GPIO 18 as primary for backwards compatibility
+    zone_strip_controller = zone_strip_controllers.get(18, list(zone_strip_controllers.values())[0])
     # PREVIEW PANEL DISABLED
     # preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
     preview_panel_controller = None
@@ -272,18 +286,24 @@ async def main():
     # ========================================================================
     # LAYER 3: APPLICATION
     # ========================================================================
-
+    services = ServiceContainer(
+        zone_service=zone_service,
+        animation_service=animation_service,
+        app_state_service=app_state_service,
+        frame_manager=frame_manager,
+        event_bus=event_bus,
+        color_manager=config_manager.color_manager,
+        config_manager=config_manager
+    )
+    
     log.info("Initializing LED controller...")
     led_controller = LEDController(
         config_manager=config_manager,
         event_bus=event_bus,
-        gpio_manager=gpio_manager,
-        zone_service=zone_service,
-        animation_service=animation_service,
-        app_state_service=app_state_service,
+        gpio_manager=gpio_manager, 
+        service_container=services,
         preview_panel_controller=preview_panel_controller,
-        zone_strip_controller=zone_strip_controller,
-        frame_manager=frame_manager
+        zone_strip_controller=zone_strip_controller
     )
 
     # ========================================================================
@@ -311,9 +331,18 @@ async def main():
     # STARTUP TRANSITION
     # ========================================================================
     
-    log.info("Performing startup transition...")
+    log.info("Performing startup - rendering initial state...")
     zones = zone_service.get_all()
-    await zone_strip_controller.startup_fade_in(zones, zone_strip_transition_service.STARTUP)
+
+    # Render all zones with their loaded state (makes LEDs visible on startup)
+    # This submits a MANUAL priority frame with all zone colors to FrameManager
+    # Format: {ZoneID: (Color, brightness_0_to_100)}
+    zone_colors = {
+        zone.config.id: (zone.state.color, int(zone.brightness * 100))
+        for zone in zones
+    }
+    zone_strip_controller.submit_all_zones_frame(zone_colors, priority=FramePriority.MANUAL)
+    await asyncio.sleep(0.1)  # Give async task time to submit frame
 
     # ========================================================================
     # RUN LOOPS
@@ -347,7 +376,6 @@ async def main():
     finally:
         await cleanup_application(
             led_controller,
-            zone_strip_transition_service,
             gpio_manager,
             keyboard_task,
             polling_task,

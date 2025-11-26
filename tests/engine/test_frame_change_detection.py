@@ -16,6 +16,8 @@ This is correct because:
 4. Semantically perfect: if it's the same frame object, it's the same visual output
 """
 
+import pytest
+
 from models.enums import FramePriority, FrameSource, ZoneID
 from models.color import Color
 from models.frame import ZoneFrame, PixelFrame
