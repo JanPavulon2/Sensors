@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 from models.enums import ZoneID
-from models import Color
+from models.color import Color
 from utils.logger import get_logger, LogCategory
 from services import ServiceContainer
 

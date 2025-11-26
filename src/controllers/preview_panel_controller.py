@@ -9,7 +9,7 @@ import asyncio
 from typing import Optional, Tuple, List, TYPE_CHECKING, Any
 from components.preview_panel import PreviewPanel
 from utils.logger import get_logger, LogLevel, LogCategory
-from models import Color
+from models.color import Color
 from models.enums import AnimationID
 from services.transition_service import TransitionService
 

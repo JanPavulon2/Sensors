@@ -49,23 +49,21 @@ class LEDController:
         config_manager: "ConfigManager",
         event_bus: "EventBus",
         gpio_manager: "GPIOManager",
-        zone_service: "ZoneService",
-        animation_service: "AnimationService",
-        app_state_service: "ApplicationStateService",
+        service_container: "ServiceContainer",
         preview_panel_controller: "PreviewPanelController",
-        zone_strip_controller: "ZoneStripController",
-        frame_manager: "FrameManager"
+        zone_strip_controller: "ZoneStripController"
     ):
         self.config_manager = config_manager
         self.event_bus = event_bus
         self.gpio_manager = gpio_manager
-        self.zone_service = zone_service
-        self.animation_service = animation_service
-        self.app_state_service = app_state_service
+        self.services = service_container
+        self.zone_service = service_container.zone_service
+        self.animation_service = service_container.animation_service
+        self.app_state_service = service_container.app_state_service
         self.preview_panel_controller = preview_panel_controller
         self.zone_strip_controller = zone_strip_controller
 
-        self.frame_manager = frame_manager
+        self.frame_manager = service_container.frame_manager
         self.frame_manager.add_main_strip(self.zone_strip_controller.zone_strip)
 
         # if self.preview_panel_controller.preview_panel._pixel_strip:
@@ -79,37 +77,28 @@ class LEDController:
         )
         
         # Load persistent state
-        state = app_state_service.get_state()
+        state = self.app_state_service.get_state()
         # Note: main_mode has been removed - zones now have individual modes
         self.edit_mode = state.edit_mode
 
-        # Create ServiceContainer for dependency injection
-        services = ServiceContainer(
-            zone_service=zone_service,
-            animation_service=animation_service,
-            app_state_service=app_state_service,
-            frame_manager=frame_manager,
-            event_bus=event_bus,
-            color_manager=config_manager.color_manager
-        )
-
         # Initialize feature controllers with dependency injection
         self.static_mode_controller = StaticModeController(
-            services=services,
+            services=self.services,
             strip_controller=zone_strip_controller,
             preview_panel=preview_panel_controller
         )
+        
         self.animation_mode_controller = AnimationModeController(
-            services=services,
+            services=self.services,
             animation_engine=self.animation_engine,
             preview_panel=preview_panel_controller
         )
         self.lamp_white_mode = LampWhiteModeController(
-            services=services,
+            services=self.services,
             strip_controller=zone_strip_controller
         )
         self.power_toggle = PowerToggleController(
-            services=services,
+            services=self.services,
             strip_controller=zone_strip_controller,
             preview_panel=preview_panel_controller,
             animation_engine=self.animation_engine,
@@ -278,21 +267,18 @@ class LEDController:
         # if not self.edit_mode:
         #     log.info("Selector rotation ignored when not in edit mode")
         #     return
-
-        
-        
         current_zone = self.zone_service.get_selected_zone()
         if not current_zone:
             log.warn("No zone selected for selector rotation")
             return
 
         # Context-aware routing based on selected zone's mode
-        # if current_zone.state.mode == ZoneRenderMode.ANIMATION:
-        #     # In ANIMATION mode: rotate to cycle animations
-        #     self.animation_mode_controller.select_animation(delta)
-        # else:
+        if current_zone.state.mode == ZoneRenderMode.ANIMATION:
+            # In ANIMATION mode: rotate to cycle animations
+            self.animation_mode_controller.select_animation(delta)
+        else:
             # In STATIC or OFF mode: rotate to select zones
-        self._cycle_zone_selection(delta)
+            self._cycle_zone_selection(delta)
             
     def _handle_selector_click(self):
         """
@@ -487,6 +473,11 @@ class LEDController:
         zone_id = zone.config.id
 
         self.static_mode_controller._stop_pulse()
+
+        # Render all static zones BEFORE starting animation
+        # This ensures non-animated zones stay on while animation runs
+        # Priority: STATIC frames (MANUAL=10) won't override animation frames (ANIMATION=30)
+        self.static_mode_controller.render_all_static_zones()
 
         current_anim = self.animation_service.get_current()
 

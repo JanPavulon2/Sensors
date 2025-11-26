@@ -128,6 +128,10 @@ class WS281xStrip(IPhysicalStrip):
             return self._buffer[index]
         return Color.black()
 
+    def get_frame(self) -> List[Color]:
+        """Read pixel from buffer (fast, no hardware query)."""
+        return self._buffer
+
     def apply_frame(self, pixels: List[Color]) -> None:
         """
         Atomic push of full frame to hardware (single DMA transfer).

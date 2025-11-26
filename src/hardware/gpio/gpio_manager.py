@@ -17,7 +17,6 @@ from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.HARDWARE)
 
-
 class GPIOManager:
     """
     Infrastructure component managing GPIO pin allocation and lifecycle.
@@ -105,7 +104,7 @@ class GPIOManager:
         self._registry[pin] = component
 
         log.info(
-             f"GPIO pin registered (OUTPUT)",
+            f"GPIO pin registered (OUTPUT)",
             pin=pin,
             component=component,
             initial=initial.name
@@ -127,12 +126,11 @@ class GPIOManager:
         """
         self._check_available(pin, component)
 
-        # No GPIO.setup() - WS281x library handles DMA setup
         self._registry[pin] = component
 
         log.info(
-             f"GPIO pin registered (WS281x DMA)",
-            pin=pin,
+            f"GPIO pin registered (OUTPUT)", 
+            pin=pin, 
             component=component
         )
 

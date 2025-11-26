@@ -19,13 +19,13 @@ Does NOT:
 from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
-from models.color import Color
+
 from models.enums import ZoneID
 from models.domain.zone import ZoneConfig
+from models.color import Color
 from hardware.led.strip_interface import IPhysicalStrip
 from zone_layer.zone_pixel_mapper import ZonePixelMapper
 from utils.logger import get_logger, LogCategory
-
 log = get_logger().for_category(LogCategory.ZONE)
 
 
@@ -163,7 +163,8 @@ class ZoneStrip:
         Returns:
             List of (r, g, b) tuples (length = pixel_count)
         """
-        return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
+        return self.hardware.get_frame()
+        # return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
     def get_zone_buffer(self, zone: ZoneID) -> List[Color]:
         """Get zone pixels as Color list (logical order)."""
@@ -203,7 +204,9 @@ class ZoneStrip:
                 Each list is logical pixels for that zone (respects reversed).
         """
         # Build full frame (preserving pixels from zones not in dict)
-        full_frame: List[Color] = [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
+        full_frame: List[Color] = self.hardware.get_frame()
+        
+        # [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
         for zone, pixels in zone_pixels_dict.items():
             indices = self.mapper.get_indices(zone)
@@ -239,7 +242,7 @@ class ZoneStrip:
             List of Color objects (length = pixel_count)
         """
         # Start with existing pixels (preserves zones not in zone_colors)
-        frame = [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
+        frame = self.get_full_frame() # [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
         # Update only the zones provided in zone_colors
         for zone, color in zone_colors.items():
@@ -251,7 +254,9 @@ class ZoneStrip:
 
     def get_full_frame(self) -> List[Color]:
         """Get full strip as Color list (for new API)."""
-        return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
+        return self.hardware.get_frame()
+        
+        # return [self.hardware.get_pixel(i) for i in range(self.pixel_count)]
 
     # ==================== Control ====================
 

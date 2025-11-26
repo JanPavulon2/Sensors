@@ -330,6 +330,22 @@ class Color:
     def black() -> 'Color':
         return Color.from_rgb(0, 0, 0)
     
+    @staticmethod
+    def white() -> 'Color':
+        return Color.from_rgb(255, 255, 255)
+    
+    @staticmethod
+    def red() -> 'Color':
+        return Color.from_rgb(255, 0, 0)
+    
+    @staticmethod
+    def green() -> 'Color':
+        return Color.from_rgb(0, 255, 0)
+    
+    @staticmethod
+    def blue() -> 'Color':
+        return Color.from_rgb(0, 0, 255)
+    
     # === STRING REPRESENTATION ===
 
     def __str__(self) -> str:

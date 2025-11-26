@@ -1,6 +1,7 @@
 """Service Container - Dependency injection container for all core services"""
 
 from dataclasses import dataclass
+from managers.config_manager import ConfigManager
 from services.zone_service import ZoneService
 from services.animation_service import AnimationService
 from services.application_state_service import ApplicationStateService
@@ -58,3 +59,4 @@ class ServiceContainer:
     frame_manager: FrameManager
     event_bus: EventBus
     color_manager: ColorManager
+    config_manager: ConfigManager
