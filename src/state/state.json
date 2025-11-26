@@ -119,10 +119,10 @@
     "preview": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cyan"
+        "preset_name": "blue"
       },
-      "brightness": 0,
-      "mode": "ANIMATION"
+      "brightness": 100,
+      "mode": "STATIC"
     },
     "pixel2": {
       "color": {
@@ -130,19 +130,20 @@
         "preset_name": "orange"
       },
       "brightness": 100,
-      "mode": "STATIC"
+      "mode": "ANIMATION"
     }
   },
   "current_animation": {
-    "id": "SNAKE",
+    "id": "COLOR_SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5
+      "ANIM_LENGTH": 5,
+      "ANIM_HUE_OFFSET": 30
     }
   },
   "application": {
-    "edit_mode_on": false,
+    "edit_mode_on": true,
     "lamp_white_mode_on": true,
     "lamp_white_saved_state": {
       "color": {
@@ -151,8 +152,8 @@
       },
       "brightness": 0
     },
-    "active_parameter": "ANIM_INTENSITY",
-    "selected_zone_index": 2,
+    "active_parameter": "ANIM_SPEED",
+    "selected_zone_index": 7,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

@@ -96,7 +96,7 @@ class ZoneStripController:
         """
         Async implementation: Apply brightness to Color objects and submit to FrameManager.
 
-        Applies brightness scaling while preserving color mode (HUE/PRESET).
+        Applies brightness scalng while preserving color mode (HUE/PRESET).
         Wraps in ZoneFrame and submits to FrameManager priority queue for 60 FPS render loop.
 
         Args:
@@ -115,7 +115,7 @@ class ZoneStripController:
             ttl=1.5
         )
 
-        await self.frame_manager.submit_zone_frame(frame)
+        asyncio.create_task(self.frame_manager.submit_zone_frame(frame))
 
     def render_zone_combined(self, zone: ZoneCombined) -> None:
         """

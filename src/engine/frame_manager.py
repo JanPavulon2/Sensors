@@ -105,15 +105,11 @@ class FrameManager:
             for p in FramePriority
             if isinstance(p.value, int)
         }
-        self.preview_queues: Dict[int, Deque[PreviewFrame]] = {
-            p.value: deque(maxlen=2)
-            for p in FramePriority
-            if isinstance(p.value, int)
-        }
-
+        
         # Registered render targets
         self.main_strips: List[ZoneStrip] = []  # ZoneStrip instances
-        self.preview_strips: List = []  # PreviewPanel instances
+       
+        self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
         # Runtime state
         self.running = False
@@ -127,15 +123,11 @@ class FrameManager:
         self.dropped_frames = 0
         self.frames_rendered = 0
         self.dma_skipped = 0  # Count of DMA transfers skipped due to frame match
-
-        # Frame change detection (Phase 2 optimization)
-        # Store last rendered frame to detect when content hasn't changed
+        
         self.last_rendered_main_frame: Optional[MainStripFrame] = None
 
-        # Per-zone render state (Phase 2 foundation)
-        # Will be initialized when strips are registered
-        self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
-
+        self.last_rendered_frame_hash = None
+        
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
 
@@ -149,25 +141,21 @@ class FrameManager:
 
     def add_main_strip(self, strip) -> None:
         """Register a main LED strip (ZoneStrip)."""
-        if strip not in self.main_strips:
-            self.main_strips.append(strip)
-
-            # Initialize zone render states for all zones in this strip
-            for zone_id in strip.mapper.all_zone_ids():
-                if zone_id not in self.zone_render_states:
-                    zone_length = strip.mapper.get_zone_length(zone_id)
-                    self.zone_render_states[zone_id] = ZoneRenderState(
-                        zone_id=zone_id,
-                        pixels=[Color.black()] * zone_length,
-                    )
-
-            log.debug(f"Added main strip: {strip} (initialized {len(strip.mapper.all_zone_ids())} zones)")
-
-    def add_preview_strip(self, strip) -> None:
-        """Register a preview LED strip (PreviewPanel)."""
-        if strip not in self.preview_strips:
-            self.preview_strips.append(strip)
-            log.debug(f"Added preview strip: {strip}")
+        if strip in self.main_strips:
+            return
+        
+        self.main_strips.append(strip)
+        log.info(f"FrameManager: added strip {strip}")
+        
+        # Initialize zone render states for all zones in this strip
+        for zone_id in strip.mapper.all_zone_ids():
+            if zone_id not in self.zone_render_states:
+                zone_length = strip.mapper.get_zone_length(zone_id)
+                self.zone_render_states[zone_id] = ZoneRenderState(
+                    zone_id=zone_id,
+                    pixels=[Color.black()] * zone_length,
+                )
+                log.debug(f"Added main strip: {strip} (initialized {len(strip.mapper.all_zone_ids())} zones)")
 
     def remove_main_strip(self, strip) -> None:
         """Unregister a main LED strip."""
@@ -175,26 +163,15 @@ class FrameManager:
             self.main_strips.remove(strip)
             log.debug(f"Removed main strip: {strip}")
 
-    def remove_preview_strip(self, strip) -> None:
-        """Unregister a preview LED strip."""
-        if strip in self.preview_strips:
-            self.preview_strips.remove(strip)
-            log.debug(f"Removed preview strip: {strip}")
-
     # === Strip Registration (for controllers) ===
 
     def add_strip(self, strip: ZoneStrip) -> None:
-        """
-        Register a strip (used by LEDController).
-
-        Note: New code should use add_main_strip() or add_preview_strip() explicitly.
-        """
+        """Register a strip (used by LEDController)."""
         self.add_main_strip(strip)
 
     def remove_strip(self, strip) -> None:
         """Unregister a strip."""
         self.remove_main_strip(strip)
-        self.remove_preview_strip(strip)
 
     # === Frame Submission API (Type-Specific) ===
 
@@ -213,29 +190,13 @@ class FrameManager:
         async with self._lock:
             self.main_queues[frame.priority.value].append(frame)
 
-    async def submit_preview_frame(self, frame: PreviewFrame) -> None:
-        """Submit a preview panel frame."""
-        async with self._lock:
-            self.preview_queues[frame.priority.value].append(frame)
-
     # === Control API ===
 
-    def pause(self) -> None:
-        """Pause rendering (for debugging)."""
-        self.paused = True
-        log.info("FrameManager paused")
+    def pause(self) -> None: self.paused = True
 
-    def resume(self) -> None:
-        """Resume rendering."""
-        self.paused = False
-        log.info("FrameManager resumed")
+    def resume(self) -> None: self.paused = False
 
-    def step_frame(self) -> None:
-        """Render single frame when paused (frame-by-frame mode)."""
-        if not self.paused:
-            log.warn("step_frame() ignored — must be paused first")
-            return
-        self.step_requested = True
+    def step_frame(self) -> None: self.step_requested = True
 
     def set_fps(self, fps: int) -> None:
         """Change FPS at runtime."""
@@ -249,6 +210,7 @@ class FrameManager:
         if self.running:
             log.warn("FrameManager already running")
             return
+        
         self.running = True
         self.render_task = asyncio.create_task(self._render_loop())
         log.info(f"FrameManager render loop started @ {self.fps} FPS")
@@ -264,7 +226,7 @@ class FrameManager:
                 await self.render_task
             except asyncio.CancelledError:
                 pass
-            self.render_task = None
+            
         log.info(
             "FrameManager stopped",
             frames_rendered=self.frames_rendered,
@@ -299,6 +261,7 @@ class FrameManager:
     async def _render_loop(self) -> None:
         """Main render loop @ target FPS."""
         frame_delay = 1.0 / self.fps
+        
         log.info(f"Render loop @ {self.fps} FPS (delay={frame_delay*1000:.2f}ms)")
 
         while self.running:
@@ -316,24 +279,20 @@ class FrameManager:
 
             # Select and render frames
             try:
-                main_frame = await self._select_main_frame_by_priority()
-                preview_frame = await self._select_preview_frame_by_priority()
-
+                frame = await self._select_main_frame_by_priority()
+                
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
-                if main_frame or preview_frame:
-                    # Check if this is the same frame object (reference equality)
-                    # Since frames are either newly created OR selected from queue,
-                    # same reference = same frame content
-                    if main_frame is not self.last_rendered_main_frame:
+                if frame:
+                    if frame is not self.last_rendered_main_frame:
                         # Frame changed (different object) → do full render with hardware DMA
-                        self._render_atomic(main_frame, preview_frame)
-                        self.last_rendered_main_frame = main_frame
+                        self._render_atomic(frame)
+                        self.last_rendered_main_frame = frame
                         self.frames_rendered += 1
                         self.frame_times.append(time.perf_counter())
                         log.debug(
                             f"Frame rendered (DMA)",
-                            frame_type=type(main_frame).__name__ if main_frame else None,
+                            frame_type=type(frame).__name__ if frame else None,
                         )
                     else:
                         # Frame unchanged (same object) → skip DMA, LEDs already have correct pixels
@@ -373,32 +332,9 @@ class FrameManager:
 
         return None
 
-    async def _select_preview_frame_by_priority(self) -> Optional[PreviewFrame]:
-        """
-        Select highest-priority non-expired frame from preview queues.
-
-        Priority order: DEBUG > TRANSITION > ANIMATION > PULSE > MANUAL > IDLE
-
-        Returns:
-            PreviewFrame with highest priority, or None if all expired/empty
-        """
-        async with self._lock:
-            # Iterate from highest to lowest priority
-            for priority_value in sorted(self.preview_queues.keys(), reverse=True):
-                queue = self.preview_queues[priority_value]
-                while queue:
-                    frame = queue.popleft()
-                    if not frame.is_expired():
-                        return frame
-                    # Expired frame discarded, try next
-
-        return None
-
     # === Rendering ===
 
-    def _render_atomic(
-        self, main_frame: Optional[MainStripFrame], preview_frame: Optional[PreviewFrame]
-    ) -> None:
+    def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
         """
         Render frames to all registered strips atomically.
 
@@ -408,44 +344,132 @@ class FrameManager:
         if main_frame:
             self._render_main_frame(main_frame)
 
-        # Render preview panel
-        if preview_frame:
-            self._render_preview_frame(preview_frame)
-
     def _render_main_frame(self, frame: MainStripFrame) -> None:
         """
         Unified render pipeline:
         1. Frame → logical zone update (as_zone_update)
-        2. Normalize to actual pixel counts
-        3. Update ZoneRenderState
-        4. Apply to hardware via ZoneStrip
+        2. Filter to zones on this strip
+        3. Normalize to actual pixel counts
+        4. Update ZoneRenderState
+        5. Apply to hardware via ZoneStrip
         """
+        updates = frame.as_zone_update()  # ZoneID -> Color | [Color]
+
+        # 1) Łączymy z poprzednim stanem
+        # merged = {
+        #     zone_id: updates.get(zone_id, self.zone_render_states[zone_id].pixels)
+        #     for zone_id in self.zone_render_states.keys()
+        # }
+        merged = self._merge_partial_update(updates)
+        
+        
+        frame_hash = self._hash_merged_frame(merged)
+        
+        if frame_hash == self.last_rendered_frame_hash:
+            self.dma_skipped += 1
+            return
+        self.last_rendered_frame_hash = frame_hash
+        
+        # 3) Wyślij do stripów
         for strip in self.main_strips:
             try:
-                # 1) Frame → logical representation
-                updates = frame.as_zone_update()
-
-                # 1b) Filter to only zones that exist on this strip
-                # (FullStripFrame returns all ZoneID enum members, but each strip only has specific zones)
-                valid_zone_ids = set(strip.mapper.all_zone_ids())
-                filtered_updates = {
-                    zone_id: color
-                    for zone_id, color in updates.items()
-                    if zone_id in valid_zone_ids
+                zone_ids = strip.mapper.all_zone_ids()
+                strip_frame = {
+                    z: merged[z] for z in zone_ids
                 }
-
-                # 2) Normalize logical → physical pixel lists
-                normalized = self._normalize_to_zone_lengths(filtered_updates, strip.mapper)
-
-                # 3) Update ZoneRenderState
-                self._apply_zone_state(normalized, frame.source)
-
-                # 4) Send to hardware (atomic: single DMA transfer)
-                strip.show_full_pixel_frame(normalized)
-
+                strip.show_full_pixel_frame(strip_frame)
             except Exception as e:
-                log.error(f"Error rendering main frame to {strip}: {e}")
+                log.error(f"Render error on strip {strip}: {e}")
+
+        self.frames_rendered += 1
+        self.frame_times.append(time.perf_counter())
+        
+        # for strip in self.main_strips:
+        #     try:
+        #         strip_zones = strip.mapper.all_zone_ids()
                 
+        #         per_strip = {
+        #                         z: merged[z]
+        #                         for z in strip_zones
+        #                     }
+
+        #         strip.show_full_pixel_frame(per_strip)
+                
+        #         # 2) Filter to only zones belonging to this strip (multi-GPIO support)
+        #         filtered = {
+        #             zone_id: value
+        #             for zone_id, value in updates.items()
+        #             if zone_id in strip_zone_ids
+        #         }
+
+        #         # == CRITICAL FIX ==
+        #         if not filtered:
+        #             continue
+
+        #         # 3) Normalize logical → per-pixel lists
+        #         normalized = self._normalize_to_zone_lengths(filtered, strip.mapper)
+
+        #         # 4) Update ZoneRenderState
+        #         self._apply_zone_state(normalized, frame.source)
+
+        #         # 5) Atomic render to hardware
+        #         strip.show_full_pixel_frame(normalized)
+
+        #     except Exception as e:
+        #         log.error(f"Error rendering frame to {strip}: {e}")
+    
+    # ============================================================
+    # Helpers
+    # ============================================================
+
+    def _merge_partial_update(self, updates):
+        """
+        Łączy częściową ramkę z pełnym stanem stref.
+        """
+        merged = {}
+
+        for zone_id, state in self.zone_render_states.items():
+            if zone_id in updates:
+                new_val = updates[zone_id]
+                if isinstance(new_val, Color):
+                    merged[zone_id] = [new_val] * len(state.pixels)
+                else:
+                    pix = list(new_val[:len(state.pixels)])
+                    if len(pix) < len(state.pixels):
+                        pix += [Color.black()] * (len(state.pixels) - len(pix))
+                    merged[zone_id] = pix
+            else:
+                merged[zone_id] = list(state.pixels)
+
+        # Aktualizujemy ZoneRenderState
+        for zone_id, pix in merged.items():
+            self.zone_render_states[zone_id].pixels = pix
+
+        return merged
+
+    @staticmethod
+    def _hash_merged_frame(merged):
+        """
+        Tworzy szybki hash ramki do DMA skip.
+        """
+        h = 0
+        for zone_id, pix in merged.items():
+            for c in pix:
+                h = (h * 1315423911) ^ hash(c.to_rgb())
+        return h
+
+    # ============================================================
+    # Tools
+    # ============================================================
+
+    def clear_all(self):
+        for q in self.main_queues.values():
+            q.clear()
+        log.info("FrameManager v3 queues cleared")
+
+    def __repr__(self):
+        return f"FrameManagerV3(fps={self.fps}, rendered={self.frames_rendered}, skipped={self.dma_skipped})"
+                                
     def _apply_zone_state(self, normalized_frame, source):
         """
         Update ZoneRenderState with the full normalized per-zone pixel lists.
@@ -485,21 +509,11 @@ class FrameManager:
 
         return expanded
 
-    def _render_preview_frame(self, frame: PreviewFrame) -> None:
-        """Render preview panel frame."""
-        for strip in self.preview_strips:
-            try:
-                strip.show_frame(frame.pixels)
-            except Exception as e:
-                log.error(f"Error rendering preview frame to {strip}: {e}")
-
     # === Cleanup ===
 
     def clear_all(self) -> None:
         """Clear all pending frames."""
         for queue in self.main_queues.values():
-            queue.clear()
-        for queue in self.preview_queues.values():
             queue.clear()
         log.info("FrameManager queues cleared")
 
@@ -521,10 +535,6 @@ class FrameManager:
                 cleared_count += len(queue)
                 queue.clear()
 
-        for priority_value, queue in list(self.preview_queues.items()):
-            if priority_value < min_value:
-                cleared_count += len(queue)
-                queue.clear()
 
         if cleared_count > 0:
             log.debug(f"Cleared {cleared_count} frames below priority {min_priority.name}")

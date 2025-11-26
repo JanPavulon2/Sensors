@@ -65,7 +65,7 @@ class AnimationEngine:
     # Registry of available animations - built dynamically from enum
     ANIMATIONS: Dict[AnimationID, Type[BaseAnimation]] = _build_animation_registry()
 
-    def __init__(self, strip, zones: List[ZoneCombined], frame_manager: FrameManager):
+    def __init__(self, strip: ZoneStrip, zones: List[ZoneCombined], frame_manager: FrameManager):
         """
         Initialize animation engine
 

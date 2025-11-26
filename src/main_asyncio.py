@@ -249,38 +249,15 @@ async def main():
     for gpio_pin, strip in zone_strips.items():
         frame_manager.add_main_strip(strip)
         log.info(f"Registered ZoneStrip (GPIO {gpio_pin}) with FrameManager")
-
-    # ========================================================================
-    # SERVICES: TRANSITIONS (One per GPIO strip)
-    # ========================================================================
-
-    log.info("Creating transition services for each GPIO...")
-    zone_strip_transition_services = {}
-    for gpio_pin, strip in zone_strips.items():
+        
         transition_service = TransitionService(strip, frame_manager)
-        zone_strip_transition_services[gpio_pin] = transition_service
         log.info(f"Created TransitionService for GPIO {gpio_pin}")
 
-    # PREVIEW PANEL DISABLED - will enable after testing main LED strips
-    preview_panel_transition_service = None
-
-    # ========================================================================
-    # LAYER 2: CONTROLLERS (One ZoneStripController per GPIO strip)
-    # ========================================================================
-
-    log.info("Initializing zone strip controllers for each GPIO...")
     zone_strip_controllers = {}
-    for gpio_pin, strip in zone_strips.items():
-        transition_service = zone_strip_transition_services[gpio_pin]
-        controller = ZoneStripController(strip, transition_service, frame_manager)
-        zone_strip_controllers[gpio_pin] = controller
-        log.info(f"Created ZoneStripController for GPIO {gpio_pin}")
-
-    # Use GPIO 18 as primary for backwards compatibility
-    zone_strip_controller = zone_strip_controllers.get(18, list(zone_strip_controllers.values())[0])
-    # PREVIEW PANEL DISABLED
-    # preview_panel_controller = PreviewPanelController(control_panel.preview_panel, preview_panel_transition_service)
-    preview_panel_controller = None
+    controller = ZoneStripController(strip, transition_service, frame_manager)
+    zone_strip_controllers[gpio_pin] = controller
+    log.info(f"Created ZoneStripController for GPIO {gpio_pin}")
+    
     control_panel_controller = ControlPanelController(control_panel, event_bus)
 
     # ========================================================================
@@ -302,8 +279,7 @@ async def main():
         event_bus=event_bus,
         gpio_manager=gpio_manager, 
         service_container=services,
-        preview_panel_controller=preview_panel_controller,
-        zone_strip_controller=zone_strip_controller
+        zone_strip_controllers=zone_strip_controllers
     )
 
     # ========================================================================
@@ -341,7 +317,7 @@ async def main():
         zone.config.id: (zone.state.color, int(zone.brightness * 100))
         for zone in zones
     }
-    zone_strip_controller.submit_all_zones_frame(zone_colors, priority=FramePriority.MANUAL)
+    # frame_manager.submit_full_strip_frame(FullStripFrame(zone_colors, priority=FramePriority.MANUAL)
     await asyncio.sleep(0.1)  # Give async task time to submit frame
 
     # ========================================================================

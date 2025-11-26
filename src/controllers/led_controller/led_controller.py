@@ -4,16 +4,14 @@ Coordinates between static, animation, and lamp/power modes.
 """
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 from animations.engine import AnimationEngine
-from hardware.output.buzzer import Buzzer
 from models.color import Color
 from models.enums import ButtonID, EncoderSource, AnimationID, ZoneRenderMode
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
-from utils.logger import get_logger, LogCategory, LogLevel
+from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
-from engine import FrameManager
 from services import ServiceContainer
 
 from controllers.led_controller.static_mode_controller import StaticModeController
@@ -23,14 +21,11 @@ from controllers.led_controller.power_toggle_controller import PowerToggleContro
 from controllers.led_controller.frame_playback_controller import FramePlaybackController
 
 if TYPE_CHECKING:
-    from controllers.preview_panel_controller import PreviewPanelController
     from controllers.zone_strip_controller import ZoneStripController
-    from services import ZoneService, AnimationService, ApplicationStateService
     from managers import ConfigManager
     from hardware.gpio.gpio_manager import GPIOManager
     from services.event_bus import EventBus
-    from engine.frame_manager import FrameManager
-    
+
 log = get_logger().for_category(LogCategory.GENERAL)
 
 class LEDController:
@@ -50,8 +45,7 @@ class LEDController:
         event_bus: "EventBus",
         gpio_manager: "GPIOManager",
         service_container: "ServiceContainer",
-        preview_panel_controller: "PreviewPanelController",
-        zone_strip_controller: "ZoneStripController"
+        zone_strip_controllers: Dict[int, "ZoneStripController"]
     ):
         self.config_manager = config_manager
         self.event_bus = event_bus
@@ -60,34 +54,32 @@ class LEDController:
         self.zone_service = service_container.zone_service
         self.animation_service = service_container.animation_service
         self.app_state_service = service_container.app_state_service
-        self.preview_panel_controller = preview_panel_controller
-        self.zone_strip_controller = zone_strip_controller
-
+        self.zone_strip_controllers = zone_strip_controllers
         self.frame_manager = service_container.frame_manager
-        self.frame_manager.add_main_strip(self.zone_strip_controller.zone_strip)
 
-        # if self.preview_panel_controller.preview_panel._pixel_strip:
-        #     self.frame_manager.add_preview_strip(self.preview_panel_controller.preview_panel)
+        # Use GPIO 19 strip for animation engine (AUX_5V with most zones)
+        # TODO: Make this configurable or use all strips
+        self.strip_controller = self.zone_strip_controllers[19]
 
         # Create and attach animation engine
         self.animation_engine = AnimationEngine(
-            strip=self.zone_strip_controller.zone_strip,
+            strip=self.strip_controller.zone_strip,
             zones=self.zone_service.get_all(),
             frame_manager=self.frame_manager
         )
-        
+
         # Load persistent state
         state = self.app_state_service.get_state()
-        # Note: main_mode has been removed - zones now have individual modes
         self.edit_mode = state.edit_mode
+        preview_panel_controller = None
 
         # Initialize feature controllers with dependency injection
         self.static_mode_controller = StaticModeController(
             services=self.services,
-            strip_controller=zone_strip_controller,
+            strip_controllers=zone_strip_controllers,
             preview_panel=preview_panel_controller
         )
-        
+
         self.animation_mode_controller = AnimationModeController(
             services=self.services,
             animation_engine=self.animation_engine,
@@ -95,11 +87,11 @@ class LEDController:
         )
         self.lamp_white_mode = LampWhiteModeController(
             services=self.services,
-            strip_controller=zone_strip_controller
+            strip_controller=zone_strip_controllers[19]
         )
         self.power_toggle = PowerToggleController(
             services=self.services,
-            strip_controller=zone_strip_controller,
+            strip_controllers=zone_strip_controllers,
             preview_panel=preview_panel_controller,
             animation_engine=self.animation_engine,
             static_mode_controller=self.static_mode_controller
@@ -109,19 +101,13 @@ class LEDController:
             animation_engine=self.animation_engine,
             event_bus=self.event_bus
         )
-        
+
         # Register event handlers
         self._register_events()
 
         # Initialize zones based on per-zone modes
         self._initialize_zones()
 
-        # bz = Buzzer(pin=12, active=True)
-        # bz.beep(0.1)
-
-        bz = Buzzer(pin=12, active=False)
-        bz.play_tone(440, 0.3)
-        
         log.info("LEDController initialized")
 
     # ------------------------------------------------------------------
@@ -130,8 +116,6 @@ class LEDController:
 
     def _initialize_zones(self):
         """Initialize zone controllers based on per-zone modes"""
-        # Zones now have individual modes, so initialize both controllers
-        # They will handle mode-specific logic when appropriate
         self.static_mode_controller.enter_mode()
 
     async def start_frame_by_frame_debugging(self, animation_id: AnimationID, **params):
@@ -177,15 +161,11 @@ class LEDController:
     def _register_events(self):
         """Subscribe to all relevant hardware events."""
         self.event_bus.subscribe(EventType.ENCODER_ROTATE, self._handle_encoder_rotate)
-
         self.event_bus.subscribe(EventType.ENCODER_CLICK, self._handle_encoder_click)
-
         self.event_bus.subscribe(EventType.BUTTON_PRESS, self._handle_button)
-
         self.event_bus.subscribe(EventType.KEYBOARD_KEYPRESS, self._handle_keyboard_keypress)
-
         log.info("LEDController subscribed to EventBus")
-        
+
     # ------------------------------------------------------------------
     # EVENT HANDLING
     # ------------------------------------------------------------------
@@ -195,7 +175,7 @@ class LEDController:
             self._handle_selector_rotation(e.delta)
         elif e.source == EncoderSource.MODULATOR:
             self._handle_modulator_rotation(e.delta)
-            
+
     def _handle_encoder_click(self, e: EncoderClickEvent):
         if e.source == EncoderSource.SELECTOR:
             self._handle_selector_click()
@@ -264,9 +244,6 @@ class LEDController:
         - ANIMATION zone: Rotate to cycle through animations
         - OFF zone: Rotate to select different zones
         """
-        # if not self.edit_mode:
-        #     log.info("Selector rotation ignored when not in edit mode")
-        #     return
         current_zone = self.zone_service.get_selected_zone()
         if not current_zone:
             log.warn("No zone selected for selector rotation")
@@ -279,7 +256,7 @@ class LEDController:
         else:
             # In STATIC or OFF mode: rotate to select zones
             self._cycle_zone_selection(delta)
-            
+
     def _handle_selector_click(self):
         """
         Selector click: Toggle zone mode or start/stop animation.
@@ -289,18 +266,8 @@ class LEDController:
         - ANIMATION zone: Toggle to STATIC mode
         - OFF zone: Ignored
         """
-        
-        # current_zone = self.zone_service.get_selected_zone()
-        # if not current_zone:
-        #     log.warn("No zone selected for selector click")
-        #     return
+        pass
 
-        # if current_zone.state.mode == ZoneRenderMode.OFF:
-        #     log.info("Selector click ignored for OFF zone")
-        # else:
-        #     # Toggle STATIC ↔ ANIMATION mode
-        #     asyncio.create_task(self._toggle_zone_mode())
-            
     def _handle_modulator_rotation(self, delta: int):
         """
         Modulator rotation: Adjust parameter based on selected zone's mode.
@@ -323,8 +290,7 @@ class LEDController:
             self.static_mode_controller.adjust_param(delta)
         elif current_zone.state.mode == ZoneRenderMode.ANIMATION:
             self.animation_mode_controller.adjust_param(delta)
-        # For OFF mode, do nothing
-        
+
     def _handle_modulator_click(self):
         """
         Modulator click: Cycle parameter based on selected zone's mode.
@@ -347,8 +313,7 @@ class LEDController:
             self.static_mode_controller.cycle_parameter()
         elif current_zone.state.mode == ZoneRenderMode.ANIMATION:
             self.animation_mode_controller.cycle_param()
-        # For OFF mode, do nothing
-        
+
     def _toggle_edit_mode(self):
         """Toggle edit mode and notify controllers"""
         self.edit_mode = not self.edit_mode
@@ -357,7 +322,7 @@ class LEDController:
         # Notify controllers of edit mode change (per-zone mode aware)
         self.static_mode_controller.on_edit_mode_change(self.edit_mode)
         self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
-       
+
     async def _set_zone_mode_async(self, target_mode: ZoneRenderMode):
         """
         Set the render mode of the currently selected zone.
@@ -377,10 +342,6 @@ class LEDController:
             return
 
         log.info(f"SetZoneMode: {zone_id.name} {old_mode.name} → {target_mode.name}")
-
-        # Stop animations if switching away from ANIMATION
-        # if self.animation_engine.is_running():
-        #    await self.animation_engine.stop()
 
         # Update state
         current_zone.state.mode = target_mode
@@ -424,8 +385,7 @@ class LEDController:
         self.app_state_service.set_current_zone_index(new_index)
         log.info("Cycled zone selection", from_zone=old_zone_id.name, to_zone=new_zone_id.name)
 
-        # Render all STATIC zones so none are blacked out when cycling
-        # self.static_mode_controller.render_all_static_zones()
+        # Sync preview to show selected zone
         self.static_mode_controller._sync_preview()
 
     async def _cycle_zone_mode_async(self):
@@ -440,10 +400,9 @@ class LEDController:
 
         current_mode = current_zone.state.mode
         zone_id = current_zone.config.id
-        
+
         log.info(f"Cycling zone mode for {zone_id.name}...")
 
-        # 1. Determine next mode
         # Determine next mode
         if current_mode == ZoneRenderMode.STATIC:
             next_mode = ZoneRenderMode.ANIMATION
@@ -455,29 +414,19 @@ class LEDController:
         log.info(f"CycleZoneMode: {zone_id.name} → {next_mode.name}")
 
         await self._set_zone_mode_async(next_mode)
-        
+
     async def _apply_static_mode(self, zone):
         zone_id = zone.config.id
-
-        # Submit frame through FrameManager (not directly to hardware)
-        self.zone_strip_controller.render_zone_combined(zone)
 
         log.debug(f"Zone {zone_id.name}: Applied STATIC mode")
 
         if self.edit_mode:
-            # Sync preview
-            # self.static_mode_controller._sync_preview()
             self.static_mode_controller._start_pulse()
-    
+
     async def _apply_animation_mode(self, zone):
         zone_id = zone.config.id
 
         self.static_mode_controller._stop_pulse()
-
-        # Render all static zones BEFORE starting animation
-        # This ensures non-animated zones stay on while animation runs
-        # Priority: STATIC frames (MANUAL=10) won't override animation frames (ANIMATION=30)
-        self.static_mode_controller.render_all_static_zones()
 
         current_anim = self.animation_service.get_current()
 
@@ -511,7 +460,7 @@ class LEDController:
         )
 
         self.animation_mode_controller._sync_preview()
-            
+
     async def _apply_off_mode(self, zone):
         zone_id = zone.config.id
 
@@ -520,14 +469,14 @@ class LEDController:
         zone.state.color = Color.black()
 
         # Submit frame through FrameManager (not directly to hardware)
-        self.zone_strip_controller.render_zone_combined(zone)
+        self.strip_controller.render_zone_combined(zone)
 
         # Restore original color to state (so next render has correct value)
         zone.state.color = original_color
 
         log.debug(f"Zone {zone_id.name}: Applied OFF mode")
-     
-     
+
+
     async def _toggle_zone_mode(self):
         """
         Toggle currently selected zone between STATIC ↔ ANIMATION mode.
@@ -569,11 +518,9 @@ class LEDController:
         if next_mode == ZoneRenderMode.STATIC:
             log.debug(f"Zone {zone_id.name}: Switching to STATIC mode")
 
-            # Submit frame through FrameManager (not directly to hardware)
-            self.zone_strip_controller.render_zone_combined(current_zone)
+            # Submit static zone frame
+            self.strip_controller.render_zone_combined(current_zone)
 
-            # Sync preview
-            # self.static_mode_controller._sync_preview()
             if self.edit_mode:
                 self.static_mode_controller._start_pulse()
 
@@ -617,15 +564,14 @@ class LEDController:
             # Start animation with proper exclusions
             await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
             self.animation_mode_controller._sync_preview()
-        
-        
+
+
     # ------------------------------------------------------------------
     # CORE OPERATIONS
     # ------------------------------------------------------------------
     def clear_all(self) -> None:
         """Turn off all LEDs (both preview and strip)."""
-        self.zone_strip_controller.zone_strip.clear()
-        # self.preview_panel_controller.clear()
+        self.strip_controller.zone_strip.clear()
         log.info("All LEDs cleared")
 
     async def stop_all(self) -> None:

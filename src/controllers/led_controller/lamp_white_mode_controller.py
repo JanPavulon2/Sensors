@@ -57,7 +57,7 @@ class LampWhiteModeController:
             self.zone_service.set_color(ZoneID.LAMP, warm)
             self.zone_service.set_brightness(ZoneID.LAMP, 100)
 
-            # Refresh lamp after service changes
+            # Refresh lamp after service changes and render
             lamp = self.zone_service.get_zone(ZoneID.LAMP)
             self.strip_controller.render_zone_combined(lamp)
 

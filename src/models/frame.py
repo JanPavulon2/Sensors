@@ -33,7 +33,7 @@ class FullStripFrame(BaseFrame):
     """
     Single color for entire strip (all zones same color).
     """
-    color: Tuple[int, int, int] = field(default=(0, 0, 0)) 
+    color: Tuple[int, int, int] = field(default=Color.black().to_rgb()) 
    
     def as_zone_update(self) -> Dict[ZoneID, Color]:
         """
