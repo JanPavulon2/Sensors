@@ -82,6 +82,9 @@ from hardware.hardware_coordinator import HardwareCoordinator
 # Shared reference to api_server for explicit shutdown in signal handler
 _api_server_ref: dict = {'instance': None}
 
+# Shared reference to gpio_manager for atexit cleanup
+_gpio_manager_ref: dict = {'instance': None}
+
 # ---------------------------------------------------------------------------
 # SHUTDOWN & CLEANUP
 # ---------------------------------------------------------------------------
@@ -89,8 +92,13 @@ _api_server_ref: dict = {'instance': None}
 def emergency_gpio_cleanup():
     """Emergency cleanup - called on any exit (crashes, seg faults)."""
     try:
-        GPIOManager().cleanup()
-        log.info("🚨 Emergency GPIO cleanup completed")
+        # Use the stored gpio_manager reference (not a new instance)
+        gpio_manager = _gpio_manager_ref.get('instance')
+        if gpio_manager:
+            gpio_manager.cleanup()
+            log.info("🚨 Emergency GPIO cleanup completed")
+        else:
+            log.debug("No GPIO manager to clean up")
     except Exception as e:
         log.error(f"Failed to cleanup GPIO: {e}")
 
@@ -258,25 +266,24 @@ async def run_api_server() -> None:
     log.info(f"API docs available at http://localhost:{API_PORT}/docs")
 
     try:
-        # Start the server WITHOUT using serve() - this prevents uvicorn from
-        # installing its own signal handlers that would interfere with our
-        # shutdown pipeline
-        await server.startup()
-
-        # Keep the server running indefinitely until cancelled
-        # Signal handlers will cancel this task, triggering cleanup
-        while True:
-            await asyncio.sleep(1)
-
+        # Run uvicorn's serve() which handles the full server lifecycle.
+        # When this returns or raises an exception, the server is being shut down
+        # (either by uvicorn handling a signal, or by our signal handler cancelling this task)
+        await server.serve()
     except asyncio.CancelledError:
-        log.debug("API server task cancelled, shutting down uvicorn...")
+        log.debug("API server task cancelled by signal handler...")
+        raise
+    except KeyboardInterrupt:
+        log.debug("API server received KeyboardInterrupt...")
         raise
     finally:
-        # Ensure server is shut down if this task exits for any reason
+        # Cleanup is handled by uvicorn's serve() context manager
+        # But ensure it's shut down if this exits unexpectedly
         try:
-            await server.shutdown()
+            if server.started:
+                await server.shutdown()
         except Exception as e:
-            log.error(f"Error shutting down API server: {e}")
+            log.debug(f"Server shutdown (expected): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +301,8 @@ async def main():
 
     log.info("Initializing GPIO manager (singleton)...")
     gpio_manager = GPIOManager()
+    # Store reference for atexit cleanup
+    _gpio_manager_ref['instance'] = gpio_manager
 
     log.info("Loading configuration...")
     config_manager = ConfigManager(gpio_manager)
@@ -454,19 +463,57 @@ async def main():
             raise
 
     try:
-        # Race between tasks and shutdown signal
-        # When shutdown event is triggered, this will complete
-        await asyncio.gather(
-            keyboard_task,
-            polling_task,
-            api_task,
-            wait_for_shutdown(),
-            return_exceptions=False
-        )
+        # Monitor tasks and trigger shutdown if:
+        # 1. Shutdown event is set (user pressed Ctrl+C)
+        # 2. API server exits unexpectedly (uvicorn handled a signal)
+        while True:
+            # Check if api_task has completed (uvicorn shut down)
+            if api_task.done():
+                log.info("API server exited, triggering shutdown...")
+                shutdown_event.set()
+                break
+
+            # Check if shutdown event is set
+            if shutdown_event.is_set():
+                break
+
+            # Also check if other critical tasks failed
+            for task in [keyboard_task, polling_task]:
+                if task.done() and task.exception() is not None:
+                    log.error(f"Critical task failed: {task.get_name()}")
+                    shutdown_event.set()
+                    break
+
+            # Small sleep to avoid busy-waiting
+            try:
+                await asyncio.wait_for(asyncio.sleep(0.1), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                log.debug("Main loop cancelled.")
+                raise
+
+        # Cancel remaining tasks
+        log.debug("Breaking out of main loop, cancelling remaining tasks...")
+        for task in [keyboard_task, polling_task, api_task]:
+            if not task.done():
+                task.cancel()
+
+        # Wait for them to finish cancelling
+        await asyncio.gather(keyboard_task, polling_task, api_task, return_exceptions=True)
+
     except asyncio.CancelledError:
         log.debug("Main loop cancelled.")
     finally:
         log.info("Initiating shutdown sequence...")
+
+        # Clear LEDs IMMEDIATELY before anything else
+        try:
+            log.info("Clearing LEDs...")
+            lightning_controller.clear_all()
+            log.info("✓ LEDs cleared")
+        except Exception as e:
+            log.error(f"Error clearing LEDs: {e}")
 
         try:
             # First, run explicit shutdown to release API server and cancel tasks
