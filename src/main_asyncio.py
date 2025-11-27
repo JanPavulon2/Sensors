@@ -509,9 +509,15 @@ async def main():
 
         # Clear LEDs IMMEDIATELY before anything else
         try:
-            log.info("Clearing LEDs...")
-            lightning_controller.clear_all()
-            log.info("✓ LEDs cleared")
+            log.info("Clearing LEDs on all GPIO strips...")
+            # Clear all zone strips (there may be multiple GPIO pins)
+            for gpio_pin, strip in hardware.zone_strips.items():
+                try:
+                    strip.clear()
+                    log.debug(f"✓ Cleared GPIO {gpio_pin}")
+                except Exception as e:
+                    log.error(f"Error clearing GPIO {gpio_pin}: {e}")
+            log.info("✓ All LEDs cleared")
         except Exception as e:
             log.error(f"Error clearing LEDs: {e}")
 
