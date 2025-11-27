@@ -34,12 +34,12 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
     <div className="flex h-screen bg-bg-app">
       {/* Sidebar */}
       <aside
-        className={`bg-bg-panel border-r border-border-default transition-all duration-300 ${
+        className={`bg-bg-panel border-r border-border transition-all duration-300 ${
           sidebarOpen ? 'w-64' : 'w-20'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-border-default">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-border">
           {sidebarOpen && (
             <div>
               <h1 className="text-xl font-bold text-accent-primary">Diuna</h1>
@@ -76,7 +76,7 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
 
         {/* Footer Info */}
         {sidebarOpen && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border-default bg-bg-panel">
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border bg-bg-panel">
             <div className="text-xs space-y-1">
               <div className="flex items-center gap-2">
                 <div
@@ -97,7 +97,7 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-bg-panel border-b border-border-default flex items-center justify-between px-6">
+        <header className="h-16 bg-bg-panel border-b border-border flex items-center justify-between px-6">
           <h2 className="text-2xl font-bold text-text-primary">
             {navItems.find((item) => isActive(item.path))?.label || 'Dashboard'}
           </h2>

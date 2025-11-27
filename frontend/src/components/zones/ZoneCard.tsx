@@ -60,11 +60,11 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
           <div>
             <CardTitle className="text-lg">{zone.name}</CardTitle>
             <p className="text-xs text-text-tertiary mt-1">
-              {zone.pixel_count} pixels • GPIO {zone.gpio || 'N/A'}
+              {zone.pixel_count} pixels
             </p>
           </div>
           <div
-            className="w-10 h-10 rounded border-2 border-border-default"
+            className="w-10 h-10 rounded border-2 border-border"
             style={{ backgroundColor: colorRgb }}
             title="Zone color"
           />

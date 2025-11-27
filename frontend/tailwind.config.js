@@ -8,23 +8,26 @@ export default {
   theme: {
   	extend: {
   		colors: {
+  			/* Background colors (mapped to CSS variables) */
   			bg: {
-  				app: '#0d1117',
-  				panel: '#161b22',
-  				elevated: '#21262d',
-  				input: '#0d1117'
+  				app: 'hsl(var(--background))',        /* main app background */
+  				panel: 'hsl(var(--card))',             /* panel/elevated surfaces */
+  				elevated: 'hsl(var(--muted))',         /* even more elevated */
+  				input: 'hsl(var(--input))'             /* input background */
   			},
+  			/* Text colors */
   			text: {
-  				primary: '#e6edf3',
-  				secondary: '#8b949e',
-  				tertiary: '#6e7681',
-  				disabled: '#444c56'
+  				primary: 'hsl(var(--foreground))',
+  				secondary: 'hsl(var(--muted-foreground))',
+  				tertiary: 'hsl(var(--muted-foreground) / 0.75)',
+  				disabled: 'hsl(var(--muted-foreground) / 0.5)'
   			},
+  			/* Accent colors (matrix green focus) */
   			accent: {
-  				primary: '#39ff14',
-  				hover: '#2aff00',
-  				active: '#1eff00',
-  				glow: 'rgba(57, 255, 20, 0.3)',
+  				primary: 'hsl(var(--primary))',        /* #39ff14 - matrix green */
+  				hover: 'hsl(var(--primary) / 0.95)',   /* slightly dimmer */
+  				active: 'hsl(var(--primary) / 0.85)',  /* more dimmed */
+  				glow: 'hsl(var(--primary) / 0.3)',     /* glow effect */
   				DEFAULT: 'hsl(var(--accent))',
   				foreground: 'hsl(var(--accent-foreground))'
   			},
@@ -32,6 +35,7 @@ export default {
   			warning: '#d29922',
   			error: '#da3633',
   			info: '#58a6ff',
+  			'border-default': 'hsl(var(--border))',  /* for explicit border color references */
   			border: 'hsl(var(--border))',
   			zone: {
   				floor: '#00E5FF',

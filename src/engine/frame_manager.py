@@ -107,7 +107,7 @@ class FrameManager:
         }
         
         # Registered render targets
-        self.main_strips: List[ZoneStrip] = []  # ZoneStrip instances
+        self.zone_strips: List[ZoneStrip] = []  # ZoneStrip instances
        
         self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
@@ -137,14 +137,15 @@ class FrameManager:
             timing=f"min={WS2811Timing.MIN_FRAME_TIME_MS:.2f}ms",
         )
 
-    # === Strip Management ===
+    # === Strip Registration (for controllers) ===
 
-    def add_main_strip(self, strip) -> None:
-        """Register a main LED strip (ZoneStrip)."""
-        if strip in self.main_strips:
+    def add_zone_strip(self, strip: ZoneStrip) -> None:
+        """Register a LED strip (ZoneStrip)."""
+        
+        if strip in self.zone_strips:
             return
         
-        self.main_strips.append(strip)
+        self.zone_strips.append(strip)
         log.info(f"FrameManager: added strip {strip}")
         
         # Initialize zone render states for all zones in this strip
@@ -157,36 +158,30 @@ class FrameManager:
                 )
                 log.debug(f"Added main strip: {strip} (initialized {len(strip.mapper.all_zone_ids())} zones)")
 
-    def remove_main_strip(self, strip) -> None:
-        """Unregister a main LED strip."""
-        if strip in self.main_strips:
-            self.main_strips.remove(strip)
+    def remove_zone_strip(self, strip: ZoneStrip) -> None:
+        """Unregister a LED strip."""
+        
+        if strip in self.zone_strips:
+            self.zone_strips.remove(strip)
             log.debug(f"Removed main strip: {strip}")
-
-    # === Strip Registration (for controllers) ===
-
-    def add_strip(self, strip: ZoneStrip) -> None:
-        """Register a strip (used by LEDController)."""
-        self.add_main_strip(strip)
-
-    def remove_strip(self, strip) -> None:
-        """Unregister a strip."""
-        self.remove_main_strip(strip)
 
     # === Frame Submission API (Type-Specific) ===
 
     async def submit_full_strip_frame(self, frame: FullStripFrame) -> None:
         """Submit a full-strip frame (single color for all zones)."""
+        
         async with self._lock:
             self.main_queues[frame.priority.value].append(frame)
 
     async def submit_zone_frame(self, frame: ZoneFrame) -> None:
         """Submit a per-zone frame."""
+        
         async with self._lock:
             self.main_queues[frame.priority.value].append(frame)
 
     async def submit_pixel_frame(self, frame: PixelFrame) -> None:
         """Submit a per-pixel frame."""
+        
         async with self._lock:
             self.main_queues[frame.priority.value].append(frame)
 
@@ -371,7 +366,7 @@ class FrameManager:
         self.last_rendered_frame_hash = frame_hash
         
         # 3) Wyślij do stripów
-        for strip in self.main_strips:
+        for strip in self.zone_strips:
             try:
                 zone_ids = strip.mapper.all_zone_ids()
                 strip_frame = {

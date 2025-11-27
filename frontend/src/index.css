@@ -2,43 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global styles */
-:root {
-  color-scheme: dark;
-}
-
 @layer base {
-  body {
-    @apply bg-bg-app text-text-primary;
-    font-family: 'Courier New', 'monospace', 'system-ui', 'sans-serif';
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  h1 {
-    @apply text-5xl font-bold tracking-tight;
-  }
-
-  h2 {
-    @apply text-3xl font-semibold;
-  }
-
-  h3 {
-    @apply text-xl font-medium;
-  }
-
-  p {
-    @apply text-base text-text-secondary;
-  }
-
-  a {
-    @apply text-accent-primary hover:text-accent-hover transition-colors;
-  }
-
-  code {
-    @apply font-mono text-sm bg-bg-elevated px-2 py-1 rounded;
-  }
   :root {
+    color-scheme: dark;
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -65,31 +31,88 @@
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+
+  /* Dark mode (shadcn default + Diuna customizations) */
+  .dark,
+  :root {
+    /* shadcn default dark theme - exact from ui.shadcn.com */
+    --background: 0 0% 3.9%;               /* #09090b - near black */
+    --foreground: 0 0% 98%;                /* #faf8f8 - bright white */
+
+    --card: 0 0% 3.9%;                     /* #09090b - same as bg */
+    --card-foreground: 0 0% 98%;           /* #faf8f8 */
+
+    --popover: 0 0% 3.9%;                  /* #09090b */
+    --popover-foreground: 0 0% 98%;        /* #faf8f8 */
+
+    /* Primary: shadcn slate color (customized to matrix green for Diuna) */
+    --primary: 87.6 100% 45.7%;            /* #39ff14 - matrix green (custom) */
+    --primary-foreground: 0 0% 3.9%;       /* #09090b - text on primary */
+
+    /* Secondary: slate gray (shadcn standard) */
+    --secondary: 217.2 32.6% 17.5%;        /* #1e293b - slate */
+    --secondary-foreground: 0 0% 98%;      /* #faf8f8 */
+
+    /* Muted: subtle gray */
+    --muted: 217.2 14.3% 20.9%;            /* #18181b - zinc 900 */
+    --muted-foreground: 215.4 16.3% 56.9%; /* #71717a - zinc 500 */
+
+    /* Accent: bright highlight (matrix green) */
+    --accent: 87.6 100% 45.7%;             /* #39ff14 - matrix green */
+    --accent-foreground: 0 0% 3.9%;        /* #09090b */
+
+    /* Destructive */
+    --destructive: 0 84.2% 60.2%;          /* #f75555 - red */
+    --destructive-foreground: 0 0% 98%;    /* #faf8f8 */
+
+    /* Border & Input (shadcn dark) */
+    --border: 217.2 32.6% 17.5%;           /* #1e293b - slate 800 */
+    --input: 217.2 32.6% 17.5%;            /* #1e293b - slate 800 */
+    --ring: 87.6 100% 45.7%;               /* #39ff14 - matrix green focus */
+
+    /* Chart colors (vibrant for data viz) */
+    --chart-1: 87.6 100% 45.7%;            /* #39ff14 - matrix green */
+    --chart-2: 198.6 88.7% 48.6%;          /* #06b6d4 - cyan */
+    --chart-3: 280.7 97.3% 66.1%;          /* #d946ef - fuchsia */
+    --chart-4: 39.5 89.2% 49.8%;           /* #f59e0b - amber */
+    --chart-5: 0 84.6% 60.1%;              /* #ef4444 - red */
+
+    --radius: 0.5rem;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'system-ui', 'sans-serif';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1 {
+    @apply text-5xl font-bold tracking-tight;
+  }
+
+  h2 {
+    @apply text-3xl font-semibold;
+  }
+
+  h3 {
+    @apply text-xl font-medium;
+  }
+
+  p {
+    @apply text-base text-foreground/80;
+  }
+
+  a {
+    @apply text-primary hover:opacity-80 transition-opacity;
+  }
+
+  code {
+    @apply font-mono text-sm bg-muted px-2 py-1 rounded;
+  }
+
+  * {
+    @apply border-border;
   }
 }
 
@@ -105,7 +128,7 @@
 
   /* Glass morphism */
   .glass {
-    @apply bg-bg-panel/80 backdrop-blur-md border border-border-subtle;
+    @apply bg-card/80 backdrop-blur-md border border-border;
   }
 
   /* Smooth transitions */
@@ -129,7 +152,7 @@
 
   /* Focus ring for better accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-offset-0 ring-accent-primary;
+    @apply outline-none ring-2 ring-offset-0 ring-primary;
   }
 }
 
@@ -149,13 +172,4 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
 }

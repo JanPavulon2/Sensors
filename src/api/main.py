@@ -29,10 +29,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-from api.routes import zones
+from api.routes import zones, logger as logger_routes
 from api.middleware.error_handler import register_exception_handlers
+from api.websocket import websocket_logs_endpoint
 from utils.logger import get_logger
 from models.enums import LogCategory
+from services.log_broadcaster import get_broadcaster
 
 log = get_logger().for_category(LogCategory.SYSTEM)
 
@@ -123,7 +125,12 @@ def create_app(
         prefix="/api/v1"
     )
 
-    log.debug("Routes registered: zones (/api/v1/zones)")
+    app.include_router(
+        logger_routes.router,
+        prefix="/api/v1"
+    )
+
+    log.debug("Routes registered: zones (/api/v1/zones), logger (/api/v1/logger)")
 
     # =========================================================================
     # Health Check Endpoint
@@ -161,6 +168,17 @@ def create_app(
         )
 
     # =========================================================================
+    # WebSocket Endpoints
+    # =========================================================================
+
+    @app.websocket("/ws/logs")
+    async def websocket_logs(websocket):
+        """WebSocket endpoint for real-time log streaming"""
+        await websocket_logs_endpoint(websocket)
+
+    log.debug("WebSocket endpoint registered at /ws/logs")
+
+    # =========================================================================
     # Startup/Shutdown Hooks
     # =========================================================================
 
@@ -168,13 +186,25 @@ def create_app(
     async def startup_event():
         """Called when FastAPI server starts"""
         log.info("FastAPI app starting up")
-        # TODO: In Phase 8.2, connect WebSocket server here
+
+        # Initialize LogBroadcaster for WebSocket log streaming
+        broadcaster = get_broadcaster()
+        broadcaster.start()
+
+        # Connect broadcaster to logger singleton
+        logger = get_logger()
+        logger.set_broadcaster(broadcaster)
+
+        log.info("LogBroadcaster initialized and connected to logger")
 
     @app.on_event("shutdown")
     async def shutdown_event():
         """Called when FastAPI server shuts down"""
         log.info("FastAPI app shutting down")
-        # TODO: Cleanup WebSocket connections
+
+        # Cleanup WebSocket connections and broadcaster
+        broadcaster = get_broadcaster()
+        await broadcaster.stop()
 
     log.info(f"FastAPI app created successfully: {title}")
 

@@ -6,14 +6,11 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID
+from models.enums import ParamID, ZoneRenderMode
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from services import ServiceContainer
 from animations.engine import AnimationEngine
-
-if TYPE_CHECKING:
-    from controllers.preview_panel_controller import PreviewPanelController
 
 log = get_logger().for_category(LogCategory.GENERAL)
 
@@ -22,8 +19,7 @@ class AnimationModeController:
     def __init__(
         self,
         services: ServiceContainer,
-        animation_engine: AnimationEngine,
-        preview_panel: PreviewPanelController,
+        animation_engine: AnimationEngine
     ):
         """
         Initialize animation mode controller with dependency injection.
@@ -31,13 +27,11 @@ class AnimationModeController:
         Args:
             services: ServiceContainer with all core services and managers
             animation_engine: AnimationEngine for running animations
-            preview_panel: PreviewPanelController for preview display
         """
         self.animation_service = services.animation_service
         self.app_state_service = services.app_state_service
         self.zone_service = services.zone_service
         self.animation_engine = animation_engine
-        self.preview_panel_controller = preview_panel
 
         # Use saved param if it's an animation param, otherwise default to ANIM_SPEED
         saved_param = self.app_state_service.get_state().current_param
@@ -48,6 +42,63 @@ class AnimationModeController:
             a.config.id for a in self.animation_service.get_all()
         ]
         self.selected_animation_index = 0
+
+    # --- Initialization ---
+
+    async def initialize(self):
+        """
+        Initialize animation mode during app startup.
+
+        Queries all ANIMATION zones and starts animations on them.
+        Called once during LightingController initialization.
+
+        Current limitation: Only ONE animation can run at a time.
+        If multiple zones are in ANIMATION mode, only the first one will animate.
+        """
+        log.info("Initializing ANIMATION mode...")
+
+        animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
+        if not animated_zones:
+            log.info("ANIMATION: No animated zones to initialize")
+            return
+
+        log.info(f"ANIMATION: Found {len(animated_zones)} animated zones")
+
+        if len(animated_zones) > 1:
+            log.warn(
+                f"ANIMATION: Multiple zones in ANIMATION mode ({[z.config.id.name for z in animated_zones]}), "
+                f"only animating {animated_zones[0].config.id.name} (architecture limitation)"
+            )
+
+        # Only animate the first zone in ANIMATION mode
+        first_animated_zone = animated_zones[0]
+
+        # Get current animation from state or auto-select first available
+        current_anim = self.animation_service.get_current()
+        if not current_anim:
+            if not self.available_animations:
+                log.warn("ANIMATION: No animations available to start")
+                return
+            # Auto-select first animation
+            first_anim_id = self.available_animations[0]
+            self.animation_service.set_current(first_anim_id)
+            current_anim = self.animation_service.get_current()
+            log.info(f"ANIMATION: Auto-selected {first_anim_id.name}")
+
+        # Build excluded zones list (all zones except the animated one)
+        excluded_zone_ids = [
+            z.config.id for z in self.zone_service.get_all()
+            if z.config.id != first_animated_zone.config.id
+        ]
+
+        # Start animation
+        anim_id = current_anim.config.id
+        params = current_anim.build_params_for_engine()
+        safe_params = Serializer.params_enum_to_str(params)
+
+        log.info(f"ANIMATION: Starting {anim_id.name} on zone {first_animated_zone.config.id.name}")
+        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+        log.info(f"ANIMATION initialized: {anim_id.name} running on {first_animated_zone.config.id.name}")
 
     # --- Mode Entry/Exit ---
 
@@ -203,11 +254,3 @@ class AnimationModeController:
         self.app_state_service.set_current_param(self.current_param)
 
         log.info(f"Cycled animation param: {self.current_param.name}")
-
-    # ------------------------------------------------------------------
-    # Preview management
-    # ------------------------------------------------------------------
-
-    def _sync_preview(self):
-        """Sync preview panel (currently disabled)"""
-        pass

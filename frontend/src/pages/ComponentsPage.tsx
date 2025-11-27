@@ -32,6 +32,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HexColorPicker } from 'react-colorful';
+import { StateViewer } from '@/components/debug';
+import { Led, LedStrip } from '@/components/leds';
+import { Logger } from '@/components/logger';
 
 export function ComponentsPage(): JSX.Element {
   const [sliderValue, setSliderValue] = useState([50]);
@@ -79,7 +82,7 @@ export function ComponentsPage(): JSX.Element {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-bg-elevated border-border-default">
+            <Card className="bg-muted">
               <CardHeader>
                 <CardTitle className="text-lg">Zone: Floor Strip</CardTitle>
               </CardHeader>
@@ -92,7 +95,7 @@ export function ComponentsPage(): JSX.Element {
               </CardContent>
             </Card>
 
-            <Card className="bg-bg-elevated border-border-default">
+            <Card className="bg-muted">
               <CardHeader>
                 <CardTitle className="text-lg">Zone: Lamp</CardTitle>
               </CardHeader>
@@ -387,40 +390,367 @@ export function ComponentsPage(): JSX.Element {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <div className="h-20 bg-bg-app border border-border-default rounded" />
+              <div className="h-20 bg-background border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">bg-app</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-bg-panel border border-border-default rounded" />
+              <div className="h-20 bg-card border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">bg-panel</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-bg-elevated border border-border-default rounded" />
+              <div className="h-20 bg-muted border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">bg-elevated</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-accent-primary border border-border-default rounded" />
+              <div className="h-20 bg-accent-primary border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">accent-primary</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-success border border-border-default rounded" />
+              <div className="h-20 bg-success border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">success</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-warning border border-border-default rounded" />
+              <div className="h-20 bg-warning border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">warning</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-error border border-border-default rounded" />
+              <div className="h-20 bg-error border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">error</p>
             </div>
             <div className="space-y-2">
-              <div className="h-20 bg-info border border-border-default rounded" />
+              <div className="h-20 bg-info border border-border rounded" />
               <p className="text-xs font-mono text-text-tertiary">info</p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* LED Diodes */}
+      <Card>
+        <CardHeader>
+          <CardTitle>LED Diodes</CardTitle>
+          <CardDescription>Individual LED representations with on/off states and colors</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Sizes */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Sizes</h3>
+            <div className="flex gap-8 items-center">
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={true} size="sm" />
+                <p className="text-xs text-text-tertiary">Small</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Medium</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={true} size="lg" />
+                <p className="text-xs text-text-tertiary">Large</p>
+              </div>
+            </div>
+          </div>
+
+          {/* On/Off States */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">States</h3>
+            <div className="flex gap-12 items-center">
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">On</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={false} size="md" />
+                <p className="text-xs text-text-tertiary">Off</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Different Colors */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Colors</h3>
+            <div className="flex flex-wrap gap-6 items-center">
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#39ff14" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Matrix Green</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#FF0000" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Red</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#00FF00" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Green</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#0000FF" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Blue</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#FFFF00" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Yellow</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Led color="#FF00FF" isOn={true} size="md" />
+                <p className="text-xs text-text-tertiary">Magenta</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Brightness Levels */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Brightness Levels</h3>
+            <div className="flex gap-4 items-center">
+              {[255, 200, 150, 100, 50, 25].map((brightness) => (
+                <div key={brightness} className="flex flex-col items-center gap-2">
+                  <Led color="#39ff14" isOn={true} size="md" brightness={brightness} />
+                  <p className="text-xs text-text-tertiary">{Math.round((brightness / 255) * 100)}%</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* LED Strips */}
+      <Card>
+        <CardHeader>
+          <CardTitle>LED Strips</CardTitle>
+          <CardDescription>Multiple LEDs in series displaying animations and states</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Horizontal Strip - Rainbow */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Horizontal Strip - Rainbow</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={[
+                  { color: '#FF0000', isOn: true },
+                  { color: '#FF7F00', isOn: true },
+                  { color: '#FFFF00', isOn: true },
+                  { color: '#00FF00', isOn: true },
+                  { color: '#0000FF', isOn: true },
+                  { color: '#4B0082', isOn: true },
+                  { color: '#9400D3', isOn: true },
+                ]}
+                size="md"
+                orientation="horizontal"
+                gap="xs"
+              />
+            </div>
+          </div>
+
+          {/* Horizontal Strip - Pattern */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Horizontal Strip - On/Off Pattern</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={[
+                  { color: '#39ff14', isOn: true },
+                  { color: '#39ff14', isOn: false },
+                  { color: '#39ff14', isOn: true },
+                  { color: '#39ff14', isOn: false },
+                  { color: '#39ff14', isOn: true },
+                  { color: '#39ff14', isOn: false },
+                  { color: '#39ff14', isOn: true },
+                  { color: '#39ff14', isOn: false },
+                ]}
+                size="md"
+                orientation="horizontal"
+                gap="xs"
+              />
+            </div>
+          </div>
+
+          {/* Vertical Strip - 12 LEDs */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Vertical Strip - 12 LEDs</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 12 }, (_, i) => ({
+                  color: '#39ff14',
+                  isOn: i < 8,
+                  brightness: 255 - (i * 20),
+                }))}
+                size="sm"
+                orientation="vertical"
+                gap="xs"
+              />
+            </div>
+          </div>
+
+          {/* Horizontal Strip - With Labels */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Strip with Pixel Indices</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 8 }, (_, i) => ({
+                  color: `hsl(${(i * 45) % 360}, 100%, 50%)`,
+                  isOn: true,
+                }))}
+                size="md"
+                orientation="horizontal"
+                gap="sm"
+                showLabels={true}
+              />
+            </div>
+          </div>
+
+          {/* Horizontal Strip - Gradient */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">Strip - Brightness Gradient</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 20 }, (_, i) => ({
+                  color: '#39ff14',
+                  isOn: true,
+                  brightness: Math.round(255 * (i / 19)),
+                }))}
+                size="sm"
+                orientation="horizontal"
+                gap="none"
+              />
+            </div>
+          </div>
+
+          {/* Compact Matrix - 8x8 Grid */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Matrix - 8x8 Grid</h3>
+            <div className="flex justify-center bg-secondary p-6 rounded">
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(8, 1fr)' }}>
+                {Array.from({ length: 64 }, (_, i) => (
+                  <Led
+                    key={i}
+                    color="#39ff14"
+                    isOn={Math.random() > 0.3}
+                    size="sm"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Compact Matrix - 16x4 Grid */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Matrix - 16x4 Grid (Like Panel)</h3>
+            <div className="flex justify-center bg-secondary p-6 rounded">
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(16, 1fr)' }}>
+                {Array.from({ length: 64 }, (_, i) => (
+                  <Led
+                    key={i}
+                    color={`hsl(${(i % 16) * 22.5}, 100%, 50%)`}
+                    isOn={true}
+                    size="sm"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Circular Pattern */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Circle - Rotating Pattern</h3>
+            <div className="flex justify-center bg-secondary p-8 rounded">
+              <div
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '280px',
+                  height: '280px',
+                  gap: '8px',
+                }}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      width: '32px',
+                      height: '32px',
+                      left: '50%',
+                      top: '50%',
+                      transform: `rotate(${(i * 30) - 96}deg) translateY(-80px)`,
+                      marginLeft: '-16px',
+                      marginTop: '-16px',
+                    }}
+                  >
+                    <Led color="#39ff14" isOn={true} size="lg" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Pulsing Wave Effect */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Wave - Pulsing Effect</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 16 }, (_, i) => {
+                  const phase = (i % 4) / 4;
+                  return {
+                    color: '#39ff14',
+                    isOn: true,
+                    brightness: Math.round(128 + 127 * Math.sin(phase * Math.PI)),
+                  };
+                })}
+                size="md"
+                orientation="horizontal"
+                gap="sm"
+              />
+            </div>
+          </div>
+
+          {/* Random Noise Pattern */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Noise - Random Pattern</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 24 }, () => ({
+                  color: ['#39ff14', '#FF0000', '#0000FF', '#FFFF00'][Math.floor(Math.random() * 4)],
+                  isOn: Math.random() > 0.2,
+                  brightness: Math.floor(Math.random() * 256),
+                }))}
+                size="sm"
+                orientation="horizontal"
+                gap="xs"
+              />
+            </div>
+          </div>
+
+          {/* Dual Color Strip */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-text-primary">LED Strip - Dual Color Chase</h3>
+            <div className="flex justify-center bg-secondary p-4 rounded">
+              <LedStrip
+                colors={Array.from({ length: 12 }, (_, i) => ({
+                  color: i % 2 === 0 ? '#39ff14' : '#FF00FF',
+                  isOn: true,
+                }))}
+                size="md"
+                orientation="horizontal"
+                gap="xs"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* State Viewer (Debug) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Application State</CardTitle>
+          <CardDescription>Real-time view of Zustand store state</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StateViewer />
+        </CardContent>
+      </Card>
+
+      {/* Real-Time Logger */}
+      <Logger enabled={false} maxHeight="h-[500px]" />
     </div>
   );
 }

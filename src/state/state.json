@@ -20,7 +20,7 @@
     "floor": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cyan"
+        "preset_name": "green"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -28,17 +28,17 @@
     "left": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cool_white"
+        "preset_name": "blue"
       },
       "brightness": 100,
       "mode": "STATIC"
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 319
+        "mode": "PRESET",
+        "preset_name": "indigo"
       },
-      "brightness": 87.5,
+      "brightness": 25.0,
       "mode": "STATIC"
     },
     "right": {
@@ -46,8 +46,8 @@
         "mode": "PRESET",
         "preset_name": "red"
       },
-      "brightness": 100,
-      "mode": "STATIC"
+      "brightness": 87.5,
+      "mode": "ANIMATION"
     },
     "bottom": {
       "color": {
@@ -60,7 +60,7 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "violet"
+        "preset_name": "warm_white"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -119,7 +119,7 @@
     "preview": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "blue"
+        "preset_name": "green"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -127,19 +127,18 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "green"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     }
   },
   "current_animation": {
-    "id": "COLOR_SNAKE",
+    "id": "BREATHE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5,
-      "ANIM_HUE_OFFSET": 30
+      "ANIM_INTENSITY": 100
     }
   },
   "application": {
@@ -152,8 +151,8 @@
       },
       "brightness": 0
     },
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 7,
+    "active_parameter": "ZONE_BRIGHTNESS",
+    "selected_zone_index": 3,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

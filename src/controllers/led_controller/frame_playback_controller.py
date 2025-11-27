@@ -229,7 +229,7 @@ class FramePlaybackController:
 
         # Find first ZoneStrip (skip PreviewPanel and other strip types)
         strip = None
-        for s in self.frame_manager.main_strips:
+        for s in self.frame_manager.zone_strips:
             if isinstance(s, ZoneStrip):
                 strip = s
                 break

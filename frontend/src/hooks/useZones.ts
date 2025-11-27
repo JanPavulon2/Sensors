@@ -5,7 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import type { Zone, ZoneState } from '@/types/zone';
+import type { Zone } from '@/types/zone';
 
 interface ZonesResponse {
   zones: Zone[];
@@ -99,7 +99,7 @@ export const useUpdateZoneColorMutation = (zoneId: string) => {
 
       return { previousZones };
     },
-    onError: (err, newColor, context) => {
+    onError: (_err, _newColor, context) => {
       // Rollback on error
       if (context?.previousZones) {
         queryClient.setQueryData(['zones'], context.previousZones);
@@ -151,7 +151,7 @@ export const useUpdateZoneBrightnessMutation = (zoneId: string) => {
 
       return { previousZones };
     },
-    onError: (err, newBrightness, context) => {
+    onError: (_err, _newBrightness, context) => {
       if (context?.previousZones) {
         queryClient.setQueryData(['zones'], context.previousZones);
       }
@@ -182,7 +182,7 @@ export const useResetZoneMutation = (zoneId: string) => {
       await queryClient.cancelQueries({ queryKey: ['zones'] });
       return { previousZones: queryClient.getQueryData<ZonesResponse>(['zones']) };
     },
-    onError: (err, variables, context) => {
+    onError: (_err, _variables, context) => {
       if (context?.previousZones) {
         queryClient.setQueryData(['zones'], context.previousZones);
       }

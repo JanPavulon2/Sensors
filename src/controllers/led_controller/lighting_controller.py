@@ -10,9 +10,11 @@ from models.color import Color
 from models.enums import ButtonID, EncoderSource, AnimationID, ZoneRenderMode
 from models.events import EventType
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent, KeyboardKeyPressEvent
+from models.frame import ZoneFrame
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from services import ServiceContainer
+from models.frame import FramePriority, FrameSource
 
 from controllers.led_controller.static_mode_controller import StaticModeController
 from controllers.led_controller.animation_mode_controller import AnimationModeController
@@ -28,7 +30,7 @@ if TYPE_CHECKING:
 
 log = get_logger().for_category(LogCategory.GENERAL)
 
-class LEDController:
+class LightingController:
     """
     Main controller for LED behavior and modes.
 
@@ -61,6 +63,8 @@ class LEDController:
         # TODO: Make this configurable or use all strips
         self.strip_controller = self.zone_strip_controllers[19]
 
+        zone_strips = {}
+
         # Create and attach animation engine
         self.animation_engine = AnimationEngine(
             strip=self.strip_controller.zone_strip,
@@ -74,21 +78,18 @@ class LEDController:
         preview_panel_controller = None
 
         # Initialize feature controllers with dependency injection
-        self.static_mode_controller = StaticModeController(
-            services=self.services,
-            strip_controllers=zone_strip_controllers,
-            preview_panel=preview_panel_controller
-        )
+        self.static_mode_controller = StaticModeController(services=self.services)
 
         self.animation_mode_controller = AnimationModeController(
             services=self.services,
-            animation_engine=self.animation_engine,
-            preview_panel=preview_panel_controller
+            animation_engine=self.animation_engine
         )
+        
         self.lamp_white_mode = LampWhiteModeController(
             services=self.services,
             strip_controller=zone_strip_controllers[19]
         )
+        
         self.power_toggle = PowerToggleController(
             services=self.services,
             strip_controllers=zone_strip_controllers,
@@ -96,6 +97,7 @@ class LEDController:
             animation_engine=self.animation_engine,
             static_mode_controller=self.static_mode_controller
         )
+        
         self.frame_playback_controller = FramePlaybackController(
             frame_manager=self.frame_manager,
             animation_engine=self.animation_engine,
@@ -115,45 +117,27 @@ class LEDController:
     # ------------------------------------------------------------------
 
     def _initialize_zones(self):
-        """Initialize zone controllers based on per-zone modes"""
-        self.static_mode_controller.enter_mode()
-
-    async def start_frame_by_frame_debugging(self, animation_id: AnimationID, **params):
         """
-        Start frame-by-frame debugging mode for animation.
+        Coordinate initialization of all zone mode controllers.
 
-        Allows stepping through animation frames one at a time using keyboard:
-        - A: Previous frame
-        - D: Next frame
-        - SPACE: Play/Pause animation playback
-        - Q: Exit frame-by-frame mode
+        Calls initialize() on each subcontroller to handle their own startup logic:
+        - StaticModeController.initialize(): Render all STATIC zones
+        - AnimationModeController.initialize(): Start animations for ANIMATION zones
 
-        Args:
-            animation_id: AnimationID to debug (defaults to current animation)
-            **params: Animation parameters to override (e.g., ANIM_SPEED=50)
-
-        Returns:
-            When user presses Q to exit frame-by-frame mode
-
-        Example:
-            await led_controller.start_frame_by_frame_debugging(
-                AnimationID.SNAKE,
-                ANIM_SPEED=50
-            )
+        Each controller is responsible for reading zones, submitting frames, starting
+        animations, etc. This method just orchestrates the sequence.
         """
-        log.info(f"Starting frame-by-frame debugging mode")
+        log.info("Coordinating zone controller initialization...")
 
-        # Use current animation if not specified
-        if animation_id is None:
-            current_anim = self.animation_service.get_current()
-            if not current_anim:
-                log.warn("No animation selected for frame-by-frame debugging")
-                return
-            animation_id = current_anim.config.id
+        # Static zones render immediately
+        self.static_mode_controller.initialize()
 
-        # Enter frame-by-frame mode (blocks until user presses Q)
-        await self.frame_playback_controller.enter_frame_by_frame_mode(animation_id, **params)
+        # Animated zones start asynchronously
+        # asyncio.create_task(self.animation_mode_controller.initialize())
 
+        log.info("Zone controller initialization coordinated")
+
+    
     # ------------------------------------------------------------------
     # EVENT BUS SUBSCRIPTIONS
     # ------------------------------------------------------------------
@@ -190,31 +174,31 @@ class LEDController:
             asyncio.create_task(self.lamp_white_mode.toggle())
         elif btn == ButtonID.BTN3:
             asyncio.create_task(self.power_toggle.toggle())
-        elif btn == ButtonID.BTN4:
-            asyncio.create_task(self._toggle_zone_mode())
+        # elif btn == ButtonID.BTN4:
+        #     asyncio.create_task(self._toggle_zone_mode())
 
     def _handle_keyboard_keypress(self, e: KeyboardKeyPressEvent):
         """Handle keyboard key presses for debug features and zone mode switching.
 
         Keyboard shortcuts:
         - F: Enter frame-by-frame mode (debug)
-        - A: Switch current zone to ANIMATION mode
-        - S: Switch current zone to STATIC mode
-        - Q: Switch current zone to OFF mode
+        - Z: Switch current zone to STATIC mode
+        - X: Switch current zone to ANIMATION mode
+        - C: Switch current zone to OFF mode
         """
         key = e.key.upper()
         if key == 'F':
             log.info("Entering frame-by-frame mode (F pressed)")
             asyncio.create_task(self._enter_frame_by_frame_mode_async())
-        elif key == 'A':
-            log.info("Switching current zone to ANIMATION mode (A pressed)")
-            asyncio.create_task(self._set_zone_mode_async(ZoneRenderMode.ANIMATION))
-        elif key == 'S':
-            log.info("Switching current zone to STATIC mode (S pressed)")
-            asyncio.create_task(self._set_zone_mode_async(ZoneRenderMode.STATIC))
-        elif key == 'Q':
+        elif key == 'Z':
+            log.info("Switching current zone to STATIC mode (A pressed)")
+            asyncio.create_task(self._set_zone_render_mode_async(ZoneRenderMode.STATIC))
+        elif key == 'X':
+            log.info("Switching current zone to ANIMATION mode (S pressed)")
+            asyncio.create_task(self._set_zone_render_mode_async(ZoneRenderMode.ANIMATION))
+        elif key == 'C':
             log.info("Switching current zone to OFF mode (Q pressed)")
-            asyncio.create_task(self._set_zone_mode_async(ZoneRenderMode.OFF))
+            asyncio.create_task(self._set_zone_render_mode_async(ZoneRenderMode.OFF))
 
     async def _enter_frame_by_frame_mode_async(self):
         """Async wrapper to enter frame-by-frame mode for currently running animation."""
@@ -229,7 +213,7 @@ class LEDController:
         safe_params = Serializer.params_enum_to_str(params)
 
         log.info(f"Entering frame-by-frame mode for animation: {anim_id.name}")
-        await self.start_frame_by_frame_debugging(anim_id, **safe_params)
+        await self.frame_playback_controller.enter_frame_by_frame_mode(anim_id, **safe_params)
 
     # ------------------------------------------------------------------
     # ACTIONS (DISPATCH)
@@ -249,6 +233,10 @@ class LEDController:
             log.warn("No zone selected for selector rotation")
             return
 
+        if not self.edit_mode:
+            log.info("Modulator rotation ignored when not in edit mode")
+            return
+        
         # Context-aware routing based on selected zone's mode
         if current_zone.state.mode == ZoneRenderMode.ANIMATION:
             # In ANIMATION mode: rotate to cycle animations
@@ -323,11 +311,11 @@ class LEDController:
         self.static_mode_controller.on_edit_mode_change(self.edit_mode)
         self.animation_mode_controller.on_edit_mode_change(self.edit_mode)
 
-    async def _set_zone_mode_async(self, target_mode: ZoneRenderMode):
+    async def _set_zone_render_mode_async(self, target_mode: ZoneRenderMode):
         """
         Set the render mode of the currently selected zone.
 
-        This is called directly by keyboard events (S/A/O).
+        This is called directly by keyboard events (Z - static/X - animation/C - off).
         """
         current_zone = self.zone_service.get_selected_zone()
         if not current_zone:
@@ -386,34 +374,8 @@ class LEDController:
         log.info("Cycled zone selection", from_zone=old_zone_id.name, to_zone=new_zone_id.name)
 
         # Sync preview to show selected zone
-        self.static_mode_controller._sync_preview()
+        # self.static_mode_controller._sync_preview()
 
-    async def _cycle_zone_mode_async(self):
-        """
-        Cycle between STATIC → ANIMATION → OFF → STATIC.
-        Called by encoder click (single-step action).
-        """
-        current_zone = self.zone_service.get_selected_zone()
-        if not current_zone:
-            log.warn("No zone selected for cycling mode")
-            return
-
-        current_mode = current_zone.state.mode
-        zone_id = current_zone.config.id
-
-        log.info(f"Cycling zone mode for {zone_id.name}...")
-
-        # Determine next mode
-        if current_mode == ZoneRenderMode.STATIC:
-            next_mode = ZoneRenderMode.ANIMATION
-        elif current_mode == ZoneRenderMode.ANIMATION:
-            next_mode = ZoneRenderMode.OFF
-        else:  # OFF → STATIC
-            next_mode = ZoneRenderMode.STATIC
-
-        log.info(f"CycleZoneMode: {zone_id.name} → {next_mode.name}")
-
-        await self._set_zone_mode_async(next_mode)
 
     async def _apply_static_mode(self, zone):
         zone_id = zone.config.id
@@ -459,7 +421,7 @@ class LEDController:
             **safe_params
         )
 
-        self.animation_mode_controller._sync_preview()
+        # self.animation_mode_controller._sync_preview()
 
     async def _apply_off_mode(self, zone):
         zone_id = zone.config.id
@@ -469,7 +431,7 @@ class LEDController:
         zone.state.color = Color.black()
 
         # Submit frame through FrameManager (not directly to hardware)
-        self.strip_controller.render_zone_combined(zone)
+        # self.strip_controller.render_zone_combined(zone)
 
         # Restore original color to state (so next render has correct value)
         zone.state.color = original_color
@@ -519,7 +481,15 @@ class LEDController:
             log.debug(f"Zone {zone_id.name}: Switching to STATIC mode")
 
             # Submit static zone frame
-            self.strip_controller.render_zone_combined(current_zone)
+            asyncio.create_task(
+                self.frame_manager.submit_zone_frame(ZoneFrame(
+                    FramePriority.MANUAL,
+                    FrameSource.STATIC,
+                    zone_colors=Dict[{current_zone.id, current_zone.state.color}]
+                ))
+            )
+            # submit_all_zones_frame({zone.config.id: (zone.state.color, zone.brightness)})
+            #self.strip_controller.render_zone_combined(current_zone)
 
             if self.edit_mode:
                 self.static_mode_controller._start_pulse()
@@ -563,7 +533,7 @@ class LEDController:
 
             # Start animation with proper exclusions
             await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
-            self.animation_mode_controller._sync_preview()
+            # self.animation_mode_controller._sync_preview()
 
 
     # ------------------------------------------------------------------
@@ -571,6 +541,10 @@ class LEDController:
     # ------------------------------------------------------------------
     def clear_all(self) -> None:
         """Turn off all LEDs (both preview and strip)."""
+        # for gpio_pin, strip in self.zone_strips.items():
+        #     log.info(f"Clearing GPIO {gpio_pin}...")
+        #     strip.clear()
+        
         self.strip_controller.zone_strip.clear()
         log.info("All LEDs cleared")
 

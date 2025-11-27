@@ -1,6 +1,9 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from models.enums import LogLevel, LogCategory
+
+if TYPE_CHECKING:
+    from services.log_broadcaster import LogBroadcaster
 
 # === ANSI COLORS ===
 class Colors:
@@ -89,6 +92,7 @@ class Logger:
             LogLevel.WARN: 2,
             LogLevel.ERROR: 3,
         }
+        self._broadcaster: Optional['LogBroadcaster'] = None
 
     def _should_log(self, level: LogLevel) -> bool:
         """Check if message should be logged based on level"""
@@ -113,6 +117,15 @@ class Logger:
         """Format level symbol with color"""
         symbol = LEVEL_SYMBOLS.get(level, '·')
         return self._colorize(symbol, LEVEL_COLORS.get(level, Colors.WHITE))
+
+    def set_broadcaster(self, broadcaster: 'LogBroadcaster') -> None:
+        """
+        Set the log broadcaster for WebSocket streaming.
+
+        Args:
+            broadcaster: LogBroadcaster instance for streaming logs
+        """
+        self._broadcaster = broadcaster
 
     def log(
         self,
@@ -151,10 +164,11 @@ class Logger:
 
         # Build main line
         timestamp = self._format_timestamp()
+        timestamp_str = timestamp[1:-1]  # Remove brackets for ISO format
         cat = self._format_category(category)
         sym = self._format_level_symbol(level)
         msg = self._colorize(message, LEVEL_COLORS.get(level, Colors.WHITE))
-        
+
         # Print main line
         print(f"{timestamp} {cat} {sym} {msg}")
 
@@ -170,6 +184,20 @@ class Logger:
                 # Last item gets different tree character
                 tree = "└─" if i == len(all_details) - 1 else "├─"
                 print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
+
+        # Broadcast to WebSocket clients if broadcaster is set
+        if self._broadcaster:
+            # Use ISO 8601 format for WebSocket, include details in message
+            full_message = message
+            if all_details:
+                full_message = f"{message} ({', '.join(all_details)})"
+
+            self._broadcaster.log(
+                timestamp=datetime.now().isoformat(),
+                level=level.name,
+                category=category.name,
+                message=full_message
+            )
 
     # === Level helpers (backward-compatible) ===
     def debug(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.DEBUG, **kw)
