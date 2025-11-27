@@ -18,61 +18,36 @@ Example: @app.put("/zones/{zone_id}/color")
 """
 
 from fastapi import APIRouter, Depends, status
-from typing import Annotated
 
 from api.schemas.zone import (
     ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
     ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest
 )
 from api.services.zone_service import ZoneAPIService
-from api.middleware.auth import User, get_current_user, require_scope
-from utils.logger import get_logger
-from models.enums import LogCategory
-
-log = get_logger().for_category(LogCategory.SYSTEM)
+from api.dependencies import get_service_container
 
 # Create router for zone endpoints
 # The router is included in the main app with prefix="/api/v1"
 router = APIRouter(
     prefix="/zones",
     tags=["Zones"],
-    dependencies=[Depends(get_current_user)]  # All zone endpoints require auth
+    # NOTE: All endpoints are public (no authentication required)
+    # Add back dependencies=[Depends(get_current_user)] when implementing auth
 )
 
 
-def get_zone_service() -> ZoneAPIService:
-    """Dependency to get zone service instance
+async def get_zone_service(
+    services = Depends(get_service_container)
+) -> ZoneAPIService:
+    """Dependency to get zone service instance from the service container.
 
-    MOCK FOR PHASE 8.1: Returns stub that won't crash.
-    Phase 8.2 will replace with actual Phase 6 services via DI container.
+    Uses the ServiceContainer initialized by main_asyncio.py, which contains
+    the real Phase 6 ZoneService and ColorManager.
     """
-    from api.schemas.zone import ZoneListResponse
-    from api.middleware.error_handler import ZoneNotFoundError
-
-    class MockZoneService:
-        """Stub that returns empty list (real data comes in Phase 8.2)"""
-
-        def get_all_zones(self) -> ZoneListResponse:
-            """Return empty zones (Phase 8.2 will integrate real zones)"""
-            return ZoneListResponse(zones=[], count=0)
-
-        def get_zone(self, zone_id: str):
-            """Stub - not implemented yet"""
-            raise ZoneNotFoundError(zone_id)
-
-        def update_zone_color(self, zone_id: str, color_request):
-            """Stub - not implemented yet"""
-            raise ZoneNotFoundError(zone_id)
-
-        def update_zone_brightness(self, zone_id: str, brightness: int):
-            """Stub - not implemented yet"""
-            raise ZoneNotFoundError(zone_id)
-
-        def reset_zone(self, zone_id: str):
-            """Stub - not implemented yet"""
-            raise ZoneNotFoundError(zone_id)
-
-    return MockZoneService()
+    return ZoneAPIService(
+        zone_service=services.zone_service,
+        color_manager=services.color_manager
+    )
 
 
 # ============================================================================
@@ -86,8 +61,7 @@ def get_zone_service() -> ZoneAPIService:
     description="Get all zones with their current state (color, brightness, mode)"
 )
 async def list_zones(
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(get_current_user)
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneListResponse:
     """
     List all LED zones.
@@ -95,7 +69,7 @@ async def list_zones(
     Returns all zones configured in the system with their current state.
     Zones show: color (any mode), brightness, enabled state, render mode.
 
-    **Authentication:** Required (any user)
+    **Authentication:** Not required (public endpoint)
 
     **Example Response:**
     ```json
@@ -120,7 +94,6 @@ async def list_zones(
     }
     ```
     """
-    log.info(f"User {user.user_id} listing zones")
     return zone_service.get_all_zones()
 
 
@@ -132,8 +105,7 @@ async def list_zones(
 )
 async def get_zone(
     zone_id: str,
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(get_current_user)
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
     Get details for a single zone.
@@ -149,7 +121,6 @@ async def get_zone(
     **Errors:**
     - 404: Zone not found
     """
-    log.info(f"User {user.user_id} getting zone {zone_id}")
     return zone_service.get_zone(zone_id)
 
 
@@ -167,8 +138,7 @@ async def get_zone(
 async def update_zone_color(
     zone_id: str,
     color_request: ZoneColorUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(require_scope("zones:write"))
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
     Update a zone's color.
@@ -198,7 +168,6 @@ async def update_zone_color(
     - Broadcasts update to all clients (WebSocket)
     - Triggers on-screen update if in live preview mode
     """
-    log.info(f"User {user.user_id} updating color for zone {zone_id}")
     return zone_service.update_zone_color(zone_id, color_request.color)
 
 
@@ -212,8 +181,7 @@ async def update_zone_color(
 async def update_zone_brightness(
     zone_id: str,
     brightness_request: ZoneBrightnessUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(require_scope("zones:write"))
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
     Update a zone's brightness.
@@ -238,7 +206,6 @@ async def update_zone_brightness(
     **Note:** This adjusts brightness independently from color.
     The color hue is preserved - only intensity changes.
     """
-    log.info(f"User {user.user_id} updating brightness for zone {zone_id}")
     return zone_service.update_zone_brightness(zone_id, brightness_request.brightness)
 
 
@@ -251,9 +218,7 @@ async def update_zone_brightness(
 )
 async def toggle_zone_enabled(
     zone_id: str,
-    enabled_request: dict,  # {"enabled": true/false}
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(require_scope("zones:write"))
+    enabled_request: dict  # {"enabled": true/false}
 ) -> ZoneResponse:
     """
     Enable or disable a zone.
@@ -274,7 +239,6 @@ async def toggle_zone_enabled(
 
     **Returns:** Updated zone state
     """
-    log.info(f"User {user.user_id} setting zone {zone_id} enabled={enabled_request.get('enabled')}")
     # TODO: Implement once domain service supports this
     raise NotImplementedError("Zone enable/disable coming in Phase 8.2")
 
@@ -288,9 +252,7 @@ async def toggle_zone_enabled(
 )
 async def update_zone_render_mode(
     zone_id: str,
-    mode_request: ZoneRenderModeUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(require_scope("zones:write"))
+    mode_request: ZoneRenderModeUpdateRequest
 ) -> ZoneResponse:
     """
     Change what a zone is displaying.
@@ -325,7 +287,6 @@ async def update_zone_render_mode(
     {"render_mode": "OFF"}
     ```
     """
-    log.info(f"User {user.user_id} changing zone {zone_id} render mode to {mode_request.render_mode}")
     # TODO: Implement once animation service is available
     raise NotImplementedError("Zone render mode coming in Phase 8.3")
 
@@ -343,8 +304,7 @@ async def update_zone_render_mode(
 )
 async def reset_zone(
     zone_id: str,
-    zone_service: ZoneAPIService = Depends(get_zone_service),
-    user: User = Depends(require_scope("zones:write"))
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
     Reset a zone to its default state.
@@ -361,5 +321,4 @@ async def reset_zone(
 
     **Use Case:** Quick reset button in UI
     """
-    log.info(f"User {user.user_id} resetting zone {zone_id}")
     return zone_service.reset_zone(zone_id)

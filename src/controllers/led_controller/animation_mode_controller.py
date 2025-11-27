@@ -50,7 +50,7 @@ class AnimationModeController:
         Initialize animation mode during app startup.
 
         Queries all ANIMATION zones and starts animations on them.
-        Called once during LightingController initialization.
+        Uses zone-specific animation parameters saved in ZoneState.
 
         Current limitation: Only ONE animation can run at a time.
         If multiple zones are in ANIMATION mode, only the first one will animate.
@@ -73,17 +73,23 @@ class AnimationModeController:
         # Only animate the first zone in ANIMATION mode
         first_animated_zone = animated_zones[0]
 
-        # Get current animation from state or auto-select first available
-        current_anim = self.animation_service.get_current()
-        if not current_anim:
-            if not self.available_animations:
-                log.warn("ANIMATION: No animations available to start")
-                return
-            # Auto-select first animation
-            first_anim_id = self.available_animations[0]
-            self.animation_service.set_current(first_anim_id)
+        # Get animation to run: use zone's saved animation settings
+        anim_id = first_animated_zone.state.animation_id
+        if not anim_id:
+            # Zone has no saved animation, try to use current or auto-select
             current_anim = self.animation_service.get_current()
-            log.info(f"ANIMATION: Auto-selected {first_anim_id.name}")
+            if not current_anim:
+                if not self.available_animations:
+                    log.warn("ANIMATION: No animations available to start")
+                    return
+                # Auto-select first animation
+                first_anim_id = self.available_animations[0]
+                self.animation_service.set_current(first_anim_id)
+                current_anim = self.animation_service.get_current()
+                anim_id = first_anim_id
+                log.info(f"ANIMATION: Auto-selected {first_anim_id.name}")
+            else:
+                anim_id = current_anim.config.id
 
         # Build excluded zones list (all zones except the animated one)
         excluded_zone_ids = [
@@ -91,9 +97,18 @@ class AnimationModeController:
             if z.config.id != first_animated_zone.config.id
         ]
 
-        # Start animation
-        anim_id = current_anim.config.id
-        params = current_anim.build_params_for_engine()
+        # Use zone's saved animation parameters if available, otherwise use current animation's parameters
+        zone_params = first_animated_zone.state.animation_parameters
+        if zone_params:
+            params = zone_params
+        else:
+            # Fall back to current animation's parameters if no zone params are saved
+            current_anim = self.animation_service.get_current()
+            if current_anim:
+                params = current_anim.build_params_for_engine()
+            else:
+                params = {}
+
         safe_params = Serializer.params_enum_to_str(params)
 
         log.info(f"ANIMATION: Starting {anim_id.name} on zone {first_animated_zone.config.id.name}")

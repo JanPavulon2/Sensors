@@ -7,10 +7,9 @@ Provides:
 - WS /ws/logs - WebSocket endpoint for real-time log streaming
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter
 from models.enums import LogLevel, LogCategory
 from api.schemas.logger import LogLevelResponse, LogCategoryResponse
-from services.log_broadcaster import get_broadcaster
 
 router = APIRouter(
     prefix="/logger",

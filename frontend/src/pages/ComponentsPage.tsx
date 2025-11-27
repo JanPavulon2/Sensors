@@ -750,7 +750,7 @@ export function ComponentsPage(): JSX.Element {
       </Card>
 
       {/* Real-Time Logger */}
-      <Logger enabled={false} maxHeight="h-[500px]" />
+      <Logger enabled={true} maxHeight="h-[500px]" />
     </div>
   );
 }

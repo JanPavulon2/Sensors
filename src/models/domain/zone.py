@@ -33,11 +33,18 @@ class ZoneConfig:
 
 @dataclass
 class ZoneState:
-    """Mutable zone state from JSON"""
+    """
+    Mutable zone state from JSON.
+
+    Preserves all state for mode switching:
+    - color: Used by STATIC mode, preserved when in ANIMATION
+    - animation_id + animation_parameters: Used by ANIMATION mode, preserved when in STATIC
+    """
     id: ZoneID
     color: Color
     mode: ZoneRenderMode = ZoneRenderMode.STATIC
     animation_id: Optional[AnimationID] = None
+    animation_parameters: Optional[Dict[ParamID, Any]] = None
     
 
 @dataclass

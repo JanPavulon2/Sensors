@@ -31,8 +31,13 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
 import signal
 import asyncio
 import atexit
+import os
+import uvicorn
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
+from services.log_broadcaster import get_broadcaster
+from api.main import create_app
+from api.dependencies import set_service_container
 
 from models.enums import LogCategory, LogLevel, FramePriority
 from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
@@ -71,6 +76,13 @@ from services.middleware import log_middleware
 from hardware.hardware_coordinator import HardwareCoordinator
 
 # ---------------------------------------------------------------------------
+# GLOBAL STATE (for shutdown coordination)
+# ---------------------------------------------------------------------------
+
+# Shared reference to api_server for explicit shutdown in signal handler
+_api_server_ref = {'instance': None}
+
+# ---------------------------------------------------------------------------
 # SHUTDOWN & CLEANUP
 # ---------------------------------------------------------------------------
 
@@ -82,16 +94,35 @@ def emergency_gpio_cleanup():
     except Exception as e:
         log.error(f"Failed to cleanup GPIO: {e}")
 
-async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
-    """Gracefully shut down all tasks and hardware."""
+async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str = None) -> None:
+    """
+    Gracefully shut down all tasks and hardware.
+
+    Args:
+        loop: Event loop
+        signal_name: Name of signal that triggered shutdown
+    """
     if signal_name:
         log.info(f"Received signal: {signal_name} → initiating graceful shutdown...")
 
+    # Explicitly shutdown API server FIRST to release the port
+    api_server = _api_server_ref.get('instance')
+    if api_server:
+        try:
+            log.info("Shutting down API server...")
+            await api_server.shutdown()
+            log.info("API server shutdown complete")
+        except Exception as e:
+            log.error(f"Error shutting down API server: {e}")
+
+    # Give server time to release port (critical for restart)
+    await asyncio.sleep(0.1)
+
     tasks = [
-        t for t in asyncio.all_tasks(loop) 
+        t for t in asyncio.all_tasks(loop)
         if t is not asyncio.current_task(loop)
     ]
-    
+
     log.debug(f"Cancelling {len(tasks)} running tasks...")
     for task in tasks:
         task.cancel()
@@ -106,10 +137,18 @@ async def cleanup_application(
     gpio_manager: GPIOManager,
     hardware: HardwareBundle,
     keyboard_task: asyncio.Task,
-    polling_task: asyncio.Task
+    polling_task: asyncio.Task,
+    api_task: asyncio.Task
 ) -> None:
     """Perform graceful application cleanup on shutdown."""
     log.info("🧹 Starting cleanup...")
+
+    # Cancel API server task
+    if api_task and not api_task.done():
+        api_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await api_task
+        log.info("API server stopped")
 
     # Cancel polling and keyboard tasks
     if keyboard_task and not keyboard_task.done():
@@ -149,6 +188,69 @@ async def cleanup_application(
     gpio_manager.cleanup()
 
     log.info("Cleanup complete.")
+
+
+# ---------------------------------------------------------------------------
+# API SERVER RUNNER
+# ---------------------------------------------------------------------------
+
+async def run_api_server() -> 'uvicorn.Server':
+    """
+    Run the FastAPI server in the asyncio event loop.
+
+    Creates the FastAPI app with create_app() and runs it using
+    uvicorn's async server support. The API server handles REST
+    endpoints and WebSocket connections for logs and zone control.
+
+    Returns:
+        uvicorn.Server instance (for explicit shutdown if needed)
+    """
+    log.info("Setting up FastAPI application...")
+
+    # Initialize LogBroadcaster for WebSocket log streaming
+    broadcaster = get_broadcaster()
+    broadcaster.start()
+
+    # Connect broadcaster to logger singleton
+    logger = get_logger()
+    logger.set_broadcaster(broadcaster)
+
+    log.info("LogBroadcaster initialized for WebSocket log streaming")
+
+    # Create FastAPI app
+    app = create_app(
+        title="Diuna LED System",
+        description="REST API for programmable LED control",
+        version="1.0.0",
+        docs_enabled=True
+    )
+
+    # Configure uvicorn server
+    API_PORT = 8000  # Change this if port is already in use
+    config = uvicorn.Config(
+        app=app,
+        host="0.0.0.0",
+        port=API_PORT,
+        log_level="info",
+        # Disable uvicorn's default access logging (we use our logger)
+        access_log=False
+    )
+
+    server = uvicorn.Server(config)
+
+    # Store server reference for explicit shutdown in signal handler
+    _api_server_ref['instance'] = server
+
+    log.info(f"Starting FastAPI server on http://0.0.0.0:{API_PORT}")
+    log.info(f"API docs available at http://localhost:{API_PORT}/docs")
+
+    try:
+        await server.serve()
+    except asyncio.CancelledError:
+        log.info("API server received cancellation signal")
+        # Note: server.shutdown() is called explicitly in shutdown()
+        # so we don't call it here to avoid double-shutdown
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +343,11 @@ async def main():
         color_manager=config_manager.color_manager,
         config_manager=config_manager
     )
-    
+
+    # Register service container with API for dependency injection
+    set_service_container(services)
+    log.info("Service container registered with API")
+
     log.info("Initializing LED controller...")
     lightning_controller = LightingController(
         config_manager=config_manager,
@@ -283,21 +389,55 @@ async def main():
     
     
     # ========================================================================
+    # 8. API SERVER
+    # ========================================================================
+
+    log.info("Starting API server task...")
+    api_task = asyncio.create_task(run_api_server(), name="APIServer")
+
+
+    # ========================================================================
     # SIGNAL HANDLERS
     # ========================================================================
+
+    # Create shutdown event to coordinate graceful exit
+    shutdown_event = asyncio.Event()
+
+    def signal_handler(sig):
+        """Signal handler that triggers graceful shutdown."""
+        log.info(f"Received signal: {sig.name} → initiating graceful shutdown...")
+        # Schedule shutdown coroutine
+        asyncio.create_task(shutdown(asyncio.get_running_loop(), sig.name))
+        # Set event to break gather()
+        shutdown_event.set()
 
     # Register signal handlers for graceful exit
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(loop, s.name)))
+        loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
 
 
     # ========================================================================
     # MAIN TASK GATHER
     # ========================================================================
 
+    async def wait_for_shutdown():
+        """Wait for shutdown event to be triggered."""
+        try:
+            await shutdown_event.wait()
+        except asyncio.CancelledError:
+            raise
+
     try:
-        await asyncio.gather(keyboard_task, polling_task)
+        # Race between tasks and shutdown signal
+        # When shutdown event is triggered, this will raise CancelledError
+        await asyncio.gather(
+            keyboard_task,
+            polling_task,
+            api_task,
+            wait_for_shutdown(),
+            return_exceptions=False
+        )
     except asyncio.CancelledError:
         log.debug("Main loop cancelled.")
     finally:
@@ -306,7 +446,8 @@ async def main():
             gpio_manager,
             hardware,
             keyboard_task,
-            polling_task
+            polling_task,
+            api_task
         )
 
 
@@ -319,4 +460,13 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass  # Handled in main()'s finally block
+        log.info("KeyboardInterrupt received")
+    except Exception as e:
+        log.error(f"Unexpected error: {e}", exc_info=True)
+    finally:
+        # Ensure GPIO cleanup happens no matter what
+        log.info("Final shutdown...")
+        try:
+            emergency_gpio_cleanup()
+        except Exception as e:
+            log.error(f"Error in final cleanup: {e}")

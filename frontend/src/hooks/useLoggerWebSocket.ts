@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useLoggerStore } from '@/stores/loggerStore';
+import { config } from '@/config/constants';
 import type { LogEntry } from '@/types/logger';
 
 interface UseLoggerWebSocketOptions {
@@ -19,7 +20,7 @@ interface UseLoggerWebSocketOptions {
  */
 export const useLoggerWebSocket = ({
   enabled = true,
-  url = `${import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8000'}/ws/logs`,
+  url = `${config.websocket.url}/ws/logs`,
 }: UseLoggerWebSocketOptions = {}) => {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);

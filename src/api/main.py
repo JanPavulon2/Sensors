@@ -34,7 +34,6 @@ from api.middleware.error_handler import register_exception_handlers
 from api.websocket import websocket_logs_endpoint
 from utils.logger import get_logger
 from models.enums import LogCategory
-from services.log_broadcaster import get_broadcaster
 
 log = get_logger().for_category(LogCategory.SYSTEM)
 
@@ -174,7 +173,15 @@ def create_app(
     @app.websocket("/ws/logs")
     async def websocket_logs(websocket):
         """WebSocket endpoint for real-time log streaming"""
-        await websocket_logs_endpoint(websocket)
+        try:
+            log.debug("WebSocket connection attempt on /ws/logs")
+            await websocket_logs_endpoint(websocket)
+        except Exception as e:
+            log.error(f"WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
+            try:
+                await websocket.close(code=1011, reason="Internal server error")
+            except Exception:
+                pass
 
     log.debug("WebSocket endpoint registered at /ws/logs")
 
@@ -186,25 +193,15 @@ def create_app(
     async def startup_event():
         """Called when FastAPI server starts"""
         log.info("FastAPI app starting up")
-
-        # Initialize LogBroadcaster for WebSocket log streaming
-        broadcaster = get_broadcaster()
-        broadcaster.start()
-
-        # Connect broadcaster to logger singleton
-        logger = get_logger()
-        logger.set_broadcaster(broadcaster)
-
-        log.info("LogBroadcaster initialized and connected to logger")
+        # Note: LogBroadcaster is initialized in main_asyncio.py's run_api_server()
+        # This startup hook is kept for documentation and future enhancements
 
     @app.on_event("shutdown")
     async def shutdown_event():
         """Called when FastAPI server shuts down"""
         log.info("FastAPI app shutting down")
-
-        # Cleanup WebSocket connections and broadcaster
-        broadcaster = get_broadcaster()
-        await broadcaster.stop()
+        # Note: LogBroadcaster cleanup is handled by main_asyncio.py
+        # This shutdown hook is kept for documentation and future enhancements
 
     log.info(f"FastAPI app created successfully: {title}")
 
@@ -212,18 +209,12 @@ def create_app(
 
 
 # ============================================================================
-# Development/Testing
+# NOTE: This module is imported by main_asyncio.py
 # ============================================================================
-
-if __name__ == "__main__":
-    import uvicorn
-
-    # Run with: python -m api.main
-    app = create_app()
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="debug"
-    )
+#
+# Entry point is: python -m src.main_asyncio
+#
+# This module provides the create_app() factory function used to bootstrap
+# the FastAPI application. It's kept separate for clean separation of concerns:
+# - api/main.py: FastAPI app configuration
+# - main_asyncio.py: Async runtime + API server integration

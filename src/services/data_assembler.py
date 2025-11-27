@@ -181,7 +181,12 @@ class DataAssembler:
             raise
 
     def build_zones(self) -> List[ZoneCombined]:
-        """Build zone domain objects from config + state"""
+        """
+        Build zone domain objects from config + state.
+
+        Preserves complete zone state including animation parameters
+        for proper mode switching (STATIC ↔ ANIMATION) on app restart.
+        """
         try:
             state_json = self.load_state()
             zones = []
@@ -202,6 +207,7 @@ class DataAssembler:
                     brightness = 100
                     mode = ZoneRenderMode.STATIC
                     animation_id = None
+                    animation_parameters = None
                 else:
                     color_dict = zone_state_data.get("color", {"mode": "HUE", "hue": 0})
                     color = Color.from_dict(color_dict, self.color_manager)
@@ -213,21 +219,36 @@ class DataAssembler:
                     except (ValueError, TypeError):
                         mode = ZoneRenderMode.STATIC
 
-                    # Load animation_id if zone is in ANIMATION mode
+                    # Load animation state (preserved for mode switching)
                     animation_id = None
-                    if mode == ZoneRenderMode.ANIMATION:
-                        anim_id_str = zone_state_data.get("animation_id")
+                    animation_parameters = None
+                    anim_data = zone_state_data.get("animation")
+                    if anim_data:
+                        # Load animation_id
+                        anim_id_str = anim_data.get("id")
                         if anim_id_str:
                             try:
                                 animation_id = EnumHelper.to_enum(AnimationID, anim_id_str)
                             except (ValueError, TypeError):
                                 log.warn(f"Invalid animation_id for zone {zone_config.tag}: {anim_id_str}")
 
+                        # Load animation_parameters
+                        params_dict = anim_data.get("parameters", {})
+                        if params_dict and animation_id:
+                            animation_parameters = {}
+                            for param_name, value in params_dict.items():
+                                try:
+                                    param_id = EnumHelper.to_enum(ParamID, param_name)
+                                    animation_parameters[param_id] = value
+                                except (ValueError, TypeError):
+                                    log.warn(f"Invalid parameter {param_name} for zone {zone_config.tag}")
+
                 zone_state = ZoneState(
                     id=zone_config.id,
                     color=color,
                     mode=mode,
-                    animation_id=animation_id
+                    animation_id=animation_id,
+                    animation_parameters=animation_parameters
                 )
 
                 params_combined = {}
@@ -283,7 +304,12 @@ class DataAssembler:
             raise
 
     def save_zone_state(self, zones: List[ZoneCombined]) -> None:
-        """Save zone state to state.json"""
+        """
+        Save zone state to state.json.
+
+        Preserves complete zone state including color and animation parameters
+        for proper mode switching (STATIC ↔ ANIMATION) on app restart.
+        """
         try:
             state_json = self.load_state()
 
@@ -298,9 +324,16 @@ class DataAssembler:
                     "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION, OFF)
                 }
 
-                # Save animation_id if zone is in ANIMATION mode
-                if zone.state.animation_id:
-                    zone_data["animation_id"] = zone.state.animation_id.name
+                # Save animation state if zone has animation settings
+                # (even if mode=STATIC, for preservation when switching back to ANIMATION)
+                if zone.state.animation_id and zone.state.animation_parameters:
+                    zone_data["animation"] = {
+                        "id": zone.state.animation_id.name,
+                        "parameters": {
+                            param_id.name: value
+                            for param_id, value in zone.state.animation_parameters.items()
+                        }
+                    }
 
                 state_json["zones"][tag] = zone_data
 

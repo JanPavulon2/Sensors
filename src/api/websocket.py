@@ -6,7 +6,6 @@ to connected clients in real-time.
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from services.log_broadcaster import get_broadcaster
 import logging
 
 # Get Python logger for internal errors only (avoid infinite recursion)
@@ -41,11 +40,29 @@ async def websocket_logs_endpoint(websocket: WebSocket):
     - Automatically handles reconnection from frontend
     - No authentication required (can be added later)
     """
-    broadcaster = get_broadcaster()
-
+    broadcaster = None
     try:
-        # Register connection with broadcaster
-        await broadcaster.manager.connect(websocket)
+        # Accept the connection FIRST, before doing anything else
+        logger.debug("Accepting WebSocket connection")
+        await websocket.accept()
+
+        # NOW try to initialize the broadcaster
+        logger.debug("Initializing broadcaster for log streaming")
+
+        # Lazy import to avoid circular dependency
+        from services.log_broadcaster import get_broadcaster
+
+        broadcaster = get_broadcaster()
+
+        if broadcaster is None:
+            logger.error("Broadcaster is None - WebSocket initialization failed")
+            await websocket.close(code=1008, reason="Server initialization error")
+            return
+
+        # Register connection with broadcaster's manager (add to active connections)
+        logger.debug("WebSocket connection registered with broadcaster")
+        async with broadcaster.manager._lock:
+            broadcaster.manager.active_connections.add(websocket)
 
         # Keep connection open indefinitely
         # Messages are sent asynchronously by the broadcaster
@@ -57,11 +74,14 @@ async def websocket_logs_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         # Client disconnected normally
-        await broadcaster.manager.disconnect(websocket)
+        logger.debug("WebSocket client disconnected")
+        if broadcaster:
+            await broadcaster.manager.disconnect(websocket)
     except Exception as e:
         # Any other error
-        logger.error(f"WebSocket error: {e}")
-        try:
-            await broadcaster.manager.disconnect(websocket)
-        except Exception:
-            pass
+        logger.error(f"WebSocket error: {type(e).__name__}: {e}", exc_info=True)
+        if broadcaster:
+            try:
+                await broadcaster.manager.disconnect(websocket)
+            except Exception as disconnect_error:
+                logger.error(f"Error disconnecting after exception: {disconnect_error}")
