@@ -113,7 +113,7 @@ class ZoneCombined:
         """
         # Disabled zones are always black
         if not self.config.enabled:
-            return (0, 0, 0)
+            return Color.black().to_rgb()
 
         r, g, b = self.state.color.to_rgb()
         brightness_factor = self.brightness / 100.0

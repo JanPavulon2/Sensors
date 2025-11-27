@@ -11,7 +11,7 @@ Responsible for:
 
 import contextlib
 import sys
-from typing import List
+from typing import List, Optional
 
 from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
@@ -80,7 +80,7 @@ from hardware.hardware_coordinator import HardwareCoordinator
 # ---------------------------------------------------------------------------
 
 # Shared reference to api_server for explicit shutdown in signal handler
-_api_server_ref = {'instance': None}
+_api_server_ref: dict = {'instance': None}
 
 # ---------------------------------------------------------------------------
 # SHUTDOWN & CLEANUP
@@ -94,7 +94,7 @@ def emergency_gpio_cleanup():
     except Exception as e:
         log.error(f"Failed to cleanup GPIO: {e}")
 
-async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str = None) -> None:
+async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: Optional[str] = None) -> None:
     """
     Gracefully shut down all tasks and hardware.
 
@@ -163,38 +163,55 @@ async def cleanup_application(
 
     # Stop animations
     log.info("Stopping animations...")
-    led_controller.animation_mode_controller.animation_service.stop_all()
-    if led_controller.animation_engine and led_controller.animation_engine.is_running():
-        await led_controller.animation_engine.stop()
+    try:
+        led_controller.animation_mode_controller.animation_service.stop_all()
+        log.debug("✓ Animation service stopped")
+    except Exception as e:
+        log.error(f"Error stopping animation service: {e}")
+
+    try:
+        if led_controller.animation_engine and led_controller.animation_engine.is_running():
+            await led_controller.animation_engine.stop()
+            log.debug("✓ Animation engine stopped")
+    except Exception as e:
+        log.error(f"Error stopping animation engine: {e}")
 
     # Stop pulsing
     log.info("Stopping pulsing...")
-    # await led_controller.static_mode_controller._stop_pulse_async()
     await asyncio.sleep(0.05)
-
-    # Fade out
-    # log.info("Performing shutdown transition...")
-    # await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
 
     # Clear LEDs (ALL strips, not just GPIO 18)
     log.info("Clearing LEDs on all GPIO strips...")
-    led_controller.clear_all()
-    for gpio_pin, strip in hardware.zone_strips.items():
-        log.info(f"Clearing GPIO {gpio_pin}...")
-        strip.clear()
+    try:
+        led_controller.clear_all()
+        log.debug("✓ All zones cleared")
+    except Exception as e:
+        log.error(f"Error clearing zones: {e}")
+
+    try:
+        for gpio_pin, strip in hardware.zone_strips.items():
+            log.debug(f"Clearing GPIO {gpio_pin}...")
+            strip.clear()
+        log.debug("✓ All GPIO strips cleared")
+    except Exception as e:
+        log.error(f"Error clearing GPIO strips: {e}")
 
     # Cleanup GPIO
     log.info("Cleaning up GPIO...")
-    gpio_manager.cleanup()
+    try:
+        gpio_manager.cleanup()
+        log.debug("✓ GPIO cleaned up")
+    except Exception as e:
+        log.error(f"Error cleaning up GPIO: {e}")
 
-    log.info("Cleanup complete.")
+    log.info("✓ Cleanup complete.")
 
 
 # ---------------------------------------------------------------------------
 # API SERVER RUNNER
 # ---------------------------------------------------------------------------
 
-async def run_api_server() -> 'uvicorn.Server':
+async def run_api_server() -> None:
     """
     Run the FastAPI server in the asyncio event loop.
 
@@ -202,8 +219,7 @@ async def run_api_server() -> 'uvicorn.Server':
     uvicorn's async server support. The API server handles REST
     endpoints and WebSocket connections for logs and zone control.
 
-    Returns:
-        uvicorn.Server instance (for explicit shutdown if needed)
+    The server runs until cancelled (via signal handlers).
     """
     log.info("Setting up FastAPI application...")
 
@@ -233,7 +249,8 @@ async def run_api_server() -> 'uvicorn.Server':
         port=API_PORT,
         log_level="info",
         # Disable uvicorn's default access logging (we use our logger)
-        access_log=False
+        access_log=False,
+        loop="asyncio"
     )
 
     server = uvicorn.Server(config)
@@ -247,9 +264,7 @@ async def run_api_server() -> 'uvicorn.Server':
     try:
         await server.serve()
     except asyncio.CancelledError:
-        log.info("API server received cancellation signal")
-        # Note: server.shutdown() is called explicitly in shutdown()
-        # so we don't call it here to avoid double-shutdown
+        log.debug("API server task cancelled")
         raise
 
 
@@ -406,9 +421,8 @@ async def main():
     def signal_handler(sig):
         """Signal handler that triggers graceful shutdown."""
         log.info(f"Received signal: {sig.name} → initiating graceful shutdown...")
-        # Schedule shutdown coroutine
-        asyncio.create_task(shutdown(asyncio.get_running_loop(), sig.name))
-        # Set event to break gather()
+        # Set event to break gather() - this is the ONLY action in signal handler
+        # (no async calls here)
         shutdown_event.set()
 
     # Register signal handlers for graceful exit
@@ -430,7 +444,7 @@ async def main():
 
     try:
         # Race between tasks and shutdown signal
-        # When shutdown event is triggered, this will raise CancelledError
+        # When shutdown event is triggered, this will complete
         await asyncio.gather(
             keyboard_task,
             polling_task,
@@ -441,14 +455,45 @@ async def main():
     except asyncio.CancelledError:
         log.debug("Main loop cancelled.")
     finally:
-        await cleanup_application(
-            lightning_controller,
-            gpio_manager,
-            hardware,
-            keyboard_task,
-            polling_task,
-            api_task
-        )
+        log.info("Initiating shutdown sequence...")
+
+        try:
+            # First, run explicit shutdown to release API server and cancel tasks
+            await asyncio.wait_for(
+                shutdown(asyncio.get_running_loop(), "MAIN_SHUTDOWN"),
+                timeout=3.0
+            )
+        except asyncio.TimeoutError:
+            log.error("⚠️ shutdown() timeout - force cancelling remaining tasks")
+            # Force cancel all remaining tasks
+            for task in asyncio.all_tasks(loop):
+                if task is not asyncio.current_task(loop):
+                    task.cancel()
+        except Exception as e:
+            log.error(f"Error during shutdown: {e}")
+
+        try:
+            # Then, do cleanup work (clear LEDs, cleanup GPIO)
+            await asyncio.wait_for(
+                cleanup_application(
+                    lightning_controller,
+                    gpio_manager,
+                    hardware,
+                    keyboard_task,
+                    polling_task,
+                    api_task
+                ),
+                timeout=3.0  # 3 second timeout for cleanup
+            )
+        except asyncio.TimeoutError:
+            log.error("⚠️ Cleanup timeout - some operations took too long, forcing shutdown")
+            try:
+                # Try emergency GPIO cleanup as fallback
+                gpio_manager.cleanup()
+            except Exception as e:
+                log.error(f"Emergency cleanup failed: {e}")
+        except Exception as e:
+            log.error(f"Error during cleanup: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -470,3 +515,5 @@ if __name__ == "__main__":
             emergency_gpio_cleanup()
         except Exception as e:
             log.error(f"Error in final cleanup: {e}")
+        # Explicitly exit to ensure the process terminates
+        sys.exit(0)
