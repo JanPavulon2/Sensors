@@ -96,7 +96,10 @@ def emergency_gpio_cleanup():
 
 async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: Optional[str] = None) -> None:
     """
-    Gracefully shut down all tasks and hardware.
+    Gracefully shut down all tasks.
+
+    Cancels all running tasks except the current one. Each task's finally block
+    will handle its own cleanup (e.g., the API server task will call server.shutdown()).
 
     Args:
         loop: Event loop
@@ -105,19 +108,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: Optional[str] =
     if signal_name:
         log.info(f"Received signal: {signal_name} → initiating graceful shutdown...")
 
-    # Explicitly shutdown API server FIRST to release the port
-    api_server = _api_server_ref.get('instance')
-    if api_server:
-        try:
-            log.info("Shutting down API server...")
-            await api_server.shutdown()
-            log.info("API server shutdown complete")
-        except Exception as e:
-            log.error(f"Error shutting down API server: {e}")
-
-    # Give server time to release port (critical for restart)
-    await asyncio.sleep(0.1)
-
+    # Get all running tasks except this one
     tasks = [
         t for t in asyncio.all_tasks(loop)
         if t is not asyncio.current_task(loop)
@@ -127,6 +118,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: Optional[str] =
     for task in tasks:
         task.cancel()
 
+    # Wait for all tasks to be cancelled and cleaned up
     await asyncio.gather(*tasks, return_exceptions=True)
     await asyncio.sleep(0.05)
     log.info("Shutdown complete. Goodbye!")
@@ -220,6 +212,10 @@ async def run_api_server() -> None:
     endpoints and WebSocket connections for logs and zone control.
 
     The server runs until cancelled (via signal handlers).
+
+    IMPORTANT: We manage the server's lifespan manually (startup/shutdown)
+    instead of using serve() to prevent uvicorn from installing its own
+    signal handlers that would interfere with our shutdown pipeline.
     """
     log.info("Setting up FastAPI application...")
 
@@ -262,10 +258,25 @@ async def run_api_server() -> None:
     log.info(f"API docs available at http://localhost:{API_PORT}/docs")
 
     try:
-        await server.serve()
+        # Start the server WITHOUT using serve() - this prevents uvicorn from
+        # installing its own signal handlers that would interfere with our
+        # shutdown pipeline
+        await server.startup()
+
+        # Keep the server running indefinitely until cancelled
+        # Signal handlers will cancel this task, triggering cleanup
+        while True:
+            await asyncio.sleep(1)
+
     except asyncio.CancelledError:
-        log.debug("API server task cancelled")
+        log.debug("API server task cancelled, shutting down uvicorn...")
         raise
+    finally:
+        # Ensure server is shut down if this task exits for any reason
+        try:
+            await server.shutdown()
+        except Exception as e:
+            log.error(f"Error shutting down API server: {e}")
 
 
 # ---------------------------------------------------------------------------
