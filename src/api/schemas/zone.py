@@ -103,7 +103,7 @@ class ColorResponse(BaseModel):
 class ZoneStateResponse(BaseModel):
     """Zone state - what's currently being displayed on the zone"""
     color: ColorResponse = Field(description="Current color")
-    brightness: int = Field(
+    brightness: float = Field(
         ge=0,
         le=255,
         description="Zone brightness level 0-255"
@@ -179,7 +179,7 @@ class ZoneColorUpdateRequest(BaseModel):
 
 class ZoneBrightnessUpdateRequest(BaseModel):
     """Request to update zone brightness"""
-    brightness: int = Field(
+    brightness: float = Field(
         ge=0,
         le=255,
         description="New brightness 0-255"
@@ -238,7 +238,7 @@ class ZoneRenderModeUpdateRequest(BaseModel):
 class ZoneUpdateRequest(BaseModel):
     """Request to update entire zone (flexible update)"""
     color: Optional[ColorRequest] = Field(None, description="New color (optional)")
-    brightness: Optional[int] = Field(
+    brightness: Optional[float] = Field(
         None,
         ge=0,
         le=255,

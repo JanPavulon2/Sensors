@@ -136,7 +136,7 @@ def create_app(
     # =========================================================================
 
     @app.get(
-        "/health",
+        "/api/health",
         tags=["System"],
         summary="Health check",
         description="Check if API is running and responding"
@@ -149,7 +149,7 @@ def create_app(
             "version": version
         }
 
-    log.debug("Health check endpoint registered at /health")
+    log.debug("Health check endpoint registered at /api/health")
 
     # =========================================================================
     # Root Redirect
@@ -162,7 +162,7 @@ def create_app(
             {
                 "message": "Diuna LED System API",
                 "docs": "/docs",
-                "health": "/health"
+                "health": "/api/health"
             }
         )
 

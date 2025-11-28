@@ -103,12 +103,12 @@ class ZoneAPIService:
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
 
-    def update_zone_brightness(self, zone_id: str, brightness: int) -> ZoneResponse:
+    def update_zone_brightness(self, zone_id: str, brightness: float) -> ZoneResponse:
         """Update zone brightness
 
         Args:
             zone_id: Zone ID string
-            brightness: Brightness 0-255
+            brightness: Brightness 0-255 (can be float)
 
         Returns:
             Updated ZoneResponse

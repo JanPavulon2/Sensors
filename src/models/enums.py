@@ -171,6 +171,8 @@ class LogCategory(Enum):
     RENDER_ENGINE = auto()
     GENERAL = auto()    # Default general category
     API = auto()
+    
+    SHUTDOWN = auto()
 
 class FramePriority(Enum):
     """

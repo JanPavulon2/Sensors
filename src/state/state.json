@@ -30,7 +30,7 @@
         "mode": "PRESET",
         "preset_name": "blue"
       },
-      "brightness": 100,
+      "brightness": 63.0,
       "mode": "STATIC"
     },
     "top": {
@@ -47,7 +47,7 @@
         "preset_name": "red"
       },
       "brightness": 87.5,
-      "mode": "ANIMATION"
+      "mode": "OFF"
     },
     "bottom": {
       "color": {
@@ -121,7 +121,7 @@
         "mode": "PRESET",
         "preset_name": "green"
       },
-      "brightness": 100,
+      "brightness": 73.0,
       "mode": "STATIC"
     },
     "pixel2": {
@@ -134,7 +134,7 @@
     }
   },
   "current_animation": {
-    "id": "BREATHE",
+    "id": "COLOR_FADE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
@@ -152,7 +152,7 @@
       "brightness": 0
     },
     "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 3,
+    "selected_zone_index": 7,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

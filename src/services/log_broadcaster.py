@@ -172,7 +172,8 @@ class LogBroadcaster:
                 await self.manager.broadcast(message)
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as ex:
+                log.error()
                 # Log error internally (avoid infinite recursion)
                 # Just continue processing
                 pass

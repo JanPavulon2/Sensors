@@ -75,12 +75,22 @@ from services.middleware import log_middleware
 # === Hardware Layer ===
 from hardware.hardware_coordinator import HardwareCoordinator
 
+# === Lifecycle Management ===
+from lifecycle import (
+    ShutdownCoordinator,
+    LEDShutdownHandler,
+    AnimationShutdownHandler,
+    APIServerShutdownHandler,
+    TaskCancellationHandler,
+    GPIOShutdownHandler,
+)
+
 # ---------------------------------------------------------------------------
 # GLOBAL STATE (for shutdown coordination)
 # ---------------------------------------------------------------------------
 
 # Shared reference to api_server for explicit shutdown in signal handler
-_api_server_ref: dict = {'instance': None}
+# _api_server_ref: dict = {'instance': None}
 
 # Shared reference to gpio_manager for atexit cleanup
 _gpio_manager_ref: dict = {'instance': None}
@@ -260,7 +270,7 @@ async def run_api_server() -> None:
     server = uvicorn.Server(config)
 
     # Store server reference for explicit shutdown in signal handler
-    _api_server_ref['instance'] = server
+    # _api_server_ref['instance'] = server
 
     log.info(f"Starting FastAPI server on http://0.0.0.0:{API_PORT}")
     log.info(f"API docs available at http://localhost:{API_PORT}/docs")
