@@ -1,25 +1,27 @@
 """
-Lifecycle management for Diuna application.
+Lifecycle subsystem
+-------------------
 
-Handles startup, running, and graceful shutdown with component-based architecture.
+Exports the public API for:
+- graceful shutdown
+- task tracking & introspection
+- shutdown handlers
+
+Internal modules remain private. External code should import from:
+    from lifecycle import ShutdownCoordinator, TaskRegistry
+    from lifecycle.handlers import LEDShutdownHandler
 """
 
-from .shutdown_protocol import ShutdownHandler
 from .shutdown_coordinator import ShutdownCoordinator
-from .handlers import (
-    LEDShutdownHandler,
-    AnimationShutdownHandler,
-    APIServerShutdownHandler,
-    GPIOShutdownHandler,
-    TaskCancellationHandler,
-)
+from .task_registry import TaskRegistry, TaskCategory, TaskInfo
+from .shutdown_protocol import IShutdownHandler
+from . import handlers
 
 __all__ = [
-    "ShutdownHandler",
     "ShutdownCoordinator",
-    "LEDShutdownHandler",
-    "AnimationShutdownHandler",
-    "APIServerShutdownHandler",
-    "GPIOShutdownHandler",
-    "TaskCancellationHandler",
+    "TaskRegistry",
+    "TaskCategory",
+    "TaskInfo",
+    "IShutdownHandler",
+    "handlers",
 ]

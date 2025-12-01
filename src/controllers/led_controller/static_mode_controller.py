@@ -17,6 +17,7 @@ from utils.logger import get_logger, LogCategory
 
 if TYPE_CHECKING:
     from controllers.zone_strip_controller import ZoneStripController
+    from services.zone_service import ZoneService
 
 log = get_logger().for_category(LogCategory.GENERAL)
 

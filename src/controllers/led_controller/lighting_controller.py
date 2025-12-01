@@ -485,7 +485,7 @@ class LightingController:
                 self.frame_manager.submit_zone_frame(ZoneFrame(
                     FramePriority.MANUAL,
                     FrameSource.STATIC,
-                    zone_colors=Dict[{current_zone.id, current_zone.state.color}]
+                    zone_colors=Dict[current_zone.id, current_zone.state.color]
                 ))
             )
             # submit_all_zones_frame({zone.config.id: (zone.state.color, zone.brightness)})

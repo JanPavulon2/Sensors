@@ -6,10 +6,10 @@ in the graceful shutdown sequence.
 """
 
 from typing import Protocol
+
 from abc import abstractmethod
 
-
-class ShutdownHandler(Protocol):
+class IShutdownHandler(Protocol):
     """
     Protocol for components that need graceful shutdown.
 
@@ -32,38 +32,12 @@ class ShutdownHandler(Protocol):
     @property
     def shutdown_priority(self) -> int:
         """
-        Shutdown priority (higher = shutdown first).
-
-        Priority levels:
-        - 100: LEDs (clear immediately to prevent leaving them on)
-        - 80: Animations (stop animation engine)
-        - 60: API Server (stop HTTP/WebSocket server)
-        - 40: Controllers (stop background processing)
-        - 20: Event systems (stop event bus)
-        - 10: GPIO (cleanup hardware last)
-
-        Returns:
-            Priority value (0-100+). Higher priority shuts down first.
+        Higher priority shuts down earlier.
         """
         ...
 
     async def shutdown(self) -> None:
         """
-        Perform graceful shutdown of this component.
-
-        This method is called during the shutdown sequence. It should:
-        1. Stop all activity
-        2. Clean up resources
-        3. Release ports/handles
-        4. Be idempotent (safe to call multiple times)
-
-        Can raise exceptions, which are caught and logged by ShutdownCoordinator.
-
-        Returns:
-            None
-
-        Raises:
-            asyncio.TimeoutError: If shutdown takes too long
-            Exception: Any other exception is logged but doesn't prevent other handlers
+        Called during coordinated shutdown.
         """
         ...

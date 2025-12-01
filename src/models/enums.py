@@ -173,6 +173,8 @@ class LogCategory(Enum):
     API = auto()
     
     SHUTDOWN = auto()
+    LIFECYCLE = auto()
+    TASK = auto()
 
 class FramePriority(Enum):
     """

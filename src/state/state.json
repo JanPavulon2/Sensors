@@ -19,26 +19,38 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "green"
+        "mode": "RGB",
+        "rgb": [
+          99,
+          235,
+          99
+        ]
       },
       "brightness": 100,
       "mode": "STATIC"
     },
     "left": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "blue"
+        "mode": "RGB",
+        "rgb": [
+          7,
+          7,
+          227
+        ]
       },
-      "brightness": 63.0,
-      "mode": "STATIC"
+      "brightness": 100,
+      "mode": "ANIMATION"
     },
     "top": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "indigo"
+        "mode": "RGB",
+        "rgb": [
+          86,
+          42,
+          117
+        ]
       },
-      "brightness": 25.0,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "right": {
@@ -46,8 +58,8 @@
         "mode": "PRESET",
         "preset_name": "red"
       },
-      "brightness": 87.5,
-      "mode": "OFF"
+      "brightness": 100,
+      "mode": "STATIC"
     },
     "bottom": {
       "color": {
@@ -59,8 +71,8 @@
     },
     "lamp": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "warm_white"
+        "mode": "HUE",
+        "hue": 319
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -118,10 +130,10 @@
     },
     "preview": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "green"
+        "mode": "HUE",
+        "hue": 210
       },
-      "brightness": 73.0,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "pixel2": {
@@ -134,25 +146,19 @@
     }
   },
   "current_animation": {
-    "id": "COLOR_FADE",
+    "id": "SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_INTENSITY": 100
+      "ANIM_LENGTH": 5
     }
   },
   "application": {
     "edit_mode_on": true,
-    "lamp_white_mode_on": true,
-    "lamp_white_saved_state": {
-      "color": {
-        "mode": "HUE",
-        "hue": 319
-      },
-      "brightness": 0
-    },
+    "lamp_white_mode_on": false,
+    "lamp_white_saved_state": null,
     "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 7,
+    "selected_zone_index": 1,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }
