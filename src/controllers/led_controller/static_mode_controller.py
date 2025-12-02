@@ -14,6 +14,7 @@ from models.domain import ZoneCombined
 from models.frame import ZoneFrame
 from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 if TYPE_CHECKING:
     from controllers.zone_strip_controller import ZoneStripController
@@ -193,7 +194,11 @@ class StaticModeController:
 
         if not self.pulse_active:
             self.pulse_active = True
-            self.pulse_task = asyncio.create_task(self._pulse_task())
+            self.pulse_task = create_tracked_task(
+                self._pulse_task(),
+                category=TaskCategory.BACKGROUND,
+                description="StaticMode: brightness pulse animation"
+            )
 
     def _stop_pulse(self):
         """Stop pulse animation (synchronous version for normal mode changes)"""

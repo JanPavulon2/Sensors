@@ -174,7 +174,7 @@ class TaskRegistry:
                 log.debug(
                     f"[Task {record.info.id}] Completed successfully"
                 )
-
+                
     # -----------------------------
     # Utility: find record by task instance
     # -----------------------------

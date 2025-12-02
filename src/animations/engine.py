@@ -28,6 +28,7 @@ from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriorit
 from models.frame import ZoneFrame, PixelFrame
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 log = get_category_logger(LogCategory.ANIMATION)
 
@@ -234,7 +235,11 @@ class AnimationEngine:
 
         # Step 10: NOW start animation loop (transition complete - no race condition)
         log.info(f"AnimEngine: Starting loop for {animation_id}")
-        self.animation_task = asyncio.create_task(self._run_loop())
+        self.animation_task = create_tracked_task(
+            self._run_loop(),
+            category=TaskCategory.ANIMATION,
+            description=f"AnimationEngine: {animation_id}"
+        )
         log.info(f"AnimEngine: Started {animation_id} | params:{params}")
 
         

@@ -22,6 +22,7 @@ from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import FullStripFrame, ZoneFrame, PixelFrame
 from models.color import Color
 from zone_layer.zone_strip import ZoneStrip
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
@@ -436,7 +437,11 @@ class FramePlaybackController:
         self._playing = True
         log.info(f"Starting playback: {fps} FPS")
 
-        self._play_task = asyncio.create_task(self._playback_loop(fps))
+        self._play_task = create_tracked_task(
+            self._playback_loop(fps),
+            category=TaskCategory.BACKGROUND,
+            description=f"FramePlayback: {fps} FPS playback loop"
+        )
 
     async def stop(self) -> None:
         """Stop automatic playback."""

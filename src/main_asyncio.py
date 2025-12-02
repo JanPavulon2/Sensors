@@ -503,7 +503,9 @@ async def main():
     coordinator.register(AnimationShutdownHandler(lighting_controller))
     coordinator.register(APIServerShutdownHandler(api_task))
     coordinator.register(TaskCancellationHandler([keyboard_task, polling_task, api_task]))
-    # coordinator.register(AllTasksCancellationHandler())
+    # AllTasksCancellationHandler cancels all remaining tracked tasks (excluding explicitly managed ones)
+    # This ensures any tasks registered in TaskRegistry get cleaned up, avoiding orphaned tasks
+    coordinator.register(AllTasksCancellationHandler(exclude_tasks=[keyboard_task, polling_task, api_task]))
     coordinator.register(GPIOShutdownHandler(gpio_manager))
     
     shutdown_event = asyncio.Event()

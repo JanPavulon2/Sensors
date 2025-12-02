@@ -16,6 +16,7 @@ from managers import ConfigManager
 from utils.enum_helper import EnumHelper
 from models.enums import LogLevel
 from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 log = get_logger().for_category(LogCategory.CONFIG)
 
@@ -107,7 +108,11 @@ class DataAssembler:
             self._save_task.cancel()
 
         # Schedule new save with debounce delay
-        self._save_task = asyncio.create_task(self._debounced_save())
+        self._save_task = create_tracked_task(
+            self._debounced_save(),
+            category=TaskCategory.SYSTEM,
+            description="DataAssembler: debounced state save"
+        )
 
     def build_animations(self) -> List[AnimationCombined]:
         """Build animation domain objects from config + state"""

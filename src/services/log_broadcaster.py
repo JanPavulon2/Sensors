@@ -11,6 +11,7 @@ from typing import List, Set
 from datetime import datetime
 from fastapi import WebSocket
 from api.schemas.logger import LogMessage
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 
 class ConnectionManager:
@@ -112,7 +113,11 @@ class LogBroadcaster:
     def start(self) -> None:
         """Start the background broadcasting task."""
         if self._broadcast_task is None:
-            self._broadcast_task = asyncio.create_task(self._broadcast_worker())
+            self._broadcast_task = create_tracked_task(
+                self._broadcast_worker(),
+                category=TaskCategory.SYSTEM,
+                description="LogBroadcaster: WebSocket log streaming worker"
+            )
 
     async def stop(self) -> None:
         """Stop the background broadcasting task."""
