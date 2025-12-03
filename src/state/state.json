@@ -19,22 +19,18 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 220
       },
-      "brightness": 0,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "left": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          44,
-          44,
-          62
-        ]
+        "mode": "HUE",
+        "hue": 120
       },
-      "brightness": 0,
+      "brightness": 87.5,
       "mode": "STATIC"
     },
     "top": {
@@ -51,10 +47,10 @@
     },
     "right": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 50
       },
-      "brightness": 0,
+      "brightness": 50.0,
       "mode": "STATIC"
     },
     "bottom": {
@@ -62,13 +58,13 @@
         "mode": "PRESET",
         "preset_name": "orange"
       },
-      "brightness": 0,
+      "brightness": 37.5,
       "mode": "STATIC"
     },
     "lamp": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "warm_white"
+        "mode": "HUE",
+        "hue": 138
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -159,8 +155,8 @@
       },
       "brightness": 0
     },
-    "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 3,
+    "active_parameter": "ZONE_COLOR_HUE",
+    "selected_zone_index": 2,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }
