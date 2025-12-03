@@ -20,7 +20,7 @@
     "floor": {
       "color": {
         "mode": "HUE",
-        "hue": 220
+        "hue": 250
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -28,21 +28,17 @@
     "left": {
       "color": {
         "mode": "HUE",
-        "hue": 120
+        "hue": 130
       },
       "brightness": 87.5,
       "mode": "STATIC"
     },
     "top": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          86,
-          42,
-          117
-        ]
+        "mode": "HUE",
+        "hue": 285
       },
-      "brightness": 0,
+      "brightness": 37.5,
       "mode": "STATIC"
     },
     "right": {
@@ -138,11 +134,11 @@
     }
   },
   "current_animation": {
-    "id": "SNAKE",
+    "id": "BREATHE",
     "parameters": {
-      "ANIM_SPEED": 1,
+      "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5
+      "ANIM_INTENSITY": 100
     }
   },
   "application": {
