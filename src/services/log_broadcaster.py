@@ -10,9 +10,11 @@ import json
 from typing import List, Set
 from datetime import datetime
 from fastapi import WebSocket
+from utils.logger import get_logger, LogCategory
 from api.schemas.logger import LogMessage
 from lifecycle.task_registry import create_tracked_task, TaskCategory
 
+log = get_logger().for_category(LogCategory.RENDER_ENGINE)
 
 class ConnectionManager:
     """Manages WebSocket connections for log streaming."""
@@ -178,7 +180,7 @@ class LogBroadcaster:
             except asyncio.CancelledError:
                 break
             except Exception as ex:
-                log.error()
+                log.error(f"Error when broadcasting log message: {ex}")
                 # Log error internally (avoid infinite recursion)
                 # Just continue processing
                 pass

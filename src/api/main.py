@@ -21,21 +21,25 @@ FastAPI automatically:
 - Generates client SDK documentation
 """
 import sys
-if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
-    sys.stdout.reconfigure(encoding='utf-8')
     
-from fastapi import FastAPI
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
+    sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
+    sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
+
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
 
 from api.routes import zones, logger as logger_routes, system
 from api.middleware.error_handler import register_exception_handlers
+from api.middleware.websocket_validation import validate_app_websockets
 from api.websocket import websocket_logs_endpoint
 from utils.logger import get_logger
 from models.enums import LogCategory
 
-log = get_logger().for_category(LogCategory.SYSTEM)
+log = get_logger().for_category(LogCategory.API)
 
 
 def create_app(
@@ -83,24 +87,30 @@ def create_app(
 
     if cors_origins is None:
         # Default: Allow frontend on localhost + typical dev URLs
+        # For WebSocket support, we need to allow both HTTP and the origins themselves
         cors_origins = [
             "http://localhost:3000",      # React dev server (default)
             "http://localhost:5173",      # Vite dev server (alternative)
             "http://localhost",           # localhost without port
+            "http://localhost:8000",      # API server itself (for WebSocket connections)
+            "http://127.0.0.1",           # 127.0.0.1 without port
             "http://127.0.0.1:3000",      # 127.0.0.1 variant
-            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5173",      # 127.0.0.1 variant
+            "http://127.0.0.1:8000",      # 127.0.0.1 API server
             # Add production domain here later: "https://app.diuna.io"
         ]
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
+        allow_origins=cors_origins,  # Use the specific origins list (not *)
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=600,  # Cache preflight for 10 minutes
     )
 
-    log.debug(f"CORS enabled for origins: {cors_origins}")
+    log.info(f"CORS enabled for origins: {cors_origins}")
 
     # =========================================================================
     # Exception Handlers
@@ -110,7 +120,7 @@ def create_app(
 
     register_exception_handlers(app)
 
-    log.debug("Exception handlers registered")
+    log.info("Exception handlers registered")
 
     # =========================================================================
     # Routes
@@ -146,6 +156,7 @@ def create_app(
         summary="Health check",
         description="Check if API is running and responding"
     )
+    
     async def health_check():
         """Simple health check endpoint for monitoring"""
         return {
@@ -176,19 +187,22 @@ def create_app(
     # =========================================================================
 
     @app.websocket("/ws/logs")
-    async def websocket_logs(websocket):
+    async def websocket_logs(websocket: WebSocket):
         """WebSocket endpoint for real-time log streaming"""
+        log.info("WebSocket /ws/logs upgrade request received")
         try:
-            log.debug("WebSocket connection attempt on /ws/logs")
+            # Delegate to handler (which will accept the connection)
             await websocket_logs_endpoint(websocket)
         except Exception as e:
             log.error(f"WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
+            # Only try to close if the connection was actually accepted
             try:
-                await websocket.close(code=1011, reason="Internal server error")
-            except Exception:
-                pass
+                if websocket.client_state.name == 'CONNECTED':
+                    await websocket.close(code=1011, reason="Internal server error")
+            except Exception as close_error:
+                log.debug(f"Could not close WebSocket after error: {close_error}")
 
-    log.debug("WebSocket endpoint registered at /ws/logs")
+    log.info("WebSocket endpoint registered at /ws/logs")
 
     # =========================================================================
     # Startup/Shutdown Hooks
@@ -209,6 +223,18 @@ def create_app(
         # This shutdown hook is kept for documentation and future enhancements
 
     log.info(f"FastAPI app created successfully: {title}")
+
+    # =========================================================================
+    # WebSocket Validation (Catch Missing Type Hints at Startup)
+    # =========================================================================
+    # Validates all WebSocket handlers have proper type hints on their parameters.
+    # This catches issues early (at app startup) rather than at runtime (HTTP 403).
+    try:
+        validate_app_websockets(app)
+        log.debug("✓ WebSocket handlers validated successfully")
+    except Exception as e:
+        log.error(f"WebSocket validation failed: {e}")
+        raise
 
     return app
 

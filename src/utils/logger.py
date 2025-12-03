@@ -244,5 +244,13 @@ def get_category_logger(category: LogCategory) -> BoundLogger:
     return _logger.for_category(category)
 
 def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
+    """
+    Configure the logger singleton (modify in-place, don't create new instance).
+
+    This respects the singleton pattern - updates properties on the existing instance
+    rather than replacing it. This ensures any broadcasters or references remain valid.
+    """
     global _logger
-    _logger = Logger(min_level=min_level, use_colors=use_colors)
+    # Modify existing logger instead of creating new one (preserves singleton + broadcaster)
+    _logger.min_level = min_level
+    _logger.use_colors = use_colors

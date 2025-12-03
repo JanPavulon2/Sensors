@@ -285,10 +285,10 @@ class FrameManager:
                         self.last_rendered_main_frame = frame
                         self.frames_rendered += 1
                         self.frame_times.append(time.perf_counter())
-                        log.debug(
-                            f"Frame rendered (DMA)",
-                            frame_type=type(frame).__name__ if frame else None,
-                        )
+                        # log.debug(
+                        #     f"Frame rendered (DMA)",
+                        #     frame_type=type(frame).__name__ if frame else None,
+                        # )
                     else:
                         # Frame unchanged (same object) → skip DMA, LEDs already have correct pixels
                         self.dma_skipped += 1

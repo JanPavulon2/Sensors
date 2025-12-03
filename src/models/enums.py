@@ -169,13 +169,16 @@ class LogCategory(Enum):
     TRANSITION = auto()  # LED state transitions
     EVENT = auto()       # Event bus events and handling
     RENDER_ENGINE = auto()
-    GENERAL = auto()    # Default general category
+    
     API = auto()
+    WEBSOCKET = auto()
     
     SHUTDOWN = auto()
     LIFECYCLE = auto()
     TASK = auto()
 
+    GENERAL = auto()    # Default general category
+    
 class FramePriority(Enum):
     """
     Frame priority levels (higher value = higher priority)

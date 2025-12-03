@@ -24,7 +24,7 @@ from utils.logger import get_logger
 from models.enums import LogCategory
 import json
 
-log = get_logger().for_category(LogCategory.SYSTEM)
+log = get_logger().for_category(LogCategory.API)
 
 
 class DomainError(Exception):
@@ -98,8 +98,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         """Handle Pydantic validation errors (bad JSON structure)"""
         request_id = str(uuid.uuid4())
 
-        log.warning(
-            f"Validation error ({request_id}): {exc.error_count()} errors",
+        log.warn(
+            f"Validation error ({request_id}): {exc.errors().count} errors",
             extra={"request_id": request_id}
         )
 
@@ -117,7 +117,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             error=ErrorDetail(
                 code="VALIDATION_ERROR",
                 message="Request validation failed",
-                details={"error_count": exc.error_count()},
+                details={"error_count": exc.errors().count},
                 timestamp=datetime.utcnow()
             ),
             validation_errors=validation_errors,
@@ -135,7 +135,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         """Handle domain-specific business logic errors"""
         request_id = str(uuid.uuid4())
 
-        log.warning(
+        log.warn(
             f"Domain error ({request_id}): {exc.code} - {exc.message}",
             extra={"request_id": request_id}
         )

@@ -199,10 +199,12 @@ async def cleanup_application(
 # API SERVER RUNNER
 # ---------------------------------------------------------------------------
 
-async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) -> (Server, asyncio.Task):
+async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) -> None:
     """
-    Create uvicorn.Server and run serve() in a background task.
-    Returns the Server instance and the Task running server.serve().
+    Run FastAPI/Uvicorn server in asyncio event loop.
+
+    Disables uvicorn's own signal handlers to use our shutdown coordinator instead.
+    The server runs until cancelled (via CancelledError from shutdown system).
     """
     config = uvicorn.Config(
         app=app,
@@ -210,23 +212,20 @@ async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) 
         port=port,
         loop="asyncio",
         log_level="info",
-        access_log=False, 
+        access_log=False,
         lifespan="on"
     )
-    
+
     server = uvicorn.Server(config)
-    
-    log.info("API server starting...")
-    
-    server.install_signal_handlers = lambda: None 
-    
+    server.install_signal_handlers = lambda: None  # Prevent uvicorn from handling signals
+
     try:
+        log.debug(f"🌐 Starting API server on {host}:{port}")
         await server.serve()
     except asyncio.CancelledError:
-        log.debug("Uvicorn lifespan cancelled during shutdown (expected).")
-        
-    return server
-    log.debug("Uvicorn lifespan cancelled during shutdown (expected).")
+        # Expected during shutdown - uvicorn raises CancelledError on lifespan shutdown
+        log.debug("🌐 API server cancelled (expected during shutdown)")
+        raise  # Let the cancellation propagate to task handler
 
 # async def run_api_server2(app: FastAPI) -> Server:
 #     """
@@ -326,6 +325,11 @@ async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) 
 
 async def main():
     """Main async entry point (dependency injection and event loop startup)."""
+
+    # Initialize broadcaster first so all logs can be transmitted
+    _broadcaster = get_broadcaster()
+    _broadcaster.start()
+    get_logger().set_broadcaster(_broadcaster)
 
     log.info("Starting Diuna application...")
 
@@ -472,15 +476,6 @@ async def main():
     # ========================================================================
 
     log.info("Starting API server task...")
-    # Initialize LogBroadcaster for WebSocket log streaming
-    broadcaster = get_broadcaster()
-    broadcaster.start()
-
-    # Connect broadcaster to logger singleton
-    # get_logger().set_broadcaster(broadcaster)
-
-    log.info("LogBroadcaster initialized for WebSocket log streaming")
-
 
     app = create_app()
     api_task = create_tracked_task(
@@ -491,7 +486,7 @@ async def main():
 
 
     # ============================================================
-    # 8. SHUTDOWN COORDINATOR
+    # 10. SHUTDOWN COORDINATOR
     # ============================================================
 
     log.info("Initializing shutdown system...")
