@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from models.transition import TransitionConfig
@@ -11,7 +11,6 @@ from models.enums import ZoneRenderMode
 from services import ServiceContainer
 
 if TYPE_CHECKING:
-    from controllers.zone_strip_controller import ZoneStripController
     from controllers.preview_panel_controller import PreviewPanelController
 
 log = get_logger().for_category(LogCategory.GENERAL)
@@ -30,7 +29,6 @@ class PowerToggleController:
     def __init__(
         self,
         services: ServiceContainer,
-        strip_controllers: Dict[int, ZoneStripController],
         preview_panel: PreviewPanelController,
         animation_engine,
         static_mode_controller,
@@ -40,14 +38,12 @@ class PowerToggleController:
 
         Args:
             services: ServiceContainer with all core services and managers
-            strip_controllers: Dict mapping GPIO pin → ZoneStripController
             preview_panel: PreviewPanelController for preview display
             animation_engine: AnimationEngine for animation control
             static_mode_controller: StaticModeController for pulse control
         """
         self.zone_service = services.zone_service
         self.animation_service = services.animation_service
-        self.strip_controllers = strip_controllers
         self.preview_panel_controller = preview_panel
         self.app_state = services.app_state_service
         self.animation_engine = animation_engine
@@ -88,9 +84,10 @@ class PowerToggleController:
 
         # Fade out each GPIO strip
         fades = []
-        for gpio, strip_controller in self.strip_controllers.items():
-            fade = strip_controller.transition_service.fade_out(transition)
-            fades.append(fade)
+        # TODO: Use frame_manager.zone_strips for per-strip fades
+        # for gpio, strip_controller in self.strip_controllers.items():
+        #     fade = strip_controller.transition_service.fade_out(transition)
+        #     fades.append(fade)
 
         # Fade out preview panel (if available)
         if self.preview_panel_controller:

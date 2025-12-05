@@ -9,6 +9,7 @@ Every agent must follow this workflow on FIRST activation:
 3. Wait for user confirmation
 
 ### Agent Routing
+- `[uber-expert]` → @uber-expert
 - `[backend-sonnet]` → @python-expert-sonnet
 - `[backend]` → @python-expert
 - `[frontend-sonnet]` → @frontend-expert-sonnet

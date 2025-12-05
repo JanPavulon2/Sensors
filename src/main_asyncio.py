@@ -51,21 +51,19 @@ from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
 from hardware.gpio.gpio_manager import GPIOManager
 from hardware.hardware_coordinator import HardwareCoordinator, HardwareBundle
 from controllers.led_controller.lighting_controller import LightingController
-from controllers import ControlPanelController, PreviewPanelController, ZoneStripController
+from controllers import ControlPanelController, PreviewPanelController
 from managers import ConfigManager
 from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService, ServiceContainer
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
 from engine.frame_manager import FrameManager
-from zone_layer.zone_strip import ZoneStrip
-from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
 # ---------------------------------------------------------------------------
 
 log = get_logger().for_category(LogCategory.SYSTEM)
-configure_logger(LogLevel.DEBUG)
+configure_logger(LogLevel.INFO)
 
 DEBUG_NOPULSE = False
 
@@ -200,17 +198,12 @@ async def main():
         description="Frame Manager render loop"
     )
 
-    zone_strip_controllers = {}
-    
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.zone_strips.items():
         frame_manager.add_zone_strip(strip)
+        # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        zone_strip_controllers[gpio_pin] = ZoneStripController(
-            strip, transition_service, frame_manager
-        )
-
-        log.info(f"ZoneStripController ready on GPIO {gpio_pin}")
+        log.info(f"Zone strip registered on GPIO {gpio_pin}")
 
     
     # ========================================================================
@@ -235,10 +228,10 @@ async def main():
     lighting_controller = LightingController(
         config_manager=config_manager,
         event_bus=event_bus,
-        gpio_manager=gpio_manager, 
-        service_container=services,
-        zone_strip_controllers=zone_strip_controllers
+        gpio_manager=gpio_manager,
+        service_container=services
     )
+    log.info("Finished initializing LED controller...")
 
 
     # ========================================================================
@@ -338,6 +331,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log.info("Keyboard interrupt received")
     except Exception as e:
+        log.error(f"Fatal error: {e}")
         log.error(f"Fatal error: {e}", exc_info=True)
     finally:
         sys.exit(0)

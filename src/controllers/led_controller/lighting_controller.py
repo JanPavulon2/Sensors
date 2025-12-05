@@ -4,7 +4,7 @@ Coordinates between static, animation, and lamp/power modes.
 """
 
 import asyncio
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 from animations.engine import AnimationEngine
 from models.color import Color
 from models.enums import ButtonID, EncoderSource, AnimationID, ZoneRenderMode
@@ -23,7 +23,6 @@ from controllers.led_controller.power_toggle_controller import PowerToggleContro
 from controllers.led_controller.frame_playback_controller import FramePlaybackController
 
 if TYPE_CHECKING:
-    from controllers.zone_strip_controller import ZoneStripController
     from managers import ConfigManager
     from hardware.gpio.gpio_manager import GPIOManager
     from services.event_bus import EventBus
@@ -46,8 +45,7 @@ class LightingController:
         config_manager: "ConfigManager",
         event_bus: "EventBus",
         gpio_manager: "GPIOManager",
-        service_container: "ServiceContainer",
-        zone_strip_controllers: Dict[int, "ZoneStripController"]
+        service_container: "ServiceContainer"
     ):
         self.config_manager = config_manager
         self.event_bus = event_bus
@@ -56,18 +54,18 @@ class LightingController:
         self.zone_service = service_container.zone_service
         self.animation_service = service_container.animation_service
         self.app_state_service = service_container.app_state_service
-        self.zone_strip_controllers = zone_strip_controllers
         self.frame_manager = service_container.frame_manager
 
-        # Use GPIO 19 strip for animation engine (AUX_5V with most zones)
-        # TODO: Make this configurable or use all strips
-        self.strip_controller = self.zone_strip_controllers[19]
-
-        zone_strips = {}
-
         # Create and attach animation engine
+        # Use first available zone strip from FrameManager (all strips have same zone mappings)
+        if not self.frame_manager.zone_strips:
+            raise ValueError("No zone strips registered with FrameManager")
+
+        first_strip = self.frame_manager.zone_strips[0]
+
+        log.info("Initializing animation engine")
         self.animation_engine = AnimationEngine(
-            strip=self.strip_controller.zone_strip,
+            strip=first_strip,
             zones=self.zone_service.get_all(),
             frame_manager=self.frame_manager
         )
@@ -77,28 +75,33 @@ class LightingController:
         self.edit_mode = state.edit_mode
         preview_panel_controller = None
 
+
+        log.info("Initializing static mode controller")
         # Initialize feature controllers with dependency injection
         self.static_mode_controller = StaticModeController(
             services=self.services
         )
 
+        log.info("Initializing animation mode controller")
         self.animation_mode_controller = AnimationModeController(
             services=self.services,
             animation_engine=self.animation_engine
         )
         
-        self.lamp_white_mode = LampWhiteModeController(
-            services=self.services,
-            strip_controller=zone_strip_controllers[19]
-        )
-        
-        self.power_toggle = PowerToggleController(
-            services=self.services,
-            strip_controllers=zone_strip_controllers,
-            preview_panel=preview_panel_controller,
-            animation_engine=self.animation_engine,
-            static_mode_controller=self.static_mode_controller
-        )
+
+        # TODO: Disabled - needs direct FrameManager rendering implementation
+        # log.info("Initializing lamp white mode controller")
+        # self.lamp_white_mode = LampWhiteModeController(
+        #     services=self.services
+        # )
+
+        # TODO: Disabled - needs direct FrameManager rendering implementation
+        # self.power_toggle = PowerToggleController(
+        #     services=self.services,
+        #     preview_panel=preview_panel_controller,
+        #     animation_engine=self.animation_engine,
+        #     static_mode_controller=self.static_mode_controller
+        # )
         
         self.frame_playback_controller = FramePlaybackController(
             frame_manager=self.frame_manager,
@@ -172,10 +175,10 @@ class LightingController:
         btn = e.source
         if btn == ButtonID.BTN1:
             self._toggle_edit_mode()
-        elif btn == ButtonID.BTN2:
-            asyncio.create_task(self.lamp_white_mode.toggle())
-        elif btn == ButtonID.BTN3:
-            asyncio.create_task(self.power_toggle.toggle())
+        # elif btn == ButtonID.BTN2:  # TODO: Disabled - lamp_white_mode not implemented
+        #     asyncio.create_task(self.lamp_white_mode.toggle())
+        # elif btn == ButtonID.BTN3:  # TODO: Disabled - power_toggle not implemented
+        #     asyncio.create_task(self.power_toggle.toggle())
         # elif btn == ButtonID.BTN4:
         #     asyncio.create_task(self._toggle_zone_mode())
 
@@ -542,12 +545,9 @@ class LightingController:
     # CORE OPERATIONS
     # ------------------------------------------------------------------
     def clear_all(self) -> None:
-        """Turn off all LEDs (both preview and strip)."""
-        # for gpio_pin, strip in self.zone_strips.items():
-        #     log.info(f"Clearing GPIO {gpio_pin}...")
-        #     strip.clear()
-        
-        self.strip_controller.zone_strip.clear()
+        """Turn off all LEDs by clearing all registered zone strips."""
+        for strip in self.frame_manager.zone_strips:
+            strip.clear()
         log.info("All LEDs cleared")
 
     async def stop_all(self) -> None:

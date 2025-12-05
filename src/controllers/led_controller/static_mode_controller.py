@@ -8,17 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import math
-from typing import Dict, TYPE_CHECKING
+from typing import Dict
 from models.enums import ParamID, FramePriority, FrameSource, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.frame import ZoneFrame
 from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
 from lifecycle.task_registry import create_tracked_task, TaskCategory
-
-if TYPE_CHECKING:
-    from controllers.zone_strip_controller import ZoneStripController
-    from services.zone_service import ZoneService
 
 log = get_logger().for_category(LogCategory.GENERAL)
 
@@ -29,8 +25,6 @@ class StaticModeController:
 
         Args:
             services: ServiceContainer with all core services and managers
-            strip_controllers: Dict mapping GPIO pin → ZoneStripController (unused - kept for compatibility)
-            preview_panel: PreviewPanelController for display
         """
         self.zone_service = services.zone_service
         self.app_state_service = services.app_state_service

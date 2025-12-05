@@ -37,14 +37,16 @@ class ServiceContainer:
             app_state_service=app_state_service,
             frame_manager=frame_manager,
             event_bus=event_bus,
-            color_manager=color_manager
+            color_manager=color_manager,
+            config_manager=config_manager
         )
 
         # Pass to controllers
-        controller = StaticModeController(
+        controller = StaticModeController(services=services)
+        controller2 = PowerToggleController(
             services=services,
-            strip_controller=zone_strip_controller,
-            preview_panel=preview_panel_controller
+            animation_engine=animation_engine,
+            static_mode_controller=static_mode_controller
         )
 
         # API endpoints can use services directly
