@@ -310,10 +310,9 @@ async def main():
     # Register shutdown handlers in priority order (highest → lowest)
     coordinator.register(LEDShutdownHandler(hardware))
     coordinator.register(AnimationShutdownHandler(lighting_controller))
-    coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← NEW: Pass wrapper, not task
-    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Removed api_task (handled by APIServerShutdownHandler)
-    # TODO: Enable AllTasksCancellationHandler after testing APIServerWrapper
-    # coordinator.register(AllTasksCancellationHandler(exclude_tasks=[keyboard_task, polling_task, frame_manager_task, api_task]))
+    coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
+    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Keyboard and polling tasks
+    coordinator.register(AllTasksCancellationHandler())  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 
     # Setup signal handlers via coordinator
