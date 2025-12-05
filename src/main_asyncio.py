@@ -19,7 +19,7 @@ from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
 from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
 from lifecycle.handlers.task_cancellation_handler import TaskCancellationHandler
 from lifecycle.api_server_wrapper import APIServerWrapper
-from lifecycle.port_manager import PortManager
+from services.port_manager import PortManager
 from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
 from services.service_container import ServiceContainer

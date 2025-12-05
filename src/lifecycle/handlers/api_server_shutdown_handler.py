@@ -54,7 +54,7 @@ class APIServerShutdownHandler(IShutdownHandler):
 
         try:
             await self.api_wrapper.stop()
-            log.info("✓ API server stopped and port released")
+            log.info("API server stopped and port released")
         except Exception as e:
             log.error(f"Error stopping API server: {e}", exc_info=True)
 

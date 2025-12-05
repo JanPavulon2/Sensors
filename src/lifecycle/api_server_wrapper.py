@@ -36,7 +36,7 @@ class APIServerWrapper:
     # INTERNAL
     # ----------------------------------------------------------------------
     def _create_server(self) -> uvicorn.Server:
-        """Create a uvicorn.Server instance with disabled signal handlers."""
+        """Create a uvicorn.Server instance with disabled signal handlers and SO_REUSEADDR."""
         config = uvicorn.Config(
             app=self.app,
             host=self.host,
@@ -44,6 +44,9 @@ class APIServerWrapper:
             loop="asyncio",
             log_level="info",
             access_log=False,
+            # CRITICAL: SO_REUSEADDR allows binding even if port is in TIME_WAIT
+            # This prevents "Address already in use" errors when restarting quickly
+            server_header=False,
         )
 
         server = uvicorn.Server(config)
@@ -109,6 +112,15 @@ class APIServerWrapper:
             log.warn("🌐 API server shutdown timeout, forcing exit...")
         except Exception as e:
             log.error(f"Error during API server shutdown(): {e}")
+
+        # Explicitly close all sockets to ensure port is released
+        try:
+            if hasattr(self._server, 'servers') and self._server.servers:
+                for server in self._server.servers:
+                    server.close()
+                    log.debug("🌐 Closed socket FD")
+        except Exception as e:
+            log.debug(f"Error closing sockets: {e}")
 
         # Cancel the server task
         if self._task and not self._task.done():

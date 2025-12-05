@@ -63,7 +63,7 @@
         "preset_name": "ocean"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     },
     "back": {
       "color": {
@@ -106,11 +106,11 @@
     }
   },
   "current_animation": {
-    "id": "COLOR_FADE",
+    "id": "SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_INTENSITY": 100
+      "ANIM_LENGTH": 5
     }
   },
   "application": {
