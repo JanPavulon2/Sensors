@@ -11,7 +11,7 @@ import signal
 from typing import List, Optional, Dict, Any, Set
 from utils.logger import get_logger, LogCategory
 
-log = get_logger().for_category(LogCategory.SYSTEM)
+log = get_logger().for_category(LogCategory.SHUTDOWN)
 
 # Import TaskRegistry for critical task monitoring
 # (deferred import to avoid circular dependencies)

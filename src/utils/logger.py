@@ -32,6 +32,13 @@ class Colors:
     BRIGHT_CYAN = '\033[96m'
     BRIGHT_WHITE = '\033[97m'
 
+    # Extended 256-color palette (for unique category colors)
+    ORANGE = '\033[38;5;208m'           # Orange
+    LIGHT_PURPLE = '\033[38;5;141m'     # Light purple
+    LIGHT_GRAY = '\033[38;5;245m'       # Light gray
+    DARK_CYAN = '\033[38;5;30m'         # Dark cyan
+    PINK = '\033[38;5;219m'             # Pink
+
 
 CATEGORY_COLORS = {
     LogCategory.CONFIG: Colors.CYAN,
@@ -44,6 +51,12 @@ CATEGORY_COLORS = {
     LogCategory.TRANSITION: Colors.MAGENTA,
     LogCategory.EVENT: Colors.BRIGHT_MAGENTA,
     LogCategory.RENDER_ENGINE: Colors.MAGENTA,
+    LogCategory.SHUTDOWN: Colors.BRIGHT_RED,      # Shutdown operations stand out (critical)
+    LogCategory.LIFECYCLE: Colors.ORANGE,         # Important lifecycle events
+    LogCategory.TASK: Colors.LIGHT_PURPLE,        # Task tracking and management
+    LogCategory.API: Colors.PINK,                 # API operations
+    LogCategory.WEBSOCKET: Colors.LIGHT_GRAY,     # WebSocket connections
+    LogCategory.GENERAL: Colors.WHITE,            # Fallback for general category
 }
 
 LEVEL_SYMBOLS = {

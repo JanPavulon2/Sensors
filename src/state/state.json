@@ -38,7 +38,7 @@
         "mode": "HUE",
         "hue": 285
       },
-      "brightness": 37.5,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "right": {
@@ -46,7 +46,7 @@
         "mode": "PRESET",
         "preset_name": "ocean"
       },
-      "brightness": 50.0,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "bottom": {
@@ -54,13 +54,13 @@
         "mode": "HUE",
         "hue": 120
       },
-      "brightness": 37.5,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "lamp": {
       "color": {
-        "mode": "HUE",
-        "hue": 138
+        "mode": "PRESET",
+        "preset_name": "ocean"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -83,7 +83,7 @@
     "pixel": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "amber"
+        "preset_name": "lime"
       },
       "brightness": 37.5,
       "mode": "STATIC"
@@ -99,7 +99,7 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "green"
+        "preset_name": "cyan"
       },
       "brightness": 50.0,
       "mode": "STATIC"
@@ -114,7 +114,7 @@
     }
   },
   "application": {
-    "edit_mode_on": false,
+    "edit_mode_on": true,
     "lamp_white_mode_on": true,
     "lamp_white_saved_state": {
       "color": {
@@ -123,8 +123,8 @@
       },
       "brightness": 0
     },
-    "active_parameter": "ZONE_BRIGHTNESS",
-    "selected_zone_index": 2,
+    "active_parameter": "ZONE_COLOR_PRESET",
+    "selected_zone_index": 7,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

@@ -78,27 +78,47 @@ class APIServerWrapper:
             log.warn("🌐 API server start not confirmed (maybe still booting)")
 
     async def stop(self) -> None:
-        """Gracefully stop the API server and its task."""
+        """
+        Stop the API server immediately and release the port.
+
+        CRITICAL FIX for uvicorn/Starlette lifespan task leak:
+        Setting force_exit=True bypasses lifespan shutdown handlers and closes
+        all socket FDs immediately. This prevents the port from remaining in
+        LISTEN state and prevents the application from hanging on Ctrl+C.
+
+        Without force_exit, Starlette lifespan handlers can leak a task that:
+        - Keeps the port in LISTEN state even after process dies
+        - Prevents Ctrl+C from working (application appears frozen)
+        - Requires Ctrl+Z (SIGSTOP) to kill, leaving orphaned process
+        """
         if self._server is None:
             log.warn("API server stop() called before start()")
             return
 
         log.info("🌐 Stopping API server...")
 
+        # ✅ CRITICAL: Prevent uvicorn lifespan task leak
+        # force_exit=True immediately closes all FDs without waiting for lifespan
+        self._server.force_exit = True
+
         try:
-            await self._server.shutdown()
-            log.info("🌐 API server.shutdown() completed")
+            # This will now exit immediately due to force_exit
+            await asyncio.wait_for(self._server.shutdown(), timeout=1.0)
+            log.info("🌐 API server shutdown completed")
+        except asyncio.TimeoutError:
+            log.warn("🌐 API server shutdown timeout, forcing exit...")
         except Exception as e:
             log.error(f"Error during API server shutdown(): {e}")
 
+        # Cancel the server task
         if self._task and not self._task.done():
             self._task.cancel()
             try:
-                await self._task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(self._task, timeout=0.5)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 log.debug("Uvicorn task cancelled cleanly")
 
-        log.info("🌐 API server stopped")
+        log.info("🌐 API server stopped and port released")
         
     # ----------------------------------------------------------------------
     # PROPERTIES

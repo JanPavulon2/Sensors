@@ -12,12 +12,14 @@ Responsible for:
 import sys
 from typing import List, Optional
 
-# from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
+from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
 from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
 from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
 from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
 from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
 from lifecycle.handlers.task_cancellation_handler import TaskCancellationHandler
+from lifecycle.api_server_wrapper import APIServerWrapper
+from lifecycle.port_manager import PortManager
 from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
 from services.service_container import ServiceContainer
@@ -37,7 +39,6 @@ import asyncio
 import os
 import uvicorn
 from fastapi import FastAPI
-from uvicorn import Server
 
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
@@ -104,6 +105,8 @@ async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) 
     Disables uvicorn's own signal handlers to use our shutdown coordinator instead.
     The server runs until cancelled (via CancelledError from shutdown system).
     """
+    log.debug("API: run_api_server() entered")
+    
     config = uvicorn.Config(
         app=app,
         host=host,
@@ -125,6 +128,9 @@ async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) 
         log.debug("🌐 API server cancelled (expected during shutdown)")
         raise  # Let the cancellation propagate to task handler
 
+    
+    log.debug("API: run_api_server() exiting (server.serve() returned)")
+
 # ---------------------------------------------------------------------------
 # Application Entry
 # ---------------------------------------------------------------------------
@@ -145,7 +151,6 @@ async def main():
 
     log.info("Initializing GPIO manager (singleton)...")
     gpio_manager = GPIOManager()
-    # _gpio_manager_ref['instance'] = gpio_manager
 
     log.info("Loading configuration...")
     config_manager = ConfigManager(gpio_manager)
@@ -189,11 +194,11 @@ async def main():
 
     log.info("Initializing FrameManager...")
     frame_manager = FrameManager(fps=60)
-    create_tracked_task(frame_manager.start(),
-                        category=TaskCategory.RENDER,
-                        description="Frame Manager renders loops")
-    
-    # frame_manager_task = asyncio.create_task(frame_manager.start())
+    frame_manager_task = create_tracked_task(
+        frame_manager.start(),
+        category=TaskCategory.RENDER,
+        description="Frame Manager render loop"
+    )
 
     zone_strip_controllers = {}
     
@@ -224,7 +229,7 @@ async def main():
 
     # Register service container with API for dependency injection
     set_service_container(services)
-    log.info("Service container registered with API")
+    log.info("Service container registered")
 
     log.info("Initializing LED controller...")
     lighting_controller = LightingController(
@@ -246,8 +251,6 @@ async def main():
         category=TaskCategory.INPUT,
         description="KeyboardInputAdapter"
     )
-    # asyncio.create_task(keyboard_adapter.run())
-
 
     # ========================================================================
     # 7. HARDWARE POLLING LOOP
@@ -265,29 +268,36 @@ async def main():
         except asyncio.CancelledError:
             log.debug("Hardware polling loop cancelled.")
             raise
-    
         
     polling_task =  create_tracked_task(
         hardware_polling_loop(),
         category=TaskCategory.HARDWARE,
         description="ControlPanel Polling Loop"
     )
-    # asyncio.create_task(hardware_polling_loop(), name="HardwarePolling")
-    
+
     
     # ========================================================================
     # 8. API SERVER
     # ========================================================================
 
-    log.info("Starting API server task...")
+    # Ensure port is free before starting API server
+    # (recovery from previous crashes that left port orphaned)
+    log.info("Checking API port availability...")
+    port_mgr = PortManager.instance()
+    await port_mgr.ensure_available(port=8000)
 
+    log.info("Starting API server...")
     app = create_app()
+
+    # Use APIServerWrapper for clean shutdown with force_exit fix
+    api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)
+
     api_task = create_tracked_task(
-        run_api_server(app),
+        api_wrapper.start(),
         category=TaskCategory.API,
         description="FastAPI/Uvicorn Server"
     )
-
+    log.info("API server task created")
 
     # ============================================================
     # 10. SHUTDOWN COORDINATOR
@@ -297,14 +307,13 @@ async def main():
 
     coordinator = ShutdownCoordinator()
 
-    # Register shutdown handlers
+    # Register shutdown handlers in priority order (highest → lowest)
     coordinator.register(LEDShutdownHandler(hardware))
     coordinator.register(AnimationShutdownHandler(lighting_controller))
-    coordinator.register(APIServerShutdownHandler(api_task))
-    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task, api_task]))
-    # AllTasksCancellationHandler cancels all remaining tracked tasks (excluding explicitly managed ones)
-    # This ensures any tasks registered in TaskRegistry get cleaned up, avoiding orphaned tasks
-    # coordinator.register(AllTasksCancellationHandler(exclude_tasks=[keyboard_task, polling_task, api_task]))
+    coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← NEW: Pass wrapper, not task
+    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Removed api_task (handled by APIServerShutdownHandler)
+    # TODO: Enable AllTasksCancellationHandler after testing APIServerWrapper
+    # coordinator.register(AllTasksCancellationHandler(exclude_tasks=[keyboard_task, polling_task, frame_manager_task, api_task]))
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 
     # Setup signal handlers via coordinator
