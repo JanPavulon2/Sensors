@@ -108,14 +108,15 @@ class StaticModeController:
         if not is_first_enter and self.app_state_service.get_state().edit_mode:
             self._start_pulse()
 
-    def exit_mode(self):
+    async def exit_mode(self):
         """
         Exit static mode: stop pulsing and cleanup
 
         Called when switching away from STATIC mode.
+        Properly awaits pulse task cancellation for clean async shutdown.
         """
         log.info("Exiting STATIC mode")
-        self._stop_pulse()
+        await self._stop_pulse_async()
 
     def on_edit_mode_change(self, enabled: bool):
         """Start or stop pulsing"""

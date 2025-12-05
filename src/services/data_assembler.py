@@ -43,7 +43,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "r") as f:
                 state = json.load(f)
-                log.debug(f"Loaded state from {self.state_path}")
+                # log.debug(f"Loaded state from {self.state_path}")
                 return state
         except FileNotFoundError:
             log.error(f"State file not found: {self.state_path}")
@@ -62,7 +62,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
-                log.debug(f"Saved state to {self.state_path}")
+                log.debug(f"State saved {self.state_path}")
         except Exception as e:
             log.error(f"Failed to save state: {e}")
             raise
@@ -410,7 +410,7 @@ class DataAssembler:
             }
 
             self.save_state(state_json)
-            log.debug(f"Saved application state")
+            log.debug(f"Application state saved")
 
         except Exception as e:
             log.error(f"Failed to save application state: {e}")

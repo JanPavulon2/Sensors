@@ -118,7 +118,11 @@ class AnimationModeController:
     # --- Mode Entry/Exit ---
 
     def enter_mode(self):
-        """Initialize or resume animation preview and auto-start animation"""
+        """
+        Initialize or resume animation preview and auto-start animation.
+
+        Per-zone mode: Start animation on all zones with ANIMATION render mode.
+        """
         # Auto-start animation if not already running
         if not self.animation_engine.is_running():
             asyncio.create_task(self.toggle_animation())
@@ -161,50 +165,47 @@ class AnimationModeController:
 
     async def _switch_to_selected_animation(self):
         """
-        Switch main strip to currently selected animation (with transition).
+        Switch to currently selected animation (with transition).
 
-        Per-zone mode: Only animate the currently selected zone.
-        All other zones are excluded from animation.
+        Per-zone mode: Animate all zones with ANIMATION render mode using their animations.
         """
-        current_anim = self.animation_service.get_current()
-        if not current_anim:
+        # Get all zones in ANIMATION render mode
+        animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
+        if not animated_zones:
+            log.warn("No zones in ANIMATION mode")
             return
 
-        anim_id = current_anim.config.id
-        params = current_anim.build_params_for_engine()
+        # Use first animated zone's animation (TODO: support different animations per zone)
+        first_animated_zone = animated_zones[0]
+        anim_id = first_animated_zone.state.animation_id
+        if not anim_id:
+            log.warn(f"Zone {first_animated_zone.config.display_name} in ANIMATION mode but no animation_id set")
+            return
 
+        zone_params = first_animated_zone.state.animation_parameters or {}
+        params = zone_params if zone_params else {}
         log.info(f"Auto-switching to animation: {anim_id.name}")
         safe_params = Serializer.params_enum_to_str(params)
 
-        # Get the currently selected zone
-        selected_zone = self.zone_service.get_selected_zone()
-        if not selected_zone:
-            log.warn("No zone selected for animation")
-            return
-
-        # Build list of zones to exclude: ALL zones except the selected one
+        # Build list of zones to exclude: ALL zones except animated zones
+        animated_zone_ids = {z.config.id for z in animated_zones}
         excluded_zone_ids = [
-            zone.config.id for zone in self.zone_service.get_all()
-            if zone.config.id != selected_zone.config.id
+            z.config.id for z in self.zone_service.get_all()
+            if z.config.id not in animated_zone_ids
         ]
 
-        log.debug(f"Animation on selected zone {selected_zone.config.id.name}, excluded: {[z.name for z in excluded_zone_ids]}")
+        log.debug(f"Animation on {len(animated_zones)} zone(s), excluded: {[z.name for z in excluded_zone_ids]}")
 
         # AnimationEngine.start() will handle stop → fade_out → fade_in → start
         await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
 
     async def toggle_animation(self):
         """
-        Start or stop the currently selected animation.
+        Start or stop animation.
 
-        Per-zone mode: Only animate the currently selected zone.
+        Per-zone mode: Animate all zones with ANIMATION render mode using their individual animations.
         """
         log.info("Toggle animation called")
-
-        current_anim = self.animation_service.get_current()
-        if not current_anim:
-            log.warn("No animation selected")
-            return
 
         engine = self.animation_engine
 
@@ -213,26 +214,34 @@ class AnimationModeController:
             await engine.stop()
             return
 
-        # Get the currently selected zone
-        selected_zone = self.zone_service.get_selected_zone()
-        if not selected_zone:
-            log.warn("No zone selected for animation")
+        # Get all zones in ANIMATION render mode
+        animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
+        if not animated_zones:
+            log.warn("No zones in ANIMATION mode")
             return
 
-        anim_id = current_anim.config.id
-        params = current_anim.build_params_for_engine()
-        log.info(f"Starting animation: {anim_id.name} ({params})")
+        # For now: use first animated zone's animation (TODO: support different animations per zone)
+        first_animated_zone = animated_zones[0]
+        anim_id = first_animated_zone.state.animation_id
+        if not anim_id:
+            log.warn(f"Zone {first_animated_zone.config.display_name} in ANIMATION mode but no animation_id set")
+            return
+
+        # Get animation parameters from the zone (or fall back to defaults)
+        zone_params = first_animated_zone.state.animation_parameters or {}
+        params = zone_params if zone_params else {}
+        log.info(f"Starting animation: {anim_id.name} on {len(animated_zones)} zone(s)")
         safe_params = Serializer.params_enum_to_str(params)
 
-        # Build list of zones to exclude: ALL zones except the selected one
+        # Build list of zones to exclude: ALL zones except animated zones
+        animated_zone_ids = {z.config.id for z in animated_zones}
         excluded_zone_ids = [
-            zone.config.id for zone in self.zone_service.get_all()
-            if zone.config.id != selected_zone.config.id
+            z.config.id for z in self.zone_service.get_all()
+            if z.config.id not in animated_zone_ids
         ]
 
-        log.debug(f"Animation on selected zone {selected_zone.config.id.name}, excluded: {[z.name for z in excluded_zone_ids]}")
+        log.debug(f"Animated zones: {[z.config.id.name for z in animated_zones]}, excluded: {[z.name for z in excluded_zone_ids]}")
 
-        # Only animate the selected zone
         await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
 
         log.info("Animation start call completed")

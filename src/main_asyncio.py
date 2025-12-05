@@ -63,7 +63,7 @@ from engine.frame_manager import FrameManager
 # ---------------------------------------------------------------------------
 
 log = get_logger().for_category(LogCategory.SYSTEM)
-configure_logger(LogLevel.INFO)
+configure_logger(LogLevel.DEBUG)
 
 DEBUG_NOPULSE = False
 

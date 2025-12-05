@@ -23,7 +23,14 @@
         "hue": 250
       },
       "brightness": 12.5,
-      "mode": "STATIC"
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 50,
+          "ANIM_INTENSITY": 100
+        }
+      }
     },
     "left": {
       "color": {
@@ -63,7 +70,7 @@
         "preset_name": "ocean"
       },
       "brightness": 100,
-      "mode": "ANIMATION"
+      "mode": "STATIC"
     },
     "back": {
       "color": {
@@ -102,15 +109,23 @@
         "preset_name": "cyan"
       },
       "brightness": 50.0,
-      "mode": "STATIC"
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "SNAKE",
+        "parameters": {
+          "ANIM_SPEED": 50,
+          "ANIM_PRIMARY_COLOR_HUE": 0,
+          "ANIM_LENGTH": 5
+        }
+      }
     }
   },
   "current_animation": {
-    "id": "BREATHE",
+    "id": "SNAKE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_INTENSITY": 100
+      "ANIM_LENGTH": 5
     }
   },
   "application": {
@@ -124,7 +139,7 @@
       "brightness": 0
     },
     "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 5,
+    "selected_zone_index": 7,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

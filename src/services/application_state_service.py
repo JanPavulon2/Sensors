@@ -63,7 +63,6 @@ class ApplicationStateService:
 
         try:
             self.assembler.save_application_state(self.state)
-            log.debug("State saved to disk (debounced)")
         except Exception as e:
             log.error(f"Failed to save application state: {e}")
 
