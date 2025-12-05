@@ -63,7 +63,7 @@
         "preset_name": "ocean"
       },
       "brightness": 100,
-      "mode": "STATIC"
+      "mode": "ANIMATION"
     },
     "back": {
       "color": {
@@ -124,7 +124,7 @@
       "brightness": 0
     },
     "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 7,
+    "selected_zone_index": 5,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

@@ -158,21 +158,23 @@ class TaskRegistry:
         if record is None:
             return
 
+        task_label = f"[Task {record.info.id}] {record.info.description}"
+
         if task.cancelled():
             record.cancelled = True
-            log.debug(f"[Task {record.info.id}] Cancelled")
+            log.debug(f"{task_label} - Cancelled")
         else:
             exc = task.exception()
             if exc:
                 record.finished_with_error = exc
                 log.error(
-                    f"[Task {record.info.id}] FAILED: {exc}",
+                    f"{task_label} - FAILED: {exc}",
                     exc_info=True
                 )
             else:
                 record.finished_return = task.result()
-                log.debug(
-                    f"[Task {record.info.id}] Completed successfully"
+                log.info(
+                    f"{task_label} - Completed successfully"
                 )
                 
     # -----------------------------

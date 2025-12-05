@@ -69,7 +69,11 @@ class PortManager:
         """
         Find process ID (PID) using a specific port.
 
-        Uses `lsof` (Linux) to find the process. May not work on all systems.
+        Tries multiple methods:
+        1. `lsof` - standard approach
+        2. `fuser` - fallback if lsof fails or hangs
+
+        Handles both active and suspended processes (from Ctrl+Z).
 
         Args:
             port: Port number to check
@@ -77,13 +81,13 @@ class PortManager:
         Returns:
             PID if found, None otherwise
         """
+        # Method 1: Try lsof with short timeout
         try:
-            # lsof -ti :PORT returns PID (t=terse, i=ignore+case-insensitive)
             result = subprocess.run(
                 ["lsof", "-ti", f":{port}"],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=1  # Shorter timeout to avoid hanging on suspended process
             )
             if result.returncode == 0 and result.stdout.strip():
                 try:
@@ -91,6 +95,48 @@ class PortManager:
                 except (ValueError, IndexError):
                     pass
         except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        # Method 2: Fallback to fuser (handles suspended processes better)
+        try:
+            result = subprocess.run(
+                ["fuser", f"{port}/tcp"],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                try:
+                    return int(result.stdout.strip().split()[0])
+                except (ValueError, IndexError):
+                    pass
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        return None
+
+    def _get_process_state(self, pid: int) -> Optional[str]:
+        """
+        Get process state (R, S, T, Z, etc.) from /proc/[pid]/stat.
+
+        T = stopped (from SIGSTOP, e.g., Ctrl+Z)
+        Z = zombie
+        S = interruptible sleep
+        R = running
+
+        Args:
+            pid: Process ID
+
+        Returns:
+            Process state character, or None if process not found
+        """
+        try:
+            with open(f"/proc/{pid}/stat", "r") as f:
+                # Format: pid (comm) state ...
+                parts = f.read().split()
+                if len(parts) > 2:
+                    return parts[2]  # 3rd field is state
+        except (FileNotFoundError, OSError):
             pass
         return None
 
@@ -102,7 +148,13 @@ class PortManager:
         Only use during application startup after confirming port should be free.
 
         This is especially important for recovery from crashes where the previous
-        instance left the port orphaned (uvicorn/Starlette lifespan bug).
+        instance left the port orphaned (uvicorn/Starlette lifespan bug) or was
+        suspended with Ctrl+Z.
+
+        Handles:
+        - Active processes (sends SIGKILL)
+        - Suspended processes (sends SIGCONT then SIGKILL)
+        - Zombie processes (parent must reap, but port often gets freed)
 
         Args:
             port: Port to free (0-65535)
@@ -119,10 +171,20 @@ class PortManager:
         # Try to find and kill the process
         pid = self.find_process_on_port(port)
         if pid:
+            # Check if process is suspended (T state = stopped by SIGSTOP, e.g., Ctrl+Z)
+            state = self._get_process_state(pid)
+            if state == 'T':
+                log.warn(f"Process {pid} is suspended (Ctrl+Z detected), resuming with SIGCONT...")
+                try:
+                    subprocess.run(["kill", "-CONT", str(pid)], timeout=1)
+                    await asyncio.sleep(0.1)
+                except Exception as e:
+                    log.debug(f"Failed to send SIGCONT to {pid}: {e}")
+
             log.warn(f"Found process {pid} using port {port}, sending SIGKILL...")
             try:
                 # Note: Application runs with sudo, so kill should work
-                subprocess.run(["kill", "-9", str(pid)], timeout=2)
+                subprocess.run(["kill", "-9", str(pid)], timeout=1)
                 await asyncio.sleep(0.5)  # Wait for OS cleanup
                 log.debug(f"Process {pid} killed")
             except subprocess.TimeoutExpired:
@@ -132,17 +194,25 @@ class PortManager:
                 log.error(f"Failed to kill process {pid}: {e}")
                 return False
         else:
-            log.warn(f"Port {port} in use but process not found, waiting for cleanup...")
-            await asyncio.sleep(0.5)
+            log.warn(f"Port {port} in use but process not found, using fuser fallback...")
+            try:
+                # Use fuser -k as ultimate fallback to kill ALL processes using the port
+                subprocess.run(["fuser", "-k", f"{port}/tcp"], timeout=1)
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                log.debug(f"fuser fallback failed: {e}")
 
-        # Verify port is now free
-        await asyncio.sleep(0.2)
-        if self.is_port_in_use(port, host):
-            log.error(f"Port {port} still in use after cleanup attempt")
-            return False
+        # Verify port is now free (with retries for OS cleanup)
+        for attempt in range(3):
+            await asyncio.sleep(0.2)
+            if not self.is_port_in_use(port, host):
+                log.info(f"✓ Port {port} successfully freed")
+                return True
+            if attempt < 2:
+                log.debug(f"Port {port} still in use, waiting for OS cleanup... (attempt {attempt + 1}/3)")
 
-        log.info(f"✓ Port {port} successfully freed")
-        return True
+        log.error(f"Port {port} still in use after cleanup attempts")
+        return False
 
     async def ensure_available(self, port: int, host: str = "0.0.0.0") -> None:
         """

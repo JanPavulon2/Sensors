@@ -51,7 +51,7 @@ CATEGORY_COLORS = {
     LogCategory.TRANSITION: Colors.MAGENTA,
     LogCategory.EVENT: Colors.BRIGHT_MAGENTA,
     LogCategory.RENDER_ENGINE: Colors.MAGENTA,
-    LogCategory.SHUTDOWN: Colors.BRIGHT_RED,      # Shutdown operations stand out (critical)
+    LogCategory.SHUTDOWN: Colors.DARK_CYAN,       # Shutdown operations (normal lifecycle event)
     LogCategory.LIFECYCLE: Colors.ORANGE,         # Important lifecycle events
     LogCategory.TASK: Colors.LIGHT_PURPLE,        # Task tracking and management
     LogCategory.API: Colors.PINK,                 # API operations
