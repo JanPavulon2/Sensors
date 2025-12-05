@@ -32,9 +32,11 @@ class AnimationShutdownHandler(IShutdownHandler):
     """
     Shutdown handler for animation engine.
 
-    Stops all running animations and animation service.
+    Stops all running animations and animation service (FrameManager).
+    Must run BEFORE LEDShutdownHandler to prevent race conditions where
+    FrameManager continues submitting frames after LEDs are cleared.
 
-    Priority: 80
+    Priority: 105 (runs FIRST, before LED clearing)
     """
 
     def __init__(self, led_controller: LightingController):
@@ -48,8 +50,8 @@ class AnimationShutdownHandler(IShutdownHandler):
 
     @property
     def shutdown_priority(self) -> int:
-        """Animations shutdown second."""
-        return 80
+        """Animations shutdown FIRST (before LEDs cleared)."""
+        return 105
 
     async def shutdown(self) -> None:
         """Stop animation engine and service."""

@@ -78,7 +78,9 @@ class LightingController:
         preview_panel_controller = None
 
         # Initialize feature controllers with dependency injection
-        self.static_mode_controller = StaticModeController(services=self.services)
+        self.static_mode_controller = StaticModeController(
+            services=self.services
+        )
 
         self.animation_mode_controller = AnimationModeController(
             services=self.services,

@@ -176,7 +176,7 @@ class DataAssembler:
                 )
 
                 animations.append(animation_combined)
-                log.info(f"  ✓ {animation_config.display_name} (current={is_current})")
+                log.info(f"{animation_config.display_name} (current={is_current})")
 
             log.info(f"Successfully built {len(animations)} animations")
             return animations

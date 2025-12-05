@@ -106,11 +106,11 @@
     }
   },
   "current_animation": {
-    "id": "SNAKE",
+    "id": "COLOR_FADE",
     "parameters": {
       "ANIM_SPEED": 50,
       "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5
+      "ANIM_INTENSITY": 100
     }
   },
   "application": {
@@ -124,7 +124,7 @@
       "brightness": 0
     },
     "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 5,
+    "selected_zone_index": 3,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

@@ -16,10 +16,11 @@ class LEDShutdownHandler(IShutdownHandler):
     """
     Shutdown handler for LED hardware.
 
-    Clears all LEDs immediately to prevent them from being left on.
-    This should be the first shutdown step.
+    Clears all LEDs to prevent them from being left on.
+    Runs AFTER animation engine stops to prevent race conditions
+    where FrameManager continues submitting frames after clearing.
 
-    Priority: 100 (shutdown first)
+    Priority: 100 (runs second, after animations stop)
     """
 
     def __init__(self, hardware: HardwareBundle):
@@ -33,7 +34,7 @@ class LEDShutdownHandler(IShutdownHandler):
 
     @property
     def shutdown_priority(self) -> int:
-        """LED clearing has highest priority."""
+        """LED clearing runs after animation stops."""
         return 100
 
     async def shutdown(self) -> None:
@@ -45,11 +46,11 @@ class LEDShutdownHandler(IShutdownHandler):
             for gpio_pin, strip in self.hardware.zone_strips.items():
                 try:
                     strip.clear()
-                    log.debug(f"✓ Cleared GPIO {gpio_pin}")
+                    log.debug(f"Cleared GPIO {gpio_pin}")
                 except Exception as e:
                     log.error(f"Error clearing GPIO {gpio_pin}: {e}")
 
-            log.info("✓ All LEDs cleared")
+            log.info("All LEDs cleared")
 
         except Exception as e:
             log.error(f"Error during LED clearing: {e}", exc_info=True)

@@ -60,6 +60,6 @@ class GPIOShutdownHandler(IShutdownHandler):
 
         try:
             self.gpio_manager.cleanup()
-            log.debug("✓ GPIO cleaned up")
+            log.debug("GPIO cleaned up")
         except Exception as e:
             log.error(f"Error cleaning up GPIO: {e}")

@@ -163,7 +163,7 @@ class ShutdownCoordinator:
         for failed_record in failed_records:
             if failed_record.info.category.name in critical_categories:
                 log.error(
-                    f"❌ Critical task failed: {failed_record.info.description} "
+                    f"Critical task failed: {failed_record.info.description} "
                     f"(category: {failed_record.info.category.name})"
                 )
                 self._shutdown_trigger["reason"] = (
@@ -326,7 +326,7 @@ class ShutdownCoordinator:
         """
         log.info("🛑 Initiating graceful shutdown sequence...")
         reason = self._shutdown_trigger.get("reason", "UNKNOWN")
-        log.info(f"   Reason: {reason}")
+        log.info(f"Reason: {reason}")
 
         # Sort by priority (highest first)
         sorted_handlers = sorted(
@@ -343,9 +343,7 @@ class ShutdownCoordinator:
                 # Check if total timeout exceeded
                 elapsed = asyncio.get_event_loop().time() - start_time
                 if elapsed > self._total_timeout:
-                    log.error(
-                        f"⚠️  Total shutdown timeout exceeded ({elapsed:.1f}s > {self._total_timeout}s)"
-                    )
+                    log.error(f"Total shutdown timeout exceeded ({elapsed:.1f}s > {self._total_timeout}s)")
                     break
 
                 try:
@@ -358,11 +356,11 @@ class ShutdownCoordinator:
                         handler.shutdown(), timeout=self._timeout_per_handler
                     )
 
-                    log.debug(f"✓ {handler_name} shutdown complete")
+                    log.debug(f"{handler_name} shutdown complete")
 
                 except asyncio.TimeoutError:
                     log.error(
-                        f"⚠️  {handler_name} shutdown timeout "
+                        f"{handler_name} shutdown timeout "
                         f"({self._timeout_per_handler}s)"
                     )
 
@@ -371,12 +369,10 @@ class ShutdownCoordinator:
                     raise
 
                 except Exception as e:
-                    log.error(
-                        f"❌ Error shutting down {handler_name}: {e}", exc_info=True
-                    )
+                    log.error(f"Error shutting down {handler_name}: {e}", exc_info=True)
                     # Continue with other handlers even if one fails
 
-            log.info("✓ Shutdown sequence complete")
+            log.info("Shutdown sequence complete")
 
         except asyncio.CancelledError:
             log.warn("Shutdown sequence was cancelled")
