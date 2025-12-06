@@ -248,7 +248,7 @@ class FrameManager:
             "dropped_frames": self.dropped_frames,
             "dma_skipped": self.dma_skipped,
             "pending_main": sum(len(q) for q in self.main_queues.values()),
-            "pending_preview": sum(len(q) for q in self.preview_queues.values()),
+            # "pending_preview": sum(len(q) for q in self.preview_queues.values()),
         }
 
     # === Core Render Loop ===

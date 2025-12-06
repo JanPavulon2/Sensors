@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:clean": "npm run dev:kill && npm run dev",
+    "dev:kill": "pkill -f 'node.*vite' || true",
+    "dev:check": "curl -s http://localhost:5173 > /dev/null && echo '✅ Frontend running on http://localhost:5173' || echo '❌ Frontend not running'",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx",

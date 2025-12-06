@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ParamID, ZoneRenderMode
+from animations.breathe import BreatheAnimation
+from models.enums import FramePriority, FrameSource, ParamID, ZoneRenderMode
+from models.domain.animation import AnimationID
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from services import ServiceContainer
@@ -112,7 +114,9 @@ class AnimationModeController:
         safe_params = Serializer.params_enum_to_str(params)
 
         log.info(f"ANIMATION: Starting {anim_id.name} on zone {first_animated_zone.config.id.name}")
-        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+        for zone in animated_zones:
+            # await self._start_zone_local_anim(zone)
+            await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
         log.info(f"ANIMATION initialized: {anim_id.name} running on {first_animated_zone.config.id.name}")
 
     # --- Mode Entry/Exit ---
@@ -177,7 +181,7 @@ class AnimationModeController:
 
         # Use first animated zone's animation (TODO: support different animations per zone)
         first_animated_zone = animated_zones[0]
-        anim_id = first_animated_zone.state.animation_id
+        anim_id = AnimationID.BREATHE #first_animated_zone.state.animation_id
         if not anim_id:
             log.warn(f"Zone {first_animated_zone.config.display_name} in ANIMATION mode but no animation_id set")
             return
@@ -242,7 +246,9 @@ class AnimationModeController:
 
         log.debug(f"Animated zones: {[z.config.id.name for z in animated_zones]}, excluded: {[z.name for z in excluded_zone_ids]}")
 
-        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+        for zone in animated_zones:
+            #await self._start_zone_local_anim(zone)
+            await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
 
         log.info("Animation start call completed")
 
@@ -278,3 +284,60 @@ class AnimationModeController:
         self.app_state_service.set_current_param(self.current_param)
 
         log.info(f"Cycled animation param: {self.current_param.name}")
+
+    async def _start_zone_local_anim(self, zone):
+        """
+        TEMP: Start animation ONLY for this zone,
+        bypassing global AnimationEngine.
+        Works with legacy ZoneFrame.
+        """
+
+        anim_id = zone.state.animation_id
+        if not anim_id:
+            log.warn(f"Zone {zone.config.id} has no animation_id")
+            return
+
+        params = zone.state.animation_parameters or {}
+        safe_params = Serializer.params_enum_to_str(params)
+
+        anims = self.animation_service.get_all()
+        anim_meta = anims[0]
+        anim_class = BreatheAnimation
+
+        # Animation instance that handles only ONE zone
+        anim = anim_class(
+            zones=[zone],
+            excluded_zones=[],
+            **params
+        )
+
+        log.info(f"[LOCAL ANIM] starting {anim_id.name} on zone {zone.config.id.name}")
+
+        async def runner():
+            try:
+                async for frame in anim.run():
+                    # frame = (zone_id, r, g, b)
+                    zone_id, color = frame
+
+                    from models.frame import ZoneFrame
+                    
+                    # Stare ramki wymagają dict: {zone_id: Color}
+                    from models.color import Color
+                    
+                    zone_frame = ZoneFrame(
+                        zone_colors={zone_id: color},
+                        priority=FramePriority.ANIMATION,
+                        source=FrameSource.ANIMATION,
+                        ttl=0.15  # krótkie, aby płynnie aktualizować
+                    )
+
+                    # frame_manager jest w AnimationEngine → bierzemy stamtąd
+                    fm = self.animation_engine.frame_manager
+                    await fm.submit_zone_frame(zone_frame)
+
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                log.error(f"LOCAL ANIM ERROR ({zone.config.id}): {e}", exc_info=True)
+
+        asyncio.create_task(runner())

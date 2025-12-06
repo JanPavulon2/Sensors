@@ -26,6 +26,7 @@ from engine import FrameManager
 from models.transition import TransitionConfig, TransitionType
 from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneRenderMode
 from models.frame import ZoneFrame, PixelFrame
+from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
 from lifecycle.task_registry import create_tracked_task, TaskCategory
@@ -84,10 +85,8 @@ class AnimationEngine:
         self.frame_manager = frame_manager
         self.transition_service = TransitionService(strip, frame_manager)
 
-        # Pixel buffer: zone_id -> pixel_index -> (r, g, b) for pixel-level animations
-        self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
-        # Zone color buffer: zone_id -> (r, g, b) for zone-level animations
-        self.zone_color_buffers: dict[ZoneID, tuple[int, int, int]] = {}
+        self.zone_pixel_buffers: dict[ZoneID, dict[int, Color]] = {}
+        self.zone_color_buffers: dict[ZoneID, Color] = {}
         self.zone_lengths: dict[ZoneID, int] = {
             z.config.id: z.config.pixel_count for z in zones
         }
@@ -196,7 +195,7 @@ class AnimationEngine:
                 zone_pixels=zone_pixels_dict_old,
                 priority=FramePriority.MANUAL,
                 source=FrameSource.ANIMATION,
-                ttl=5.0,  # High TTL to persist while first frame builds (~250ms)
+                ttl=5.0,  
                 partial=True
             )
             await self.frame_manager.submit_pixel_frame(pixel_frame_old)
@@ -356,8 +355,8 @@ class AnimationEngine:
             # Collect yields for first frame (animations yield multiple times per frame)
             # For zone-based animations: ~10 yields (one per zone)
             # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
-            zone_pixels_buffer: Dict[ZoneID, Dict[int, Tuple[int, int, int]]] = {}
-            zone_colors_buffer: Dict[ZoneID, Tuple[int, int, int]] = {}
+            zone_pixels_buffer: Dict[ZoneID, Dict[int, Color]] = {}
+            zone_colors_buffer: Dict[ZoneID, Color] = {}
 
             yields_collected = 0
             max_yields = 100
@@ -367,11 +366,11 @@ class AnimationEngine:
                 if len(frame) == 5:
                     # Pixel-level: (zone_id, pixel_index, r, g, b)
                     zone_id, pixel_index, r, g, b = frame
-                    zone_pixels_buffer.setdefault(zone_id, {})[pixel_index] = (r, g, b)
+                    zone_pixels_buffer.setdefault(zone_id, {})[pixel_index] = Color.from_rgb(r, g, b)
                 elif len(frame) == 4:
                     # Zone-level: (zone_id, r, g, b)
                     zone_id, r, g, b = frame
-                    zone_colors_buffer[zone_id] = (r, g, b)
+                    zone_colors_buffer[zone_id] = Color.from_rgb(r, g, b)
 
                 yields_collected += 1
 
@@ -390,7 +389,7 @@ class AnimationEngine:
             await gen.aclose()
 
             # Convert to PixelFrame format
-            zone_pixels_dict: Dict[ZoneID, List[Tuple[int, int, int]]] = {}
+            zone_pixels_dict: Dict[ZoneID, List[Color]] = {}
 
             # Process zone-level updates
             for zone_id, color in zone_colors_buffer.items():
@@ -403,8 +402,8 @@ class AnimationEngine:
                 # Start with zone color if present, else black
                 if zone_id in zone_pixels_dict:
                     pixels_list = zone_pixels_dict[zone_id].copy()
-                else:
-                    pixels_list = [(0, 0, 0)] * zone_length
+                # else:
+                    # pixels_list = Color.black().to_rgb() * zone_length
 
                 # Overlay pixel updates
                 for pixel_idx, color in pixels_dict.items():
@@ -443,7 +442,7 @@ class AnimationEngine:
                     # Pixel-level update: (zone_id, pixel_index, r, g, b)
                     zone_id, pixel_index, r, g, b = frame
                     zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
-                    zone_pixels[pixel_index] = (r, g, b)
+                    zone_pixels[pixel_index] = Color.from_rgb(r, g, b)
 
                     log.debug(
                         f"[Frame {frame_count}] Pixel update: {zone_id.name}[{pixel_index}] = ({r},{g},{b})"
@@ -453,10 +452,20 @@ class AnimationEngine:
                     # Zone-level update: (zone_id, r, g, b) - entire zone gets one color
                     zone_id, r, g, b = frame
                     # Store in zone color buffer (for zone-level animations like Breathe)
-                    self.zone_color_buffers[zone_id] = (r, g, b)
+                    self.zone_color_buffers[zone_id] = Color.from_rgb(r, g, b)
 
                     log.debug(
                         f"[Frame {frame_count}] Zone update: {zone_id.name} color=({r},{g},{b})"
+                    )
+                    
+                elif len(frame) == 2:
+                    # Zone-level update: (zone_id, Color) - entire zone gets one color
+                    zone_id, color = frame
+                    # Store in zone color buffer (for zone-level animations like Breathe)
+                    self.zone_color_buffers[zone_id] = color
+
+                    log.debug(
+                        f"[Frame {frame_count}] Zone update: {zone_id.name} color=({color})"
                     )
 
                 else:
@@ -475,7 +484,7 @@ class AnimationEngine:
                 for zone_id, color in self.zone_color_buffers.items():
                     zone_length = self.zone_lengths.get(zone_id, 0)
                     # Create pixel list with all pixels set to the zone color (convert RGB tuple to Color)
-                    color_obj = Color.from_rgb(*color)
+                    color_obj = color
                     pixels_list = [color_obj] * zone_length
                     zone_pixels_dict[zone_id] = pixels_list
 
@@ -494,7 +503,7 @@ class AnimationEngine:
                         # Overlay pixel updates (convert RGB tuples to Color objects)
                         for i in range(zone_length):
                             if i in pix_dict:
-                                pixels_list[i] = Color.from_rgb(*pix_dict[i])
+                                pixels_list[i] = pix_dict[i]
                         zone_pixels_dict[zone_id] = pixels_list
 
                 if zone_pixels_dict:

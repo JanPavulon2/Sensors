@@ -172,31 +172,6 @@ Sensors/
 
 ---
 
-## 🤖 Agent Routing
-
-Choose the right specialized agent for your task:
-
-### Architecture Work
-**When**: System design, refactoring, design patterns, code reviews
-**Read**: `context/architecture/*.md`
-**Use**: `@architecture-expert-sonnet` (complex) or `@architecture-expert` (simple)
-
-### Python Implementation
-**When**: Writing code, implementing features, fixing bugs, asyncio work
-**Read**: `context/development/coding-standards.md`, relevant domain docs
-**Use**: `@python-expert-sonnet` (complex) or `@python-expert` (simple)
-
-### Animation Work
-**When**: Implementing/modifying animations, rendering logic
-**Read**: `context/domain/animations.md`, `context/architecture/rendering-system.md`
-**Use**: `@python-expert-sonnet` + refer to animation architecture docs
-
-### Hardware/GPIO
-**When**: LED control, GPIO configuration, hardware interfacing
-**Read**: `context/technical/hardware.md`, `context/domain/zones.md`
-**Use**: `@rpi-hardware-expert-sonnet` (complex) or `@rpi-hardware-expert` (simple)
-
----
 
 ## 💻 Code Style Requirements
 

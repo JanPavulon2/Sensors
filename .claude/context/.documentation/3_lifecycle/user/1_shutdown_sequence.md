@@ -277,7 +277,7 @@ async def shutdown(self) -> None:
     if self.tasks:
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
-    log.debug("✓ All tasks cancelled")
+    log.debug(" tasks cancelled")
 ```
 
 **What happens**:

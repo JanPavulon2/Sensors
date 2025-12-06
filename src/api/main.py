@@ -231,7 +231,7 @@ def create_app(
     # This catches issues early (at app startup) rather than at runtime (HTTP 403).
     try:
         validate_app_websockets(app)
-        log.debug("✓ WebSocket handlers validated successfully")
+        log.debug("WebSocket handlers validated successfully")
     except Exception as e:
         log.error(f"WebSocket validation failed: {e}")
         raise

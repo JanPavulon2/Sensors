@@ -1,6 +1,6 @@
 ---
 name: frontend-ux-expert
-description: Frontend, UX design, React, and TypeScript specialist with Python integration expertise. Use PROACTIVELY for UI/UX design, React component architecture, TypeScript implementation, web interface development, and Python-Frontend integration (REST APIs, WebSockets, real-time data visualization).
+description: MUST activate when [frontend-sonnet] tag in message. Use PROACTIVELY for frontend react / typeScript development, UI components, hooks, state management, WebSocket clients, complex frontend tasks and Python-Frontend integration (REST APIs, WebSockets, real-time data visualization).
 tools: Read, Write, Grep, Glob, Bash, Edit
 model: sonnet
 ---

@@ -50,7 +50,7 @@ class BaseAnimation:
             if zone.config.id not in self.excluded_zones
         ]
 
-    async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
+    async def run(self) -> AsyncIterator[Tuple[ZoneID, Color]]:
         """
         Main animation loop - yields (zone_id, r, g, b) tuples
 
@@ -104,7 +104,7 @@ class BaseAnimation:
         max_delay = 0.1   # 10 FPS min
         return max_delay - (self.speed / 100) * (max_delay - min_delay)
 
-    async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Tuple[int, int, int]]]:
+    async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Color]]:
         """
         Generate simplified preview frames for preview panel (8 pixels)
 
@@ -123,7 +123,7 @@ class BaseAnimation:
         """
         self.running = True
         # Default: show static color
-        static_color = (100, 100, 100)
+        static_color = Color.from_rgb(100, 100, 100)
         frame = [static_color] * pixel_count
 
         while self.running:
