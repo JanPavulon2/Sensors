@@ -23,7 +23,7 @@
         "hue": 250
       },
       "brightness": 12.5,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -109,7 +109,7 @@
         "preset_name": "cyan"
       },
       "brightness": 50.0,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "SNAKE",
         "parameters": {
@@ -121,12 +121,8 @@
     }
   },
   "current_animation": {
-    "id": "SNAKE",
-    "parameters": {
-      "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5
-    }
+    "id": null,
+    "parameters": {}
   },
   "application": {
     "edit_mode_on": true,
@@ -139,7 +135,7 @@
       "brightness": 0
     },
     "active_parameter": "ZONE_COLOR_PRESET",
-    "selected_zone_index": 7,
+    "selected_zone_index": 1,
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

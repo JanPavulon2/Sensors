@@ -196,7 +196,8 @@ class AnimationEngine:
                 zone_pixels=zone_pixels_dict_old,
                 priority=FramePriority.MANUAL,
                 source=FrameSource.ANIMATION,
-                ttl=5.0  # High TTL to persist while first frame builds (~250ms)
+                ttl=5.0,  # High TTL to persist while first frame builds (~250ms)
+                partial=True
             )
             await self.frame_manager.submit_pixel_frame(pixel_frame_old)
 
@@ -503,7 +504,8 @@ class AnimationEngine:
                             frame = PixelFrame(
                                 priority=FramePriority.ANIMATION,
                                 source=FrameSource.ANIMATION,
-                                zone_pixels=zone_pixels_dict
+                                zone_pixels=zone_pixels_dict,
+                                partial=True
                             )
                             await self.frame_manager.submit_pixel_frame(frame)
                             if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)

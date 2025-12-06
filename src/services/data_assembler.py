@@ -272,7 +272,7 @@ class DataAssembler:
                 )
 
                 zones.append(zone_combined)
-                log.info(f"  ✓ {zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
+                log.info(f"{zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
 
             log.info(f"Successfully built {len(zones)} zones")
             return zones

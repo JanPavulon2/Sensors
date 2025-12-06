@@ -347,20 +347,16 @@ class ShutdownCoordinator:
                     break
 
                 try:
-                    log.debug(
-                        f"Shutting down {handler_name} (priority={priority})..."
-                    )
+                    log.debug(f"Executing {handler_name} (priority={priority})...")
 
                     # Call shutdown with timeout
-                    await asyncio.wait_for(
-                        handler.shutdown(), timeout=self._timeout_per_handler
-                    )
+                    await asyncio.wait_for(handler.shutdown(), timeout=self._timeout_per_handler)
 
-                    log.debug(f"{handler_name} shutdown complete")
+                    log.debug(f"{handler_name} completed")
 
                 except asyncio.TimeoutError:
                     log.error(
-                        f"{handler_name} shutdown timeout "
+                        f"{handler_name} timeout "
                         f"({self._timeout_per_handler}s)"
                     )
 

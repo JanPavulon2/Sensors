@@ -274,7 +274,7 @@ class FrameManager:
 
             # Select and render frames
             try:
-                frame = await self._select_main_frame_by_priority()
+                frame = await self._select_frame_by_priority()
                 
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
@@ -306,7 +306,7 @@ class FrameManager:
 
     # === Frame Selection ===
 
-    async def _select_main_frame_by_priority(self) -> Optional[MainStripFrame]:
+    async def _select_frame_by_priority(self) -> Optional[MainStripFrame]:
         """
         Select highest-priority non-expired frame from main queues.
 
@@ -337,9 +337,9 @@ class FrameManager:
         """
         # Render main strip
         if main_frame:
-            self._render_main_frame(main_frame)
+            self._render_frame(main_frame)
 
-    def _render_main_frame(self, frame: MainStripFrame) -> None:
+    def _render_frame(self, frame: MainStripFrame) -> None:
         """
         Unified render pipeline:
         1. Frame → logical zone update (as_zone_update)
@@ -355,9 +355,40 @@ class FrameManager:
         #     zone_id: updates.get(zone_id, self.zone_render_states[zone_id].pixels)
         #     for zone_id in self.zone_render_states.keys()
         # }
-        merged = self._merge_partial_update(updates)
+        # === MERGE LOGIC ===
         
+        is_partial = getattr(frame, "partial", False)
         
+        if is_partial:
+            log.debug(f"Frame is partial, merging.")
+            # Use existing merge helper (partial → merge with previous state)
+            merged = self._merge_partial_update(updates)
+        else: 
+            log.debug(f"Frame is full. Building whole.")
+            merged = {}
+                 
+            for zone_id, state in self.zone_render_states.items():
+                if zone_id in updates:
+                    new_val = updates[zone_id]
+
+                    if isinstance(new_val, Color):
+                        # single Color → expand to full zone
+                        merged[zone_id] = [new_val] * len(state.pixels)
+                    else:
+                        # list of Colors → normalize length
+                        pix = list(new_val[:len(state.pixels)])
+                        if len(pix) < len(state.pixels):
+                            pix += [Color.black()] * (len(state.pixels) - len(pix))
+                        merged[zone_id] = pix
+                else:
+                    # zones untouched → keep existing state
+                    merged[zone_id] = list(state.pixels)  
+                    
+            # update render states for full-frame case
+            for zone_id, pix in merged.items():
+                self.zone_render_states[zone_id].pixels = pix 
+
+        # === DMA SKIP ===
         frame_hash = self._hash_merged_frame(merged)
         
         if frame_hash == self.last_rendered_frame_hash:
@@ -365,7 +396,7 @@ class FrameManager:
             return
         self.last_rendered_frame_hash = frame_hash
         
-        # 3) Wyślij do stripów
+        # === RENDER TO STRIPS ===
         for strip in self.zone_strips:
             try:
                 zone_ids = strip.mapper.all_zone_ids()
@@ -379,40 +410,6 @@ class FrameManager:
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
         
-        # for strip in self.main_strips:
-        #     try:
-        #         strip_zones = strip.mapper.all_zone_ids()
-                
-        #         per_strip = {
-        #                         z: merged[z]
-        #                         for z in strip_zones
-        #                     }
-
-        #         strip.show_full_pixel_frame(per_strip)
-                
-        #         # 2) Filter to only zones belonging to this strip (multi-GPIO support)
-        #         filtered = {
-        #             zone_id: value
-        #             for zone_id, value in updates.items()
-        #             if zone_id in strip_zone_ids
-        #         }
-
-        #         # == CRITICAL FIX ==
-        #         if not filtered:
-        #             continue
-
-        #         # 3) Normalize logical → per-pixel lists
-        #         normalized = self._normalize_to_zone_lengths(filtered, strip.mapper)
-
-        #         # 4) Update ZoneRenderState
-        #         self._apply_zone_state(normalized, frame.source)
-
-        #         # 5) Atomic render to hardware
-        #         strip.show_full_pixel_frame(normalized)
-
-        #     except Exception as e:
-        #         log.error(f"Error rendering frame to {strip}: {e}")
-    
     # ============================================================
     # Helpers
     # ============================================================
@@ -456,15 +453,7 @@ class FrameManager:
     # ============================================================
     # Tools
     # ============================================================
-
-    def clear_all(self):
-        for q in self.main_queues.values():
-            q.clear()
-        log.info("FrameManager v3 queues cleared")
-
-    def __repr__(self):
-        return f"FrameManagerV3(fps={self.fps}, rendered={self.frames_rendered}, skipped={self.dma_skipped})"
-                                
+                  
     def _apply_zone_state(self, normalized_frame, source):
         """
         Update ZoneRenderState with the full normalized per-zone pixel lists.

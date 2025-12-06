@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 
 log = get_logger().for_category(LogCategory.SHUTDOWN)
 
-
 class APIServerShutdownHandler(IShutdownHandler):
     """
     Shutdown handler for API server (FastAPI + Uvicorn).
@@ -54,7 +53,6 @@ class APIServerShutdownHandler(IShutdownHandler):
 
         try:
             await self.api_wrapper.stop()
-            log.info("API server stopped and port released")
         except Exception as e:
             log.error(f"Error stopping API server: {e}", exc_info=True)
 

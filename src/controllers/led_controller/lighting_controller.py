@@ -115,7 +115,7 @@ class LightingController:
         # Initialize zones based on per-zone modes
         self._initialize_zones()
 
-        log.info("LEDController initialized")
+        log.info("LightingController initialized")
 
     # ------------------------------------------------------------------
     # MODE MANAGEMENT
@@ -138,7 +138,7 @@ class LightingController:
         self.static_mode_controller.initialize()
 
         # Animated zones start asynchronously
-        # asyncio.create_task(self.animation_mode_controller.initialize())
+        asyncio.create_task(self.animation_mode_controller.initialize())
 
         log.info("Zone controller initialization coordinated")
 
@@ -227,13 +227,15 @@ class LightingController:
             log.info("Modulator rotation ignored when not in edit mode")
             return
         
+        self._cycle_zone_selection(delta)
+        
         # Context-aware routing based on selected zone's mode
-        if current_zone.state.mode == ZoneRenderMode.ANIMATION:
-            # In ANIMATION mode: rotate to cycle animations
-            self.animation_mode_controller.select_animation(delta)
-        else:
-            # In STATIC or OFF mode: rotate to select zones
-            self._cycle_zone_selection(delta)
+        # if current_zone.state.mode == ZoneRenderMode.ANIMATION:
+        #     # In ANIMATION mode: rotate to cycle animations
+        #     self.animation_mode_controller.select_animation(delta)
+        # else:
+        #     # In STATIC or OFF mode: rotate to select zones
+        #     self._cycle_zone_selection(delta)
 
     def _handle_selector_click(self):
         """

@@ -58,13 +58,12 @@ class ZoneFrame(BaseFrame):
 
 @dataclass
 class PixelFrame(BaseFrame):
-    # zone_pixels stores Color objects (not RGB tuples) for type consistency
-    # This matches TransitionService and AnimationEngine output
     zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict)
     clear_other_zones: bool = False
-
+    
+    # If True, FrameManager must MERGE this update with current zone state instead of replacing.
+    partial: bool = True
     def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
-        # Colors already in correct format (service layer uses Color, not RGB tuples)
         return self.zone_pixels
 
 @dataclass
