@@ -97,9 +97,15 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
         logger.info(f"Active task WebSocket connections: {len(_active_task_websockets)}")
 
         # Get task registry
+        import time
+        t_reg = time.time()
+        print(f"[WEBSOCKET_TASKS] Importing TaskRegistry...")
         try:
             from lifecycle.task_registry import TaskRegistry
+            print(f"[WEBSOCKET_TASKS] Imported, calling instance()...")
             registry = TaskRegistry.instance()
+            t_reg2 = time.time()
+            print(f"[WEBSOCKET_TASKS] Got registry in {t_reg2-t_reg:.3f}s")
             logger.debug("TaskRegistry imported successfully")
         except ImportError as e:
             logger.error(f"Failed to import TaskRegistry: {e}")
@@ -107,28 +113,36 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
             return
 
         try:
-            # Send initial task snapshot
-            logger.debug(f"Getting stats from registry for {client_addr}")
-            stats = registry.get_stats()
-            logger.debug(f"Got stats: {type(stats)}, keys: {list(stats.keys()) if isinstance(stats, dict) else 'N/A'}")
+            # Send initial task snapshot with timing
+            import time
+            t0 = time.time()
 
-            logger.debug(f"Sending stats to {client_addr}")
+            print(f"[WEBSOCKET_TASKS] Getting stats...")
+            stats = registry.get_stats()
+            t1 = time.time()
+            print(f"[WEBSOCKET_TASKS] Got stats in {t1-t0:.3f}s")
+
+            print(f"[WEBSOCKET_TASKS] Sending stats JSON...")
             await websocket.send_json({
                 "type": "tasks:stats",
                 "stats": stats,
             })
-            logger.debug(f"Sent task stats to {client_addr}")
+            t2 = time.time()
+            print(f"[WEBSOCKET_TASKS] Sent stats in {t2-t1:.3f}s")
 
             # Send all tasks
-            logger.debug(f"Getting all tasks from registry for {client_addr}")
+            print(f"[WEBSOCKET_TASKS] Getting all tasks...")
             all_tasks = registry.get_all_as_dicts()
-            logger.debug(f"Got {len(all_tasks)} tasks, sending to {client_addr}")
+            t3 = time.time()
+            print(f"[WEBSOCKET_TASKS] Got {len(all_tasks)} tasks in {t3-t2:.3f}s")
 
+            print(f"[WEBSOCKET_TASKS] Sending tasks JSON...")
             await websocket.send_json({
                 "type": "tasks:snapshot",
                 "tasks": all_tasks,
             })
-            logger.debug(f"Sent {len(all_tasks)} tasks to {client_addr}")
+            t4 = time.time()
+            print(f"[WEBSOCKET_TASKS] Sent {len(all_tasks)} tasks in {t4-t3:.3f}s")
         except WebSocketDisconnect:
             logger.debug(f"Client {client_addr} disconnected during initial data send")
             return
