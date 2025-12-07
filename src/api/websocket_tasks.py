@@ -105,8 +105,11 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
 
         try:
             # Send initial task snapshot
-            # Send stats
+            logger.debug(f"Getting stats from registry for {client_addr}")
             stats = registry.get_stats()
+            logger.debug(f"Got stats: {type(stats)}, keys: {list(stats.keys()) if isinstance(stats, dict) else 'N/A'}")
+
+            logger.debug(f"Sending stats to {client_addr}")
             await websocket.send_json({
                 "type": "tasks:stats",
                 "stats": stats,
@@ -114,7 +117,10 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
             logger.debug(f"Sent task stats to {client_addr}")
 
             # Send all tasks
+            logger.debug(f"Getting all tasks from registry for {client_addr}")
             all_tasks = registry.get_all_as_dicts()
+            logger.debug(f"Got {len(all_tasks)} tasks, sending to {client_addr}")
+
             await websocket.send_json({
                 "type": "tasks:snapshot",
                 "tasks": all_tasks,
@@ -124,7 +130,7 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
             logger.debug(f"Client {client_addr} disconnected during initial data send")
             return
         except Exception as e:
-            logger.error(f"Error sending initial data to {client_addr}: {e}")
+            logger.error(f"Error sending initial data to {client_addr}: {e}", exc_info=True)
             try:
                 await websocket.close(code=1011, reason="Error sending initial data")
             except Exception as close_err:
