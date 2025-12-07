@@ -56,6 +56,7 @@ export function useTaskWebSocket(
 
   const websocketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(false);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -217,8 +218,19 @@ export function useTaskWebSocket(
   );
 
   // Connect on mount (if enabled)
+  // NOTE: We do NOT include 'connect' in the dependency array because:
+  // - 'connect' is recreated whenever retryCount/state changes
+  // - Including it would cause the effect to re-run constantly
+  // - This creates an infinite loop of connection attempts
+  // - Instead, we use mountedRef to ensure connect() is called only once per mount
   useEffect(() => {
-    if (enabled) {
+    if (!enabled) {
+      return;
+    }
+
+    // Only attempt to connect once per component mount
+    if (!mountedRef.current) {
+      mountedRef.current = true;
       connect();
     }
 
@@ -231,7 +243,7 @@ export function useTaskWebSocket(
         websocketRef.current.close();
       }
     };
-  }, [enabled, connect]);
+  }, [enabled]); // Only depend on 'enabled' to prevent infinite re-runs when 'connect' is recreated
 
   return {
     isConnected,
