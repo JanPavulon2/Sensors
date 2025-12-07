@@ -81,8 +81,9 @@ export function useTaskWebSocket(
         setRetryCount(0);
         store.setConnected(true);
 
-        // Server automatically sends initial snapshot and stats
-        // No need to request here - it avoids race conditions
+        // Request initial data immediately
+        ws.send(JSON.stringify({ command: "get_stats" }));
+        ws.send(JSON.stringify({ command: "get_all" }));
       };
 
       ws.onmessage = (event) => {
