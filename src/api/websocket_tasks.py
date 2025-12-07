@@ -81,9 +81,12 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
     """
     client_addr = None
     registry = None
+    print("[WEBSOCKET_TASKS] Handler called - about to accept connection")  # DEBUG: Visible output
     try:
         # Accept the connection FIRST
+        print("[WEBSOCKET_TASKS] Calling websocket.accept()")  # DEBUG
         await websocket.accept()
+        print("[WEBSOCKET_TASKS] Connection accepted successfully")  # DEBUG
         client_addr = websocket.client
         logger.info(f"Task WebSocket connection accepted from {client_addr}")
 

@@ -208,10 +208,13 @@ def create_app(
     @app.websocket("/ws/tasks")
     async def websocket_tasks(websocket: WebSocket):
         """WebSocket endpoint for real-time task monitoring"""
+        print(f"[WEBSOCKET] websocket_tasks called with {websocket}")  # DEBUG
         log.info("WebSocket /ws/tasks upgrade request received")
         try:
+            print("[WEBSOCKET] About to call websocket_tasks_endpoint")  # DEBUG
             # Delegate to handler (which will accept the connection)
             await websocket_tasks_endpoint(websocket)
+            print("[WEBSOCKET] websocket_tasks_endpoint returned")  # DEBUG
         except Exception as e:
             log.error(f"Task WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
             # Only try to close if the connection was actually accepted
