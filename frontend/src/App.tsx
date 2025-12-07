@@ -5,6 +5,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import Dashboard from '@/pages/Dashboard';
 import ComponentsPage from '@/pages/ComponentsPage';
 import SettingsPage from '@/pages/SettingsPage';
+import { DebugPage } from '@/pages/DebugPage';
 import NotFound from '@/pages/NotFound';
 
 // Create a client for React Query
@@ -25,6 +26,7 @@ export function App(): JSX.Element {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/components" element={<ComponentsPage />} />
+            <Route path="/debug" element={<DebugPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

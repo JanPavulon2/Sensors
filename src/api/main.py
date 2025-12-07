@@ -36,6 +36,7 @@ from api.routes import zones, logger as logger_routes, system
 from api.middleware.error_handler import register_exception_handlers
 from api.middleware.websocket_validation import validate_app_websockets
 from api.websocket import websocket_logs_endpoint
+from api.websocket_tasks import websocket_tasks_endpoint
 from utils.logger import get_logger
 from models.enums import LogCategory
 
@@ -203,6 +204,24 @@ def create_app(
                 log.debug(f"Could not close WebSocket after error: {close_error}")
 
     log.info("WebSocket endpoint registered at /ws/logs")
+
+    @app.websocket("/ws/tasks")
+    async def websocket_tasks(websocket: WebSocket):
+        """WebSocket endpoint for real-time task monitoring"""
+        log.info("WebSocket /ws/tasks upgrade request received")
+        try:
+            # Delegate to handler (which will accept the connection)
+            await websocket_tasks_endpoint(websocket)
+        except Exception as e:
+            log.error(f"Task WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
+            # Only try to close if the connection was actually accepted
+            try:
+                if websocket.client_state.name == 'CONNECTED':
+                    await websocket.close(code=1011, reason="Internal server error")
+            except Exception as close_error:
+                log.debug(f"Could not close WebSocket after error: {close_error}")
+
+    log.info("WebSocket endpoint registered at /ws/tasks")
 
     # =========================================================================
     # Startup/Shutdown Hooks

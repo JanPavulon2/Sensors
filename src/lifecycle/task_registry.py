@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum, auto
 from typing import Dict, Optional, List, Callable, Any
 from datetime import datetime, timezone
@@ -60,6 +60,18 @@ class TaskInfo:
     origin_stack: str  # short stack trace where create_tracked_task was called
     created_by: Optional[str] = None  # optional hint (module / function)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary for JSON transmission."""
+        return {
+            "id": self.id,
+            "category": self.category.name,
+            "description": self.description,
+            "created_at": self.created_at,
+            "created_timestamp": self.created_timestamp,
+            "created_by": self.created_by,
+            # origin_stack skipped for frontend (too verbose, breaks serialization)
+        }
+
 
 @dataclass
 class TaskRecord:
@@ -71,6 +83,40 @@ class TaskRecord:
     finished_return: Optional[Any] = None
     finished_at: Optional[str] = None  # ISO time when finished
     finished_timestamp: Optional[float] = None  # monotonic/epoch
+    parent_task_id: Optional[int] = None  # Track parent task if hierarchical
+
+    def get_status(self) -> str:
+        """Return current task status."""
+        if self.cancelled:
+            return "cancelled"
+        elif self.finished_with_error is not None:
+            return "failed"
+        elif self.task.done():
+            return "completed"
+        else:
+            return "running"
+
+    def get_duration(self) -> Optional[float]:
+        """Return task duration in seconds (or None if still running)."""
+        if self.finished_timestamp is None:
+            return None
+        return self.finished_timestamp - self.info.created_timestamp
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary for JSON transmission."""
+        error_str = None
+        if self.finished_with_error is not None:
+            error_str = f"{type(self.finished_with_error).__name__}: {str(self.finished_with_error)}"
+
+        return {
+            **self.info.to_dict(),
+            "status": self.get_status(),
+            "finished_at": self.finished_at,
+            "finished_timestamp": self.finished_timestamp,
+            "error": error_str,
+            "duration": self.get_duration(),
+            "parent_task_id": self.parent_task_id,
+        }
 
 # ---------------------------------------------------------------------------
 # TASK REGISTRY SINGLETON
@@ -147,6 +193,13 @@ class TaskRegistry:
         # Auto-attach callback to track completion
         task.add_done_callback(self._on_task_done)
 
+        # Broadcast task creation event (non-blocking)
+        try:
+            asyncio.create_task(self._broadcast_task_event("task:created", record.to_dict()))
+        except RuntimeError:
+            # No event loop running (e.g., during app shutdown)
+            pass
+
         return task_id
 
     # -----------------------------
@@ -160,9 +213,19 @@ class TaskRegistry:
 
         task_label = f"[Task {record.info.id}] {record.info.description}"
 
+        # Record finish time
+        now = datetime.now(timezone.utc)
+        record.finished_at = now.isoformat()
+        record.finished_timestamp = now.timestamp()
+
         if task.cancelled():
             record.cancelled = True
             log.debug(f"{task_label} - Cancelled")
+            # Broadcast cancellation event
+            try:
+                asyncio.create_task(self._broadcast_task_event("task:cancelled", record.to_dict()))
+            except RuntimeError:
+                pass
         else:
             exc = task.exception()
             if exc:
@@ -171,12 +234,36 @@ class TaskRegistry:
                     f"{task_label} - FAILED: {exc}",
                     exc_info=True
                 )
+                # Broadcast failure event
+                try:
+                    asyncio.create_task(self._broadcast_task_event("task:failed", record.to_dict()))
+                except RuntimeError:
+                    pass
             else:
                 record.finished_return = task.result()
                 log.info(
                     f"{task_label} - Completed successfully"
                 )
-                
+                # Broadcast completion event
+                try:
+                    asyncio.create_task(self._broadcast_task_event("task:completed", record.to_dict()))
+                except RuntimeError:
+                    pass
+
+    # -----------------------------
+    # Internal broadcast helper
+    # -----------------------------
+    async def _broadcast_task_event(self, event_type: str, task_data: dict[str, Any]) -> None:
+        """Broadcast a task event to connected WebSocket clients."""
+        try:
+            from api.websocket_tasks import broadcast_task_update
+            await broadcast_task_update(event_type, task_data)
+        except ImportError:
+            # API module not available (e.g., test environment)
+            pass
+        except Exception as e:
+            log.debug(f"Error broadcasting task event: {e}")
+
     # -----------------------------
     # Utility: find record by task instance
     # -----------------------------
@@ -226,6 +313,78 @@ class TaskRegistry:
             f"Tasks: total={total}, running={running}, "
             f"failed={failed}, cancelled={cancelled}"
         )
+
+    def get_stats(self) -> dict[str, Any]:
+        """Return task statistics for frontend dashboard."""
+        all_tasks = self.list_all()
+        active_tasks = self.active()
+        failed_tasks = self.failed()
+        cancelled_tasks = self.cancelled()
+        completed_tasks = [t for t in all_tasks if t.task.done() and not t.finished_with_error]
+
+        # Durations for running tasks (estimated)
+        now = datetime.now(timezone.utc).timestamp()
+        running_durations = [
+            now - t.info.created_timestamp for t in active_tasks
+        ]
+        avg_running_duration = sum(running_durations) / len(running_durations) if running_durations else 0
+
+        # Durations for completed tasks
+        completed_durations = [
+            t.get_duration() for t in completed_tasks
+            if t.get_duration() is not None
+        ]
+        avg_completed_duration = sum(completed_durations) / len(completed_durations) if completed_durations else 0
+
+        # Category breakdown
+        category_counts: Dict[str, int] = {}
+        for task in all_tasks:
+            cat_name = task.info.category.name
+            category_counts[cat_name] = category_counts.get(cat_name, 0) + 1
+
+        return {
+            "total": len(all_tasks),
+            "running": len(active_tasks),
+            "completed": len(completed_tasks),
+            "failed": len(failed_tasks),
+            "cancelled": len(cancelled_tasks),
+            "avg_running_duration": round(avg_running_duration, 2),
+            "avg_completed_duration": round(avg_completed_duration, 2),
+            "categories": category_counts,
+        }
+
+    def get_all_as_dicts(self) -> list[dict[str, Any]]:
+        """Return all tasks as JSON-serializable dictionaries."""
+        return [record.to_dict() for record in self._records.values()]
+
+    def get_active_as_dicts(self) -> list[dict[str, Any]]:
+        """Return active tasks as JSON-serializable dictionaries."""
+        return [record.to_dict() for record in self.active()]
+
+    def get_task_tree(self) -> dict[str, Any]:
+        """Return tasks organized by hierarchy (parent-child relationships)."""
+        all_records = self._records
+        tree_nodes: Dict[int, dict[str, Any]] = {}
+
+        # Convert all records to dicts and organize by parent
+        for task_id, record in all_records.items():
+            task_dict = record.to_dict()
+            task_dict["children"] = []
+            tree_nodes[task_id] = task_dict
+
+        # Build parent-child relationships
+        for task_id, node in tree_nodes.items():
+            parent_id = all_records[task_id].parent_task_id
+            if parent_id and parent_id in tree_nodes:
+                tree_nodes[parent_id]["children"].append(node)
+
+        # Return only root tasks (no parent)
+        roots = [
+            node for task_id, node in tree_nodes.items()
+            if all_records[task_id].parent_task_id is None
+        ]
+
+        return {"tasks": roots, "total": len(all_records)}
 
     # -----------------------------
     # Shutdown helpers

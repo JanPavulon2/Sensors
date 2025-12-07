@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from animations.breathe import BreatheAnimation
+from animations.breatheV2 import BreatheAnimationV2
 from models.enums import FramePriority, FrameSource, ParamID, ZoneRenderMode
 from models.domain.animation import AnimationID
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from services import ServiceContainer
-from animations.engine import AnimationEngine
+from animations.engine_v2 import AnimationEngine
 
 log = get_logger().for_category(LogCategory.GENERAL)
 
@@ -52,96 +52,71 @@ class AnimationModeController:
         Initialize animation mode during app startup.
 
         Queries all ANIMATION zones and starts animations on them.
-        Uses zone-specific animation parameters saved in ZoneState.
-
-        Current limitation: Only ONE animation can run at a time.
-        If multiple zones are in ANIMATION mode, only the first one will animate.
+        Uses zone-specific animation parameters.
         """
-        log.info("Initializing ANIMATION mode...")
+        
+        log.info("Initializing animation mode...")
 
         animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
         if not animated_zones:
-            log.info("ANIMATION: No animated zones to initialize")
+            log.info("No animated zones to initialize")
             return
 
-        log.info(f"ANIMATION: Found {len(animated_zones)} animated zones")
+        log.info(f"Found {len(animated_zones)} animated zones")
 
-        if len(animated_zones) > 1:
-            log.warn(
-                f"ANIMATION: Multiple zones in ANIMATION mode ({[z.config.id.name for z in animated_zones]}), "
-                f"only animating {animated_zones[0].config.id.name} (architecture limitation)"
-            )
-
-        # Only animate the first zone in ANIMATION mode
-        first_animated_zone = animated_zones[0]
-
-        # Get animation to run: use zone's saved animation settings
-        anim_id = first_animated_zone.state.animation_id
-        if not anim_id:
-            # Zone has no saved animation, try to use current or auto-select
-            current_anim = self.animation_service.get_current()
-            if not current_anim:
-                if not self.available_animations:
-                    log.warn("ANIMATION: No animations available to start")
-                    return
-                # Auto-select first animation
-                first_anim_id = self.available_animations[0]
-                self.animation_service.set_current(first_anim_id)
-                current_anim = self.animation_service.get_current()
-                anim_id = first_anim_id
-                log.info(f"ANIMATION: Auto-selected {first_anim_id.name}")
-            else:
-                anim_id = current_anim.config.id
-
-        # Build excluded zones list (all zones except the animated one)
-        excluded_zone_ids = [
-            z.config.id for z in self.zone_service.get_all()
-            if z.config.id != first_animated_zone.config.id
-        ]
-
-        # Use zone's saved animation parameters if available, otherwise use current animation's parameters
-        zone_params = first_animated_zone.state.animation_parameters
-        if zone_params:
-            params = zone_params
-        else:
-            # Fall back to current animation's parameters if no zone params are saved
-            current_anim = self.animation_service.get_current()
-            if current_anim:
-                params = current_anim.build_params_for_engine()
-            else:
-                params = {}
-
-        safe_params = Serializer.params_enum_to_str(params)
-
-        log.info(f"ANIMATION: Starting {anim_id.name} on zone {first_animated_zone.config.id.name}")
+        tasks = []
         for zone in animated_zones:
-            # await self._start_zone_local_anim(zone)
-            await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
-        log.info(f"ANIMATION initialized: {anim_id.name} running on {first_animated_zone.config.id.name}")
+            anim_id = zone.state.animation_id
+            if not anim_id:
+                # If zone has no saved animation, fallback to global current animation
+                current_anim = self.animation_service.get_current()
+                if current_anim:
+                    anim_id = current_anim.config.id
+                else:
+                    log.warn(f"Zone {zone.config.display_name} has no animation_id and no global animation is configured")
+                    continue
+                
+            # zone-specific params or fall back to animation's defaults packed for engine
+            if zone.state.animation_parameters:
+                params = zone.state.animation_parameters
+            else:
+                anim_combined = self.animation_service.get_animation(anim_id)
+                params = anim_combined.build_params_for_engine(current_zone=zone)
+                
+            safe_params = Serializer.params_enum_to_str(params)
+            # start per-zone
+            
+            tasks.append(self.animation_engine.start_for_zone(zone.config.id, anim_id, safe_params))
+            
+            log.info(f"Request start {anim_id.name} for zone {zone.config.id.name}")
 
+        try:
+            # Kick off all starts concurrently
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+                log.info(f"Animation {anim_id.name} started on {len(animated_zones)} zone(s)")
+        except Exception as e:
+            log.error(f"Error while switching animation to {anim_id}: {e}", exc_info=True)    
+            
     # --- Mode Entry/Exit ---
 
     def enter_mode(self):
         """
         Initialize or resume animation preview and auto-start animation.
-
-        Per-zone mode: Start animation on all zones with ANIMATION render mode.
+        If engine already runs something, skip starting duplicate.
         """
-        # Auto-start animation if not already running
-        if not self.animation_engine.is_running():
+        # Auto-start animation if not already running (engine decides duplicates)
+        if not getattr(self.animation_engine, "tasks", None):
             asyncio.create_task(self.toggle_animation())
-
+             
     async def exit_mode(self):
         """
-        Exit animation mode: stop running animation and cleanup
-
-        Called when switching away from ANIMATION mode.
-        NOTE: Caller (_toggle_main_mode) handles fade_out, so we skip it here.
+        Exit animation mode: stop running animations and cleanup.
         """
         log.info("Exiting ANIMATION mode")
-        if self.animation_engine.is_running():
-            await self.animation_engine.stop(skip_fade=True)
-
+        # stop all per-zone animations
+        await self.animation_engine.stop_all()
+        
     def on_edit_mode_change(self, enabled: bool):
         """No pulse here"""
         log.debug(f"Edit mode={enabled} (no pulse in ANIMATION mode)")
@@ -152,7 +127,8 @@ class AnimationModeController:
         """
         Cycle through available animations by encoder rotation.
 
-        Automatically starts/switches to selected animation on main strip.
+        Sets animation in AnimationService and triggers running animation switch
+        on all ANIMATION-mode zones.
         """
         if not self.available_animations:
             log.warn("No animations available")
@@ -164,94 +140,91 @@ class AnimationModeController:
         self.animation_service.set_current(anim_id)
         log.info(f"Selected animation: {anim_id.name}")
 
-        # Auto-start/switch animation on main strip
+        # Auto-start/switch animation on all ANIMATION zones
         asyncio.create_task(self._switch_to_selected_animation())
 
     async def _switch_to_selected_animation(self):
         """
-        Switch to currently selected animation (with transition).
-
-        Per-zone mode: Animate all zones with ANIMATION render mode using their animations.
+        Switch to currently selected animation on all ANIMATION-mode zones.
         """
-        # Get all zones in ANIMATION render mode
         animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
         if not animated_zones:
             log.warn("No zones in ANIMATION mode")
             return
 
-        # Use first animated zone's animation (TODO: support different animations per zone)
-        first_animated_zone = animated_zones[0]
-        anim_id = AnimationID.BREATHE #first_animated_zone.state.animation_id
+        anim_id = self.animation_service.get_current().config.id if self.animation_service.get_current() else None
         if not anim_id:
-            log.warn(f"Zone {first_animated_zone.config.display_name} in ANIMATION mode but no animation_id set")
+            log.warn("No global current animation available for switching")
             return
 
-        zone_params = first_animated_zone.state.animation_parameters or {}
-        params = zone_params if zone_params else {}
-        log.info(f"Auto-switching to animation: {anim_id.name}")
-        safe_params = Serializer.params_enum_to_str(params)
+        # Build and start new animation on every animated zone (stop old first)
+        tasks = []
+        for zone in animated_zones:
+            # Stop per-zone if running (engine.stop_for_zone is idempotent)
+            # Determine params: zone-specific override or animation defaults
+            if zone.state.animation_parameters:
+                params = zone.state.animation_parameters
+            else:
+                anim_combined = self.animation_service.get_animation(anim_id)
+                params = anim_combined.build_params_for_engine(current_zone=zone)
 
-        # Build list of zones to exclude: ALL zones except animated zones
-        animated_zone_ids = {z.config.id for z in animated_zones}
-        excluded_zone_ids = [
-            z.config.id for z in self.zone_service.get_all()
-            if z.config.id not in animated_zone_ids
-        ]
+            safe_params = Serializer.params_enum_to_str(params)
 
-        log.debug(f"Animation on {len(animated_zones)} zone(s), excluded: {[z.name for z in excluded_zone_ids]}")
+            # Stop existing & start new — engine.start_for_zone will stop previous if needed
+            tasks.append(self.animation_engine.start_for_zone(zone.config.id, anim_id, safe_params))
 
-        # AnimationEngine.start() will handle stop → fade_out → fade_in → start
-        await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+            log.debug(f"Switching zone {zone.config.id.name} to {anim_id.name}")
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        log.info(f"Switched animation to {anim_id.name} on {len(animated_zones)} zones")
 
     async def toggle_animation(self):
         """
-        Start or stop animation.
-
-        Per-zone mode: Animate all zones with ANIMATION render mode using their individual animations.
+        Start or stop animations on all zones in ANIMATION render mode.
+        If anything is running in engine.tasks -> stop_all, otherwise start all.
         """
         log.info("Toggle animation called")
 
         engine = self.animation_engine
 
-        if engine and engine.is_running():
-            log.info(f"Stopping running animation: {engine.get_current_animation_id().name}")
-            await engine.stop()
+        # if there are any running tasks, treat as "stop"
+        if getattr(engine, "tasks", None) and len(engine.tasks) > 0:
+            log.info("Stopping all running animations")
+            await engine.stop_all()
             return
 
-        # Get all zones in ANIMATION render mode
+        # Otherwise start animations on all ANIMATION-mode zones
         animated_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.ANIMATION)
         if not animated_zones:
             log.warn("No zones in ANIMATION mode")
             return
 
-        # For now: use first animated zone's animation (TODO: support different animations per zone)
-        first_animated_zone = animated_zones[0]
-        anim_id = first_animated_zone.state.animation_id
-        if not anim_id:
-            log.warn(f"Zone {first_animated_zone.config.display_name} in ANIMATION mode but no animation_id set")
-            return
-
-        # Get animation parameters from the zone (or fall back to defaults)
-        zone_params = first_animated_zone.state.animation_parameters or {}
-        params = zone_params if zone_params else {}
-        log.info(f"Starting animation: {anim_id.name} on {len(animated_zones)} zone(s)")
-        safe_params = Serializer.params_enum_to_str(params)
-
-        # Build list of zones to exclude: ALL zones except animated zones
-        animated_zone_ids = {z.config.id for z in animated_zones}
-        excluded_zone_ids = [
-            z.config.id for z in self.zone_service.get_all()
-            if z.config.id not in animated_zone_ids
-        ]
-
-        log.debug(f"Animated zones: {[z.config.id.name for z in animated_zones]}, excluded: {[z.name for z in excluded_zone_ids]}")
-
+        tasks = []
         for zone in animated_zones:
-            #await self._start_zone_local_anim(zone)
-            await self.animation_engine.start(anim_id, excluded_zones=excluded_zone_ids, **safe_params)
+            anim_id = zone.state.animation_id
+            if not anim_id:
+                # fallback to global selected animation
+                current_anim = self.animation_service.get_current()
+                if not current_anim:
+                    log.warn("No animation configured to start")
+                    continue
+                anim_id = current_anim.config.id
 
-        log.info("Animation start call completed")
+            if zone.state.animation_parameters:
+                params = zone.state.animation_parameters
+            else:
+                anim_combined = self.animation_service.get_animation(anim_id)
+                params = anim_combined.build_params_for_engine(current_zone=zone)
 
+            safe_params = Serializer.params_enum_to_str(params)
+            tasks.append(self.animation_engine.start_for_zone(zone.config.id, anim_id, safe_params))
+            log.info(f"Starting {anim_id.name} on zone {zone.config.id.name}")
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        log.info("Animation start calls completed")
+        
     # --- Parameter Adjustments ---
 
     def adjust_param(self, delta: int):
@@ -266,78 +239,33 @@ class AnimationModeController:
         self.animation_service.adjust_parameter(current_anim.config.id, pid, delta)
         new_value = current_anim.get_param_value(pid)
 
+        # Propagate param changes to all zones that currently run this animation
         engine = self.animation_engine
-        if engine and engine.is_running():
-            if pid == ParamID.ANIM_SPEED:
-                engine.update_param("speed", new_value)
-            elif pid == ParamID.ANIM_INTENSITY:
-                engine.update_param("intensity", new_value)
-            elif pid == ParamID.ANIM_PRIMARY_COLOR_HUE:
-                engine.update_param("hue", new_value)
+        if engine and getattr(engine, "tasks", None):
+            # update for every zone where current animation matches
+            for zone_id, anim_id in list(engine.active_anim_ids.items()):
+                # if we only want to update zones running the current animation, check equality
+                if anim_id == current_anim.config.id:
+                    # param key name should be string for engine; keep param enum conversion
+                    key = pid.name if hasattr(pid, "name") else str(pid)
+                    engine.update_param(zone_id, key, new_value)
 
         log.info(f"Adjusted {pid.name} → {new_value}")
+    #     engine = self.animation_engine
+    #     if engine and engine.is_running():
+    #         if pid == ParamID.ANIM_SPEED:
+    #             engine.update_param("speed", new_value)
+    #         elif pid == ParamID.ANIM_INTENSITY:
+    #             engine.update_param("intensity", new_value)
+    #         elif pid == ParamID.ANIM_PRIMARY_COLOR_HUE:
+    #             engine.update_param("hue", new_value)
 
-    def cycle_param(self):
-        params = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
-        idx = params.index(self.current_param)
-        self.current_param = params[(idx + 1) % len(params)]
-        self.app_state_service.set_current_param(self.current_param)
+    #     log.info(f"Adjusted {pid.name} → {new_value}")
 
-        log.info(f"Cycled animation param: {self.current_param.name}")
+    # def cycle_param(self):
+    #     params = [ParamID.ANIM_SPEED, ParamID.ANIM_INTENSITY]
+    #     idx = params.index(self.current_param)
+    #     self.current_param = params[(idx + 1) % len(params)]
+    #     self.app_state_service.set_current_param(self.current_param)
 
-    async def _start_zone_local_anim(self, zone):
-        """
-        TEMP: Start animation ONLY for this zone,
-        bypassing global AnimationEngine.
-        Works with legacy ZoneFrame.
-        """
-
-        anim_id = zone.state.animation_id
-        if not anim_id:
-            log.warn(f"Zone {zone.config.id} has no animation_id")
-            return
-
-        params = zone.state.animation_parameters or {}
-        safe_params = Serializer.params_enum_to_str(params)
-
-        anims = self.animation_service.get_all()
-        anim_meta = anims[0]
-        anim_class = BreatheAnimation
-
-        # Animation instance that handles only ONE zone
-        anim = anim_class(
-            zones=[zone],
-            excluded_zones=[],
-            **params
-        )
-
-        log.info(f"[LOCAL ANIM] starting {anim_id.name} on zone {zone.config.id.name}")
-
-        async def runner():
-            try:
-                async for frame in anim.run():
-                    # frame = (zone_id, r, g, b)
-                    zone_id, color = frame
-
-                    from models.frame import ZoneFrame
-                    
-                    # Stare ramki wymagają dict: {zone_id: Color}
-                    from models.color import Color
-                    
-                    zone_frame = ZoneFrame(
-                        zone_colors={zone_id: color},
-                        priority=FramePriority.ANIMATION,
-                        source=FrameSource.ANIMATION,
-                        ttl=0.15  # krótkie, aby płynnie aktualizować
-                    )
-
-                    # frame_manager jest w AnimationEngine → bierzemy stamtąd
-                    fm = self.animation_engine.frame_manager
-                    await fm.submit_zone_frame(zone_frame)
-
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                log.error(f"LOCAL ANIM ERROR ({zone.config.id}): {e}", exc_info=True)
-
-        asyncio.create_task(runner())
+    #     log.info(f"Cycled animation param: {self.current_param.name}")

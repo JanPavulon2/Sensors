@@ -25,6 +25,7 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
   const navItems = [
     { label: 'Dashboard', path: '/' },
     { label: 'Components', path: '/components' },
+    { label: 'Debug', path: '/debug' },
     { label: 'Settings', path: '/settings' },
   ];
 

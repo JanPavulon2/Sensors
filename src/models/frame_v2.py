@@ -1,54 +1,134 @@
 """
-Atomic frame models for centralized rendering system.
+Atomic frame models for centralized rendering system (FrameManager V3).
 
 Each frame type represents a different rendering granularity:
-- FullStripFrame: Single color for entire strip
-- ZoneFrame: Per-zone colors
-- PixelFrame: Per-pixel colors
-- PreviewFrame: 8-pixel preview panel
+
+✔ SingleZoneFrame – one zone → one Color
+✔ MultiZoneFrame  – many zones → one Color each
+✔ PixelFrameV2    – many zones → pixel list (List[Color])
 """
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.color import Color
 
+
+# =====================================================================
+# Base class (TTL, priority, source)
+# =====================================================================
+
 @dataclass
 class BaseFrameV2:
-    """Base class for all frame types with priority and TTL."""
+    """
+    Shared metadata for all frame types.
+    """
 
     priority: FramePriority
     source: FrameSource
+
     timestamp: float = field(default_factory=time.time)
-    ttl: float = 0.1  # 100ms default expiration
+    ttl: float = 0.1
     partial: bool = False
-    
+
     def is_expired(self) -> bool:
-        """Check if frame has exceeded its time-to-live."""
         return (time.time() - self.timestamp) > self.ttl
+    
+# =====================================================================
+# 1) SingleZoneFrame — the simplest and safest atomic frame type
+# =====================================================================
 
 @dataclass
 class SingleZoneFrame(BaseFrameV2):
-    zone_id: Optional[ZoneID] = None
-    color: Optional[Color] = None
+    """
+    EXACTLY ONE zone → EXACTLY ONE color.
+    """
+
+    zone_id: ZoneID = ZoneID.BOTTOM  # dummy default; overwritten when created
+    color: Color = field(default_factory=Color.black)
 
     def as_zone_update(self) -> Dict[ZoneID, Color]:
-        if self.zone_id is not None and self.color is not None:
-            return {self.zone_id: self.color}
-        return {}
-        
+        return {self.zone_id: self.color}
+
+# =====================================================================
+# 2) MultiZoneFrame — many zones → one Color per zone
+# =====================================================================
+
 @dataclass
 class MultiZoneFrame(BaseFrameV2):
+    """
+    Multi-zone update where each zone receives exactly one Color.
+    """
+
     zone_colors: Dict[ZoneID, Color] = field(default_factory=dict)
 
     def as_zone_update(self) -> Dict[ZoneID, Color]:
         return self.zone_colors
-    
+
+# =====================================================================
+# 3) PixelFrameV2 — many zones → List[Color]
+# =====================================================================
+
 @dataclass
 class PixelFrameV2(BaseFrameV2):
+    """
+    Pixel-precise frame: each zone maps to List[Color]
+    """
+
     zone_pixels: Dict[ZoneID, List[Color]] = field(default_factory=dict)
 
     def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
         return self.zone_pixels
     
+import time
+from typing import Union
+
+from models.enums import ZoneID, FramePriority, FrameSource
+from models.color import Color
+
+
+# Payload type: one zone → either a single Color or list of Colors
+ZoneUpdateValue = Union[Color, List[Color]]
+
+
+@dataclass
+class MainStripFrame:
+    """
+    Unified frame used internally by FrameManager V3.
+
+    Carries:
+        updates: Dict[ZoneID, Color | List[Color]]
+
+    Supports:
+        • single-zone updates
+        • multi-zone updates
+        • pixel-precise updates
+        • partial frames (merged with previous state)
+    """
+
+    priority: FramePriority
+    source: FrameSource
+
+    updates: Dict[ZoneID, ZoneUpdateValue]
+
+    # Metadata
+    ttl: float = 0.1
+    partial: bool = False
+    timestamp: float = field(default_factory=time.time)
+
+    # ------------------------------------------------------------
+    # TTL handling
+    # ------------------------------------------------------------
+    def is_expired(self) -> bool:
+        return (time.time() - self.timestamp) > self.ttl
+
+    # ------------------------------------------------------------
+    # FrameManager interface
+    # ------------------------------------------------------------
+    def as_zone_update(self) -> Dict[ZoneID, ZoneUpdateValue]:
+        """
+        Returns the raw update dict without interpretation.
+        FrameManager processes merging + normalization.
+        """
+        return self.updates

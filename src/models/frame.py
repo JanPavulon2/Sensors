@@ -83,7 +83,50 @@ class PreviewFrame(BaseFrame):
         if len(self.pixels) != 8:
             raise ValueError(f"Preview must have 8 pixels, got {len(self.pixels)}")
 
+@dataclass
+class MainStripFrame:
+    """
+    Unified frame used internally by FrameManager V2.
 
-# Type aliases for clarity
-MainStripFrame = FullStripFrame | ZoneFrame | PixelFrame
-AnyFrame = MainStripFrame | PreviewFrame
+    Can represent:
+      • full-strip frames        (single color for all zones)
+      • zone frames              (zone → one color)
+      • pixel frames             (zone → pixel list)
+      • partial updates          (only given zones changed)
+
+    'updates' dictionary maps:
+        ZoneID → Color
+        ZoneID → List[Color]
+
+    TTL logic is handled by FrameManager.
+    """
+
+    priority: FramePriority
+    ttl: float
+    source: FrameSource
+
+    # partial = True → merge with previous rendered state
+    partial: bool = False
+
+    # The ACTUAL payload
+    updates: Dict[ZoneID, object] = field(default_factory=dict)
+
+    timestamp: float = field(default_factory=time.time)
+
+    # ============================================================
+    # TTL
+    # ============================================================
+    def is_expired(self) -> bool:
+        return (time.time() - self.timestamp) > self.ttl
+
+    # ============================================================
+    # Convert to logical zone update
+    # ============================================================
+    def as_zone_update(self) -> Dict[ZoneID, object]:
+        """
+        Output always in the form:
+            { ZoneID: Color | List[Color] }
+        (no normalization here)
+        """
+        return self.updates
+

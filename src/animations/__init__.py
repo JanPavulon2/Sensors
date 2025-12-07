@@ -26,6 +26,7 @@ __all__ = [
     "engine",
     "base",
     "breathe",
+    "breatheV2",
     "color_fade",
     "color_cycle",
     "color_snake",

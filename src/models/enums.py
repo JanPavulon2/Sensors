@@ -202,6 +202,7 @@ class FrameSource(Enum):
     """
     IDLE = auto()           # No source (idle state)
     STATIC = auto()         # Static color controller
+    MANUAL = auto()
     PULSE = auto()          # Pulsing animation (edit mode)
     ANIMATION = auto()      # AnimationEngine
     TRANSITION = auto()     # TransitionService

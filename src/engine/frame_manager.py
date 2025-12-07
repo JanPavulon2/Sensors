@@ -41,6 +41,7 @@ from models.frame import (
     FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
     MainStripFrame
 )
+from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
@@ -167,6 +168,59 @@ class FrameManager:
 
     # === Frame Submission API (Type-Specific) ===
 
+    
+    async def push_frame(self, frame):
+        """
+        Unified V2 API endpoint.
+        Accepts SingleZoneFrame / MultiZoneFrame / PixelFrameV2
+        and wraps them into MainStripFrame for the queue system.
+        """
+
+        from models.frame_v2 import (
+            SingleZoneFrame, MultiZoneFrame, PixelFrameV2
+        )
+        from models.frame import MainStripFrame
+
+        async with self._lock:
+
+            # --- SingleZoneFrame ----------------------------------
+            if isinstance(frame, SingleZoneFrame):
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates={frame.zone_id: frame.color},
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                return
+
+            # --- MultiZoneFrame -----------------------------------
+            if isinstance(frame, MultiZoneFrame):
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates=frame.zone_colors,     # dict[ZoneID, Color]
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                return
+
+            # --- PixelFrameV2 --------------------------------------
+            if isinstance(frame, PixelFrameV2):
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates={frame.zone_pixels},
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                return
+
+            raise TypeError(f"Unsupported frame type: {type(frame)}")
+        
     async def submit_full_strip_frame(self, frame: FullStripFrame) -> None:
         """Submit a full-strip frame (single color for all zones)."""
         
