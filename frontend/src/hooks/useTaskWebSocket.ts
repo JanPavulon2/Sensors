@@ -7,6 +7,32 @@
  * - Store updates via Zustand
  * - Automatic reconnection with exponential backoff
  * - Memory cleanup on unmount
+ *
+ * IMPORTANT IMPLEMENTATION NOTES:
+ * This hook uses refs strategically to prevent infinite reconnection loops caused by stale closures.
+ *
+ * THE PROBLEM:
+ * - WebSocket event handlers (onopen, onclose, etc.) capture variables when created
+ * - If `connect()` is recreated on every state change, old handlers still reference old closures
+ * - This causes: state change → connect recreates → effect re-runs → new connection → state change → LOOP
+ *
+ * THE SOLUTION:
+ * 1. Use refs for reconnection logic values (retryCount, autoReconnect, etc.)
+ *    - Refs maintain current values without triggering re-renders
+ *    - Closures can read latest values from refs without being recreated
+ *
+ * 2. Keep connect() dependencies minimal and stable
+ *    - Only depend on: enabled, url, handleMessage
+ *    - Do NOT depend on state that changes during operation (retryCount, isConnected, etc.)
+ *
+ * 3. Use mountedRef to ensure single connection attempt per mount
+ *    - Prevents multiple simultaneous connection attempts
+ *    - useEffect depends only on 'enabled', not 'connect'
+ *
+ * 4. Access Zustand store directly via getState()
+ *    - Avoids adding store methods to dependency arrays
+ *    - Store methods from useTaskStore() might not be stable references
+ *    - Using getState() ensures we always get fresh store instance
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -58,99 +84,27 @@ export function useTaskWebSocket(
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(false);
 
+  // Use refs for values that need to be accessed in closures but shouldn't trigger re-creation
+  const retryCountRef = useRef(0);
+  const autoReconnectRef = useRef(autoReconnect);
+  const reconnectDelayRef = useRef(reconnectDelay);
+  const maxReconnectAttemptsRef = useRef(maxReconnectAttempts);
+
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  const store = useTaskStore();
+  // Update refs when props change (but don't recreate connect function)
+  autoReconnectRef.current = autoReconnect;
+  reconnectDelayRef.current = reconnectDelay;
+  maxReconnectAttemptsRef.current = maxReconnectAttempts;
 
-  const connect = useCallback(() => {
-    if (!enabled || isConnected || isConnecting) return;
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      const ws = new WebSocket(url);
-
-      ws.onopen = () => {
-        console.log("[TaskMonitor] WebSocket connected");
-        setIsConnected(true);
-        setIsConnecting(false);
-        setError(null);
-        setRetryCount(0);
-        store.setConnected(true);
-
-        // Request initial data immediately
-        ws.send(JSON.stringify({ command: "get_stats" }));
-        ws.send(JSON.stringify({ command: "get_all" }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message: TaskWebSocketMessage = JSON.parse(event.data);
-          handleMessage(message);
-        } catch (err) {
-          console.error("[TaskMonitor] Failed to parse message:", err);
-        }
-      };
-
-      ws.onerror = (event) => {
-        // Note: onerror doesn't provide detailed info, onclose will be called after
-        console.error("[TaskMonitor] WebSocket error event:", event);
-        // Only set error if we haven't already
-        if (!error) {
-          setError("WebSocket connection error");
-        }
-      };
-
-      ws.onclose = () => {
-        console.log("[TaskMonitor] WebSocket disconnected");
-        setIsConnected(false);
-        setIsConnecting(false);
-        store.setConnected(false);
-        websocketRef.current = null;
-
-        // Auto-reconnect logic
-        if (autoReconnect && retryCount < maxReconnectAttempts) {
-          const delay = reconnectDelay * Math.pow(2, retryCount); // Exponential backoff
-          console.log(
-            `[TaskMonitor] Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${maxReconnectAttempts})`
-          );
-
-          setRetryCount((prev) => prev + 1);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, delay);
-        } else if (retryCount >= maxReconnectAttempts) {
-          setError(
-            "Max reconnection attempts reached. Please refresh the page."
-          );
-        }
-      };
-
-      websocketRef.current = ws;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("[TaskMonitor] Connection error:", errorMsg);
-      setError(errorMsg);
-      setIsConnecting(false);
-    }
-  }, [
-    enabled,
-    isConnected,
-    isConnecting,
-    url,
-    autoReconnect,
-    reconnectDelay,
-    maxReconnectAttempts,
-    retryCount,
-    store,
-  ]);
-
-  const handleMessage = (message: TaskWebSocketMessage) => {
+  // Define handleMessage first so it can be used in connect
+  // Access store directly inside the handler to avoid dependency issues
+  const handleMessage = useCallback((message: TaskWebSocketMessage) => {
     const { type } = message;
+    const store = useTaskStore.getState();
 
     switch (type) {
       case "task:created":
@@ -199,7 +153,93 @@ export function useTaskWebSocket(
       default:
         console.warn("[TaskMonitor] Unknown message type:", type);
     }
-  };
+  }, []); // No dependencies - we get fresh store state each time
+
+  const connect = useCallback(() => {
+    // Guard: Don't connect if disabled, already connected, or already connecting
+    if (!enabled || websocketRef.current !== null) {
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      const ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        console.log("[TaskMonitor] WebSocket connected");
+        setIsConnected(true);
+        setIsConnecting(false);
+        setError(null);
+        setRetryCount(0);
+        retryCountRef.current = 0;
+        useTaskStore.getState().setConnected(true);
+
+        // Request initial data immediately
+        ws.send(JSON.stringify({ command: "get_stats" }));
+        ws.send(JSON.stringify({ command: "get_all" }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: TaskWebSocketMessage = JSON.parse(event.data);
+          handleMessage(message);
+        } catch (err) {
+          console.error("[TaskMonitor] Failed to parse message:", err);
+        }
+      };
+
+      ws.onerror = (event) => {
+        // Note: onerror doesn't provide detailed info, onclose will be called after
+        console.error("[TaskMonitor] WebSocket error event:", event);
+        setError("WebSocket connection error");
+      };
+
+      ws.onclose = () => {
+        console.log("[TaskMonitor] WebSocket disconnected");
+        setIsConnected(false);
+        setIsConnecting(false);
+        useTaskStore.getState().setConnected(false);
+        websocketRef.current = null;
+
+        // Auto-reconnect logic using refs to avoid stale closures
+        const currentRetryCount = retryCountRef.current;
+        const shouldReconnect = autoReconnectRef.current && currentRetryCount < maxReconnectAttemptsRef.current;
+
+        if (shouldReconnect) {
+          const delay = reconnectDelayRef.current * Math.pow(2, currentRetryCount);
+          console.log(
+            `[TaskMonitor] Reconnecting in ${delay}ms (attempt ${currentRetryCount + 1}/${maxReconnectAttemptsRef.current})`
+          );
+
+          // Increment retry count
+          retryCountRef.current = currentRetryCount + 1;
+          setRetryCount(currentRetryCount + 1);
+
+          // Schedule reconnection
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, delay);
+        } else if (currentRetryCount >= maxReconnectAttemptsRef.current) {
+          setError(
+            "Max reconnection attempts reached. Please refresh the page."
+          );
+        }
+      };
+
+      websocketRef.current = ws;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("[TaskMonitor] Connection error:", errorMsg);
+      setError(errorMsg);
+      setIsConnecting(false);
+    }
+  }, [
+    enabled,
+    url,
+    handleMessage,
+  ]); // Only include stable values - NOT state that changes during reconnection
 
   const sendCommand = useCallback(
     (command: Record<string, any>) => {

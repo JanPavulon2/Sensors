@@ -12,7 +12,12 @@ import { useState } from "react";
 import type { Task, TaskStatus } from "@/types/task";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   CheckCircle,
   XCircle,
@@ -184,80 +189,69 @@ export function TaskCard({ task }: TaskCardProps) {
 
       {/* Details Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl max-h-[80vh] overflow-auto">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  {getStatusIcon(task.status)}
-                  Task #{task.id}
-                </h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowModal(false)}
-                >
-                  ✕
-                </Button>
-              </div>
+        <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {getStatusIcon(task.status)}
+              Task #{task.id}
+            </DialogTitle>
+          </DialogHeader>
 
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-gray-400">Description:</span>
-                    <p className="font-mono text-gray-200">{task.description}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Category:</span>
-                    <p className="font-mono text-gray-200">{task.category}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Status:</span>
-                    <p className={cn("font-mono capitalize", getStatusColor(task.status))}>
-                      {task.status}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Duration:</span>
-                    <p className="font-mono text-gray-200">
-                      {formatDuration(task.duration)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Created:</span>
-                    <p className="font-mono text-gray-200">
-                      {formatTimestamp(task.created_at)}
-                    </p>
-                  </div>
-                  {task.finished_at && (
-                    <div>
-                      <span className="text-gray-400">Finished:</span>
-                      <p className="font-mono text-gray-200">
-                        {formatTimestamp(task.finished_at)}
-                      </p>
-                    </div>
-                  )}
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-gray-400">Description:</span>
+                <p className="font-mono text-gray-200">{task.description}</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Category:</span>
+                <p className="font-mono text-gray-200">{task.category}</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Status:</span>
+                <p className={cn("font-mono capitalize", getStatusColor(task.status))}>
+                  {task.status}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-400">Duration:</span>
+                <p className="font-mono text-gray-200">
+                  {formatDuration(task.duration)}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-400">Created:</span>
+                <p className="font-mono text-gray-200">
+                  {formatTimestamp(task.created_at)}
+                </p>
+              </div>
+              {task.finished_at && (
+                <div>
+                  <span className="text-gray-400">Finished:</span>
+                  <p className="font-mono text-gray-200">
+                    {formatTimestamp(task.finished_at)}
+                  </p>
                 </div>
-
-                {task.error && (
-                  <div className="p-3 bg-red-900/20 border border-red-700/50 rounded">
-                    <span className="text-gray-400 block mb-1">Error:</span>
-                    <p className="font-mono text-red-300">{task.error}</p>
-                  </div>
-                )}
-
-                {task.origin_stack && (
-                  <div className="p-3 bg-gray-900/50 border border-gray-700/30 rounded">
-                    <span className="text-gray-400 block mb-2">Stack Trace:</span>
-                    <pre className="text-xs text-gray-400 overflow-auto max-h-48">
-                      {task.origin_stack}
-                    </pre>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          </Card>
-        </div>
+
+            {task.error && (
+              <div className="p-3 bg-red-900/20 border border-red-700/50 rounded">
+                <span className="text-gray-400 block mb-1">Error:</span>
+                <p className="font-mono text-red-300">{task.error}</p>
+              </div>
+            )}
+
+            {task.origin_stack && (
+              <div className="p-3 bg-gray-900/50 border border-gray-700/30 rounded">
+                <span className="text-gray-400 block mb-2">Stack Trace:</span>
+                <pre className="text-xs text-gray-400 overflow-auto max-h-48">
+                  {task.origin_stack}
+                </pre>
+              </div>
+            )}
+          </div>
+        </DialogContent>
       </Dialog>
     </>
   );

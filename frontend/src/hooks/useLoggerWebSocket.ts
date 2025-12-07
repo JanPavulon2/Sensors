@@ -1,9 +1,31 @@
 /**
  * Logger WebSocket Hook
  * Manages real-time WebSocket connection for log streaming
+ *
+ * IMPORTANT IMPLEMENTATION NOTES:
+ * This hook uses refs and useCallback to prevent infinite reconnection loops caused by stale closures.
+ *
+ * THE PROBLEM:
+ * - WebSocket event handlers (onopen, onclose, etc.) capture variables when created
+ * - If store methods are in the dependency array, the effect re-runs when they change
+ * - This causes: state change → effect re-runs → new connection → state change → LOOP
+ *
+ * THE SOLUTION:
+ * 1. Use handleMessage callback with useLoggerStore.getState() to get fresh store state
+ *    - Avoids adding store methods to dependency arrays
+ *    - Store methods from useLoggerStore() might not be stable references
+ *    - Using getState() ensures we always get the current store instance
+ *
+ * 2. Keep effect dependencies minimal and stable
+ *    - Only depend on: enabled, url, handleMessage
+ *    - Do NOT depend on state that changes during operation (addLog, etc.)
+ *
+ * 3. Use refs for reconnection timeout tracking
+ *    - Prevents multiple simultaneous connection attempts
+ *    - Refs maintain current values without triggering re-renders
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useLoggerStore } from '@/stores/loggerStore';
 import { config } from '@/config/constants';
 import type { LogEntry } from '@/types/logger';
@@ -24,7 +46,13 @@ export const useLoggerWebSocket = ({
 }: UseLoggerWebSocketOptions = {}) => {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const addLog = useLoggerStore((state) => state.addLog);
+
+  // Define handleMessage callback that accesses fresh store state
+  // This prevents stale closures by always calling getState() instead of capturing addLog
+  const handleMessage = useCallback((log: LogEntry) => {
+    const store = useLoggerStore.getState();
+    store.addLog(log);
+  }, []); // No dependencies - we get fresh store state each time
 
   useEffect(() => {
     if (!enabled) return;
@@ -52,7 +80,9 @@ export const useLoggerWebSocket = ({
               category: logData.category || 'UNKNOWN',
               message: logData.message || '',
             };
-            addLog(log);
+            // Use handleMessage callback instead of directly calling addLog
+            // This ensures we always get the latest store instance
+            handleMessage(log);
           } catch (error) {
             console.error('Failed to parse log message:', error);
           }
@@ -84,7 +114,7 @@ export const useLoggerWebSocket = ({
         wsRef.current.close();
       }
     };
-  }, [enabled, url, addLog]);
+  }, [enabled, url, handleMessage]); // Only stable dependencies - no store methods
 
   return {
     isConnected: wsRef.current?.readyState === WebSocket.OPEN,
