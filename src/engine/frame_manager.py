@@ -97,9 +97,10 @@ class FrameManager:
         self.fps = max(1, min(fps, 240))
 
         # Dual queue system (separate for main strip and preview)
-        # maxlen=2 prevents unbounded growth
+        # maxlen=10 allows all zones to queue frames before draining
+        # (we have max 10 zones, some animating concurrently)
         self.main_queues: Dict[int, Deque[MainStripFrame]] = {
-            p.value: deque(maxlen=2)
+            p.value: deque(maxlen=10)
             for p in FramePriority
             if isinstance(p.value, int)
         }
