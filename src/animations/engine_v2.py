@@ -6,7 +6,7 @@ Uses TransitionService for smooth transitions between animation states.
 """
 
 import asyncio
-from typing import Dict, Optional, Callable, Type
+from typing import Dict, Optional, Callable, Type, overload
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from engine.frame_manager import FrameManager
@@ -77,28 +77,32 @@ class AnimationEngine:
         async with self._lock:
             # Stop previous if exists
             if zone_id in self.tasks:
+                log.warn(f"Zone {zone_id.name} already has animation, stopping old one")
                 await self.stop_for_zone(zone_id)
-            
+
             # Resolve zone model
             zone = self.zone_service.get_zone(zone_id)
             if not zone:
                 log.error(f"No such zone: {zone_id}")
                 return
 
-            
+
             # Build animation instance
             AnimClass = self.ANIMATIONS.get(anim_id)
             if AnimClass is None:
                 log.error(f"Animation {anim_id} not registered")
-                return                
-            
-            anim = anim = AnimClass(
+                return
+
+            safe_params = params.copy()
+
+            speed = safe_params.pop("speed", 50)
+
+            anim = AnimClass(
                 zone=zone,
-                speed=params.get("speed", 50),
-                **params
+                speed=speed,
+                **safe_params
             )
-            
-            
+
             # Store meta
             self.active_anim_ids[zone_id] = anim_id
             self.active_params[zone_id] = params
@@ -107,7 +111,7 @@ class AnimationEngine:
             task = asyncio.create_task(self._run_loop(zone_id, anim))
             self.tasks[zone_id] = task
 
-            log.info(f"Started animation {anim_id.name} on zone {zone_id.name}")
+            log.info(f"Started animation {anim_id.name} on zone {zone_id.name}. Active zones: {list(self.tasks.keys())}")
             
     async def stop_for_zone(self, zone_id: ZoneID):
         """Stop animation for a single zone."""
@@ -158,26 +162,40 @@ class AnimationEngine:
     # Internal animation loop
     # ------------------------------------------------------------
 
-    async def _run_loop(self, zone_id: ZoneID, animation):
+    async def _run_loop(self, zone_id: ZoneID, animation: BaseAnimation):
         """Run an animation until stopped."""
+        log.info(f"_run_loop started for {zone_id.name}")
         try:
+            frame_count = 0
             while True:
-                frame = await animation.step()
+                try:
+                    frame = await animation.step()
+                    frame_count += 1
+                    if frame_count % 60 == 0:
+                        log.debug(f"[{zone_id.name}] Animation frame #{frame_count}")
 
-                # Should always be partial zone frame
-                if frame:
+                except Exception as e:
+                    log.error(f"Animation step error on {zone_id.name}: {e}", exc_info=True)
+                    await asyncio.sleep(0.05)
+                    continue
+
+                try:
                     await self.frame_manager.push_frame(frame)
+                except Exception as e:
+                    log.error(f"Failed to push frame for {zone_id.name}: {e}", exc_info=True)
 
-                await asyncio.sleep(animation.frame_delay())
+                # yield to event loop (FrameManager drives actual refresh rate)
+                await asyncio.sleep(0)
 
         except asyncio.CancelledError:
             log.debug(f"Animation task for {zone_id.name} canceled")
         except Exception as e:
-            log.error(f"Animation error on {zone_id.name}: {e}")
+            log.error(f"Animation error on {zone_id.name}: {e}", exc_info=True)
         finally:
             # remove itself if crashed
             self.tasks.pop(zone_id, None)
-                
+            log.info(f"Animation task for {zone_id.name} finished after {frame_count} frames")
+            
     # ------------------------------------------------------------------
     # RUNTIME HELPERS
     # ------------------------------------------------------------------
@@ -193,13 +211,45 @@ class AnimationEngine:
     #     if self.current_animation:
     #         self.current_animation.update_param(param, value)
 
-    # def is_running(self) -> bool:
-    #     """Check if animation is currently running"""
-    #     return self.animation_task is not None and not self.animation_task.done()
+    def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
+        """
+        Check if animations are running.
 
-    # def get_current_animation_id(self) -> Optional[AnimationID]:
-    #     """Get name of currently running animation"""
-    #     return self.current_id if self.is_running() else None
+        If zone_id is None → check if ANY zone has running animation.
+        If zone_id provided → check that one zone.
+        """
+        if zone_id is not None:
+            task = self.tasks.get(zone_id)
+            return task is not None and not task.done()
+
+        return any(not t.done() for t in self.tasks.values())
+    
+    # def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
+    #     """
+    #     Check if animation is currently running.
+
+    #     When called without arguments, checks if any animation is running for any zone.
+    #     When called with zone_id, checks if that specific zone has a running animation.
+
+    #     Args:
+    #         zone_id: Optional zone ID to check. If None, checks all zones.
+
+    #     Returns:
+    #         True if at least one animation is running, False otherwise
+    #     """
+    #     if zone_id is not None:
+    #         task = self.tasks.get(zone_id)
+    #         return task is not None and not task.done()
+
+    #     # Check if any animation is running for any zone
+    #     for task in self.tasks.values():
+    #         if not task.done():
+    #             return True
+    #     return False
+
+    def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
+        """Get name of currently running animation"""
+        return self.active_anim_ids.get(zone_id)
 
     # def get_current_animation(self) -> Optional['BaseAnimation']:
     #     """Get name of currently running animation"""

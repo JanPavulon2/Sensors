@@ -1,0 +1,239 @@
+/**
+ * Nature Theme - Shamanic Tech
+ * Organic, forest-inspired aesthetic with warm earth tones
+ */
+
+.nature-theme {
+  /* ============ Primary Colors ============ */
+  --theme-background: #0d1a0a;
+  --theme-surface: rgba(20, 35, 25, 0.6);
+  --theme-surface-light: rgba(35, 50, 40, 0.8);
+  --theme-surface-dark: rgba(10, 20, 15, 0.8);
+
+  /* ============ Accent Colors ============ */
+  --theme-accent-primary: #4ecca3; /* Fresh green */
+  --theme-accent-secondary: #ff8c42; /* Sunset orange */
+  --theme-accent-tertiary: #ffd700; /* Golden light */
+
+  /* ============ Text Colors ============ */
+  --theme-text: #e8eaed; /* Soft white */
+  --theme-text-dim: #8aa878; /* Muted green-gray */
+  --theme-text-muted: #5a6d5a; /* Very dim green */
+
+  /* ============ Status Colors ============ */
+  --theme-success: #4ecca3;
+  --theme-warning: #ff8c42;
+  --theme-error: #ff6b6b;
+  --theme-info: #4ecca3;
+
+  /* ============ LED Glow Effects ============ */
+  --theme-glow-0: rgba(78, 204, 163, 0.6); /* Inner glow */
+  --theme-glow-1: rgba(78, 204, 163, 0.3); /* Mid glow */
+  --theme-glow-2: rgba(78, 204, 163, 0.15); /* Outer glow */
+
+  /* ============ Borders ============ */
+  --theme-border: rgba(78, 204, 163, 0.2);
+  --theme-border-light: rgba(78, 204, 163, 0.1);
+  --theme-border-dark: rgba(78, 204, 163, 0.3);
+
+  /* ============ Shadows with Glow ============ */
+  --theme-shadow-glow: 0 0 8px rgba(78, 204, 163, 0.4), 0 0 16px rgba(78, 204, 163, 0.2);
+
+  /* ============ Special Effects ============ */
+  --theme-circuit-trace: linear-gradient(
+    90deg,
+    rgba(78, 204, 163, 0.1) 0%,
+    rgba(255, 140, 66, 0.1) 50%,
+    rgba(78, 204, 163, 0.1) 100%
+  );
+}
+
+/* ============ Background Pattern (optional) ============ */
+.nature-theme body,
+.nature-theme .design-container {
+  background-color: var(--theme-background);
+  color: var(--theme-text);
+  font-family: var(--font-sans);
+}
+
+/* ============ Surface Styles ============ */
+.nature-theme .surface,
+.nature-theme [role='dialog'],
+.nature-theme .panel,
+.nature-theme .card {
+  background-color: var(--theme-surface);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text);
+}
+
+/* ============ Interactive Elements ============ */
+.nature-theme button,
+.nature-theme [role='button'],
+.nature-theme input[type='button'],
+.nature-theme input[type='submit'] {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.nature-theme button:hover {
+  background-color: #3eb088;
+  box-shadow: var(--theme-shadow-glow);
+}
+
+.nature-theme button:active {
+  transform: scale(0.98);
+  box-shadow: 0 0 16px rgba(78, 204, 163, 0.6);
+}
+
+.nature-theme button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============ Inputs ============ */
+.nature-theme input,
+.nature-theme textarea,
+.nature-theme select {
+  background-color: var(--theme-surface-dark);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  transition: all var(--transition-base);
+}
+
+.nature-theme input:focus,
+.nature-theme textarea:focus,
+.nature-theme select:focus {
+  outline: none;
+  border-color: var(--theme-accent-primary);
+  box-shadow: 0 0 8px rgba(78, 204, 163, 0.3);
+  background-color: rgba(20, 35, 25, 0.9);
+}
+
+/* ============ Sliders ============ */
+.nature-theme input[type='range'] {
+  accent-color: var(--theme-accent-primary);
+}
+
+.nature-theme input[type='range']::-webkit-slider-thumb {
+  background-color: var(--theme-accent-primary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+.nature-theme input[type='range']::-moz-range-thumb {
+  background-color: var(--theme-accent-primary);
+  border: none;
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Links ============ */
+.nature-theme a {
+  color: var(--theme-accent-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all var(--transition-base);
+}
+
+.nature-theme a:hover {
+  border-bottom-color: var(--theme-accent-primary);
+}
+
+.nature-theme a:active {
+  color: var(--theme-accent-secondary);
+}
+
+/* ============ LED Pixel ============ */
+.nature-theme .led-pixel {
+  background: var(--led-color, #fff);
+  box-shadow: 0 0 8px var(--led-color, #fff), 0 0 16px var(--led-color, #fff),
+    0 0 24px var(--led-color, #fff);
+  border-radius: 50%;
+  transition: box-shadow var(--transition-fast);
+  filter: brightness(var(--brightness-factor, 1));
+}
+
+.nature-theme .led-pixel:hover {
+  box-shadow: 0 0 12px var(--led-color, #fff), 0 0 20px var(--led-color, #fff),
+    0 0 32px var(--led-color, #fff);
+}
+
+/* ============ Scrollbar (Webkit) ============ */
+.nature-theme ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.nature-theme ::-webkit-scrollbar-track {
+  background: var(--theme-surface);
+}
+
+.nature-theme ::-webkit-scrollbar-thumb {
+  background: var(--theme-accent-primary);
+  border-radius: var(--radius-full);
+}
+
+.nature-theme ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent-secondary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Selection ============ */
+.nature-theme ::selection {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+}
+
+.nature-theme ::-moz-selection {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+}
+
+/* ============ Tooltips ============ */
+.nature-theme [data-tooltip]::after {
+  background-color: var(--theme-surface-light);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-accent-primary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Disabled Elements ============ */
+.nature-theme :disabled,
+.nature-theme [aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: var(--theme-text-muted);
+}
+
+/* ============ Focus Visible (accessibility) ============ */
+.nature-theme *:focus-visible {
+  outline: 2px solid var(--theme-accent-primary);
+  outline-offset: 2px;
+}
+
+/* ============ Placeholder ============ */
+.nature-theme ::placeholder {
+  color: var(--theme-text-muted);
+}
+
+.nature-theme ::-webkit-input-placeholder {
+  color: var(--theme-text-muted);
+}
+
+.nature-theme :-moz-placeholder {
+  color: var(--theme-text-muted);
+  opacity: 1;
+}
+
+.nature-theme ::-moz-placeholder {
+  color: var(--theme-text-muted);
+  opacity: 1;
+}

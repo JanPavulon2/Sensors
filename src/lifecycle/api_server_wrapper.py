@@ -11,26 +11,32 @@ log = get_logger().for_category(LogCategory.API)
 
 class APIServerWrapper:
     """
-    Clean wrapper for running Uvicorn inside an asyncio task without Uvicorn's
+    Robust wrapper for running Uvicorn inside an asyncio task without Uvicorn's
     signal handlers interfering with your shutdown pipeline.
-    
-    Provides:
-    - start()
-    - stop()
-    - is_running
-    - access to the underlying uvicorn.Server
+
+    Behaviour:
+      - start() launches uvicorn.Server.serve() as a background task and awaits
+        an internal stop event. start() returns only after stop_event is set.
+      - stop() triggers stop_event, attempts graceful shutdown, and forces exit
+        if necessary. It will also close sockets and cancel tasks.
+      - Both start() and stop() are safe to call from the shutdown coordinator.
     """
+
     def __init__(
-        self, 
-        app: FastAPI, 
-        host: str = "0.0.0.0", 
-        port: int = 8000):
-        
+        self,
+        app: FastAPI,
+        host: str = "0.0.0.0",
+        port: int = 8000,
+    ):
         self.app = app
         self.host = host
         self.port = port
         self._server: Optional[uvicorn.Server] = None
-        self._task: Optional[asyncio.Task] = None
+        self._serve_task: Optional[asyncio.Task] = None
+        self._stop_event: asyncio.Event = asyncio.Event()
+        # optional: track whether we called start()
+        self._started_by_wrapper = False
+        
         
     # ----------------------------------------------------------------------
     # INTERNAL
@@ -60,91 +66,145 @@ class APIServerWrapper:
     # ----------------------------------------------------------------------
     # PUBLIC API
     # ----------------------------------------------------------------------
-    async def start(self) -> None:
-        if self._task is not None:
+    async def start(self, *, wait_started_timeout: float = 5.0) -> None:
+        """
+        Start uvicorn server in background and wait until stop() is called.
+
+        This method will return when stop() has been invoked and shutdown
+        completed (or was forced). If you want non-blocking start, schedule
+        start() as a task with create_tracked_task().
+        """
+        if self._serve_task is not None and not self._serve_task.done():
             raise RuntimeError("API server already started")
 
         self._server = self._create_server()
-        log.info(f"🌐 Starting API server on http://{self.host}:{self.port}")
+        self._stop_event.clear()
+        self._started_by_wrapper = True
 
-        self._task = asyncio.create_task(
-            self._server.serve(),
-            name="UvicornServerTask"
+        log.info(f"🌐 Launching API server on http://{self.host}:{self.port}")
+
+        # Start uvicorn serve() as background task and keep reference
+        self._serve_task = asyncio.create_task(
+            self._server.serve(), name="UvicornServeInternal"
         )
 
-        # Optional: wait until the server signals it's ready
-        await asyncio.sleep(0)  # yield control
+        # Wait until uvicorn reports it's started (or timeout)
+        # use getattr to avoid static analysis complaining about .started
+        deadline = asyncio.get_event_loop().time() + wait_started_timeout
+        while asyncio.get_event_loop().time() < deadline:
+            # Case 1: uvicorn sets the 'started' flag
+            if getattr(self._server, "started", False):
+                log.info("🌐 API server reported started")
+                break
+            
+            # Case 2: uvicorn has bound low-level sockets (reliable sign of bind)
+            servers = getattr(self._server, "servers", None)
+            if servers:
+                log.info("🌐 API server has bound sockets (servers list present)")
+                break
+            await asyncio.sleep(0.05)
+        # --- Block here until stop() is called (stop_event set) ---
+        try:
+            await self._stop_event.wait()
+        except asyncio.CancelledError:
+            # If outer code cancels start(), propagate cancellation but try to stop server
+            log.debug("start() cancelled externally, invoking stop()")
+            await self.stop()
+            raise
 
-        if self._server.started:
-            log.info("🌐 API server started successfully")
-        else:
-            log.warn("🌐 API server start not confirmed (maybe still booting)")
+        # start() returns after stop_event has been triggered and stop() finished
+        log.debug("APIServerWrapper.start() exiting (stop_event set)")
 
-    async def stop(self) -> None:
+    async def stop(self, *, shutdown_timeout: float = 2.0, force_exit: bool = True) -> None:
         """
-        Stop the API server immediately and release the port.
+        Stop the API server and release the port.
 
-        CRITICAL FIX for uvicorn/Starlette lifespan task leak:
-        Setting force_exit=True bypasses lifespan shutdown handlers and closes
-        all socket FDs immediately. This prevents the port from remaining in
-        LISTEN state and prevents the application from hanging on Ctrl+C.
-
-        Without force_exit, Starlette lifespan handlers can leak a task that:
-        - Keeps the port in LISTEN state even after process dies
-        - Prevents Ctrl+C from working (application appears frozen)
-        - Requires Ctrl+Z (SIGSTOP) to kill, leaving orphaned process
+        Steps:
+          1. set stop_event so start() unblocks
+          2. set server.force_exit (optional) to avoid lifespan hang
+          3. call server.shutdown() with timeout
+          4. close sockets and cancel serve task if still running
         """
-        if self._server is None:
-            log.warn("API server stop() called before start()")
+        # If not started, nothing to do
+        if self._server is None and (self._serve_task is None or self._serve_task.done()):
+            log.warn("API server stop() called but server was not running")
+            # still set event so any waiter doesn't hang
+            self._stop_event.set()
             return
 
         log.info("🌐 Stopping API server...")
 
-        # ✅ CRITICAL: Prevent uvicorn lifespan task leak
-        # force_exit=True immediately closes all FDs without waiting for lifespan
-        self._server.force_exit = True
+        # Signal to start() waiter
+        self._stop_event.set()
 
+        # Defensive: ensure server object exists
+        if self._server is None:
+            # wait for serve task to create server (unlikely)
+            if self._serve_task:
+                try:
+                    await asyncio.wait_for(self._serve_task, timeout=0.5)
+                except Exception:
+                    pass
+            if self._server is None:
+                log.warn("API server object missing during stop(); giving up")
+                return
+
+        # Try graceful shutdown
         try:
-            # This will now exit immediately due to force_exit
-            await asyncio.wait_for(self._server.shutdown(), timeout=1.0)
-            log.info("🌐 API server shutdown completed")
-        except asyncio.TimeoutError:
-            log.warn("🌐 API server shutdown timeout, forcing exit...")
-        except Exception as e:
-            log.error(f"Error during API server shutdown(): {e}")
+            if force_exit:
+                # force_exit speeds immediate socket closing (prevents TIME_WAIT holding port)
+                self._server.force_exit = True
 
-        # Explicitly close all sockets to ensure port is released
-        try:
-            if hasattr(self._server, 'servers') and self._server.servers:
-                for server in self._server.servers:
-                    server.close()
-                    log.debug("🌐 Closed socket FD")
-        except Exception as e:
-            log.debug(f"Error closing sockets: {e}")
-
-        # Cancel the server task
-        if self._task and not self._task.done():
-            self._task.cancel()
+            # server.shutdown() is a coroutine that completes uvicorn shutdown
             try:
-                await asyncio.wait_for(self._task, timeout=0.5)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                log.debug("Uvicorn task cancelled cleanly")
+                await asyncio.wait_for(self._server.shutdown(), timeout=shutdown_timeout)
+                log.info("🌐 API server shutdown completed")
+            except asyncio.TimeoutError:
+                log.warn("🌐 API server shutdown timeout; proceeding to force-close sockets")
+        except Exception as e:
+            log.error(f"Error during API server.shutdown(): {e}", exc_info=True)
+
+        # Close low-level sockets opened by the server if any
+        try:
+            servers = getattr(self._server, "servers", None)
+            if servers:
+                for s in servers:
+                    try:
+                        s.close()
+                        log.debug("🌐 Closed socket FD")
+                    except Exception:
+                        log.debug("🌐 Exception while closing socket", exc_info=True)
+        except Exception as e:
+            log.debug(f"Error closing sockets: {e}", exc_info=True)
+
+        # Cancel the serve task if it didn't finish
+        if self._serve_task and not self._serve_task.done():
+            self._serve_task.cancel()
+            try:
+                await asyncio.wait_for(self._serve_task, timeout=1.0)
+            except asyncio.CancelledError:
+                log.debug("Uvicorn serve task cancelled cleanly")
+            except asyncio.TimeoutError:
+                log.debug("Uvicorn serve task did not stop in time")
+
+        # Final cleanup
+        self._server = None
+        self._serve_task = None
+        self._started_by_wrapper = False
 
         log.info("🌐 API server stopped and port released")
-        
+
     # ----------------------------------------------------------------------
     # PROPERTIES
     # ----------------------------------------------------------------------
     @property
     def is_running(self) -> bool:
-        return (
-            self._task is not None
-            and not self._task.done()
-        )
+        """Return whether a uvicorn serve task is active."""
+        return self._serve_task is not None and not self._serve_task.done()
 
     @property
     def task(self) -> Optional[asyncio.Task]:
-        return self._task
+        return self._serve_task
 
     @property
     def server(self) -> Optional[uvicorn.Server]:

@@ -33,7 +33,7 @@ class APIServerShutdownHandler(IShutdownHandler):
     @property
     def shutdown_priority(self) -> int:
         """API server shuts down after animations."""
-        return 90
+        return 120
 
     async def shutdown(self) -> None:
         """

@@ -183,8 +183,13 @@ class Logger:
         msg = self._colorize(message, LEVEL_COLORS.get(level, Colors.WHITE))
 
         # Print main line
-        print(f"{timestamp} {cat} {sym} {msg}")
-
+        try:
+            print(f"{timestamp} {cat} {sym} {msg}")
+        except UnicodeEncodeError:
+            safe_sym = sym.encode("ascii", "replace").decode()
+            safe_msg = msg.encode("ascii", "replace").decode()
+            print(f"{timestamp} {cat} {safe_sym} {safe_msg}")
+            
         # Add kwargs as details
         all_details = list(details or [])
         for k, v in kwargs.items():
@@ -196,7 +201,13 @@ class Logger:
             for i, d in enumerate(all_details):
                 # Last item gets different tree character
                 tree = "└─" if i == len(all_details) - 1 else "├─"
-                print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
+                try:
+                    print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
+                except UnicodeEncodeError:
+                    safe_tree = sym.encode("ascii", "replace").decode()
+                    #safe_msg = msg.encode("ascii", "replace").decode()
+                    #print(f"{timestamp} {cat} {safe_sym} {safe_msg}")
+                    print(f"{indent}{self._colorize(safe_tree, Colors.DIM)} {d}")
 
         # Broadcast to WebSocket clients if broadcaster is set
         if self._broadcaster:

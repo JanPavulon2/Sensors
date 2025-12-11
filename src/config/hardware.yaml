@@ -44,7 +44,7 @@ led_strips:
   - id: MAIN_12V
     gpio: 18                # Primary LED chain (main display zones)
     type: WS2811_12V
-    color_order: BGR        # WS2811 12V strips use BGR order
+    color_order: BRG        # WS2811 12V strips use RGB order (shifted from BGR)
     count: 51               # Total pixels: FLOOR(18) + LEFT(4) + TOP(3) + RIGHT(4) + BOTTOM(3) + LAMP(19)
     voltage: 12
 

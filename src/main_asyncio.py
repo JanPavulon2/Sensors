@@ -300,12 +300,17 @@ async def main():
 
     coordinator = ShutdownCoordinator()
 
-    # Register shutdown handlers in priority order (highest → lowest)
-    coordinator.register(LEDShutdownHandler(hardware))
-    coordinator.register(AnimationShutdownHandler(lighting_controller))
+    # 120
     coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
+    
+    # 110
+    coordinator.register(AnimationShutdownHandler(lighting_controller))
+    
+    # 100
+    coordinator.register(LEDShutdownHandler(hardware))
+    
     coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Keyboard and polling tasks
-    coordinator.register(AllTasksCancellationHandler())  # ← Catch any remaining tasks (safety net)
+    coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 
     # Setup signal handlers via coordinator

@@ -32,7 +32,7 @@ class PreviewPanel:
     Example:
         Controller flow:
         >>> controller.render_solid((255, 0, 0))  # Build zone frame
-        >>> frame_manager.submit_zone_frame(frame)  # Submit to FrameManager
+        >>> frame_manager.push_frame(frame)  # Submit to FrameManager
         >>> # FrameManager renders to all strips (including preview)
     """
 

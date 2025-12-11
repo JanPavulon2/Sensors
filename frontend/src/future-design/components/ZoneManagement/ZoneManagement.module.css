@@ -1,0 +1,384 @@
+/**
+ * Zone Management Styles
+ * Styling for zone cards and zone manager
+ */
+
+/* ============ Zone Manager ============ */
+
+.zoneManager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+}
+
+.managerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.managerHeader h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--theme-text);
+}
+
+.statsToggle {
+  padding: var(--space-1) var(--space-2);
+  background: var(--theme-surface-dark);
+  color: var(--theme-text-dim);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+
+  &:hover {
+    background: var(--theme-surface-light);
+    color: var(--theme-text);
+    border-color: var(--theme-accent-primary);
+  }
+}
+
+/* ============ Statistics Bar ============ */
+
+.statsBar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(0, 255, 0, 0.05);
+  border: 1px solid rgba(0, 255, 0, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+  text-align: center;
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statValue {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--theme-accent-primary);
+  font-family: var(--font-mono);
+
+  &.warning {
+    color: #ffaa00;
+  }
+}
+
+/* ============ Zone Cards Grid ============ */
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+/* ============ Zone Card ============ */
+
+.zoneCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--theme-surface-dark);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+    transition: background var(--transition-base);
+  }
+
+  &:hover {
+    background: var(--theme-surface-light);
+    border-color: var(--theme-accent-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 255, 0, 0.2);
+
+    &::before {
+      background: var(--theme-accent-primary);
+    }
+  }
+
+  &.selected {
+    background: transparent;
+    border: 2px solid var(--theme-accent-primary);
+    box-shadow: none;
+
+    &::before {
+      background: var(--theme-accent-primary);
+      height: 3px;
+    }
+  }
+}
+
+/* ============ Card Header ============ */
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.headerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.zoneName {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--theme-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pixelCount {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.enableToggle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--theme-surface);
+  color: var(--theme-text-dim);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+
+  &:hover {
+    border-color: var(--theme-accent-primary);
+    color: var(--theme-accent-primary);
+  }
+
+  &.enabled {
+    background: transparent;
+    color: var(--theme-accent-primary);
+    border-color: var(--theme-accent-primary);
+  }
+
+  &.disabled {
+    opacity: 0.6;
+  }
+}
+
+/* ============ Color Preview ============ */
+
+.colorPreview {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.colorSwatch {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.colorInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.colorMode {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brightness {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+}
+
+/* ============ Animation Info ============ */
+
+.animationInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--theme-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--theme-border);
+}
+
+.animIcon {
+  font-size: var(--text-lg);
+  display: block;
+}
+
+.animMode {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--theme-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============ Status Badges ============ */
+
+.statusBadge {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  min-height: 0;
+}
+
+.disabledBadge,
+.reversedBadge {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.disabledBadge {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+  border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.reversedBadge {
+  background: rgba(0, 200, 255, 0.2);
+  color: #00c8ff;
+  border: 1px solid rgba(0, 200, 255, 0.3);
+}
+
+/* ============ Empty State ============ */
+
+.emptyState {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--theme-text-muted);
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.emptyHint {
+  margin-top: var(--space-2) !important;
+  font-size: var(--text-xs) !important;
+  color: var(--theme-text-muted) !important;
+  font-style: italic;
+}
+
+/* ============ Responsive ============ */
+
+@media (max-width: 1024px) {
+  .cardsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .zoneManager {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .statsBar {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-1);
+  }
+
+  .stat {
+    gap: var(--space-1);
+  }
+
+  .statValue {
+    font-size: var(--text-base);
+  }
+
+  .cardsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-2);
+  }
+
+  .zoneCard {
+    padding: var(--space-2);
+  }
+
+  .cardHeader {
+    gap: var(--space-1);
+  }
+
+  .colorSwatch {
+    width: 36px;
+    height: 36px;
+  }
+
+  .zoneName {
+    font-size: var(--text-xs);
+  }
+}

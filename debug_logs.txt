@@ -1,0 +1,153 @@
+[09:17:23] [38;5;141mTASK     [0m [2m·[0m [2m[Task 1] Registered (SYSTEM) - LogBroadcaster: WebSocket log streaming worker[0m
+[09:17:23] [97mSYSTEM   [0m [32m✓[0m [32mStarting Diuna application...[0m
+[09:17:23] [97mSYSTEM   [0m [32m✓[0m [32mInitializing GPIO manager (singleton)...[0m
+[09:17:23] [94mHARDWARE [0m [32m✓[0m [32mGPIO manager initialized (BCM mode)[0m
+[09:17:23] [97mSYSTEM   [0m [32m✓[0m [32mLoading configuration...[0m
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mUsing include-based configuration[0m
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded hardware.yaml[0m
+           [2m└─[0m keys: ['buzzers', 'encoders', 'buttons', 'led_strips']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded zones.yaml[0m
+           [2m└─[0m keys: ['zones']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded zone_mapping.yaml[0m
+           [2m└─[0m keys: ['hardware_mappings']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded parameters.yaml[0m
+           [2m└─[0m keys: ['zone_parameters', 'animation_base_parameters', 'animation_additional_parameters']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded animations.yaml[0m
+           [2m└─[0m keys: ['animations']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mLoaded colors.yaml[0m
+           [2m└─[0m keys: ['presets', 'preset_order']
+[09:17:23] [36mCONFIG   [0m [32m✓[0m [32mConfig merge complete[0m
+           [2m├─[0m total_keys: 12
+           [2m└─[0m keys: ['buzzers', 'encoders', 'buttons', 'led_strips', 'zones', 'hardware_mappings', 'zone_parameters', 'animation_base_parameters', 'animation_additional_parameters', 'animations']
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 5
+           [2m├─[0m component: Encoder(selector).clk
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 6
+           [2m├─[0m component: Encoder(selector).dt
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 13
+           [2m├─[0m component: Encoder(selector).sw
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 16
+           [2m├─[0m component: Encoder(modulator).clk
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 20
+           [2m├─[0m component: Encoder(modulator).dt
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 21
+           [2m├─[0m component: Encoder(modulator).sw
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 22
+           [2m├─[0m component: Button[0]
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 26
+           [2m├─[0m component: Button[1]
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 23
+           [2m├─[0m component: Button[2]
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (INPUT)[0m
+           [2m├─[0m pin: 24
+           [2m├─[0m component: Button[3]
+           [2m└─[0m pull: PULL_UP
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (OUTPUT)[0m
+           [2m├─[0m pin: 18
+           [2m└─[0m component: WS281xStrip(MAIN_12V)
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (OUTPUT)[0m
+           [2m├─[0m pin: 19
+           [2m└─[0m component: WS281xStrip(AUX_5V)
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mGPIO pin registered (OUTPUT)[0m
+           [2m├─[0m pin: 12
+           [2m├─[0m component: Buzzer(passive).gpio
+           [2m└─[0m initial: LOW
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mHardwareManager initialized successfully[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mLoaded 9 zone definitions from config[0m
+[09:17:24] [93mANIMATION[0m [2m·[0m [2mLoaded animation: BREATHE[0m
+[09:17:24] [93mANIMATION[0m [2m·[0m [2mLoaded animation: SNAKE[0m
+[09:17:24] [93mANIMATION[0m [2m·[0m [2mLoaded animation: COLOR_CYCLE[0m
+[09:17:24] [93mANIMATION[0m [2m·[0m [2mLoaded animation: COLOR_SNAKE[0m
+[09:17:24] [93mANIMATION[0m [2m·[0m [2mLoaded animation: COLOR_FADE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mAnimationManager initialized with 5 animations[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mParameters loaded[0m
+           [2m├─[0m total: 11
+           [2m├─[0m zone_params: 4
+           [2m├─[0m anim_base: 2
+           [2m└─[0m anim_additional: 5
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m================================================================================[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mPARAMETERS CONFIGURATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m================================================================================[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m
+Zone Parameters (4):[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ZONE_COLOR_HUE       COLOR           default=0[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ZONE_COLOR_PRESET    COLOR           default=0[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ZONE_BRIGHTNESS      PERCENTAGE      default=100[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ZONE_REVERSED        BOOLEAN         default=False[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m
+Animation Parameters (7):[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_SPEED           PERCENTAGE      default=50[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_PRIMARY_COLOR_HUE COLOR           default=0[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_INTENSITY       PERCENTAGE      default=100[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_SECONDARY_COLOR_HUE COLOR           default=120[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_TERTIARY_COLOR_HUE COLOR           default=240[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_LENGTH          RANGE_CUSTOM    default=5[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m  ANIM_HUE_OFFSET      RANGE_CUSTOM    default=30[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m--------------------------------------------------------------------------------[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mTotal parameters: 11[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32m================================================================================[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mMapped hardware MAIN_12V → zones: ['FLOOR', 'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'LAMP'][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mMapped hardware AUX_5V → zones: ['PIXEL', 'PIXEL2', 'PREVIEW'][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mLoaded 2 zone-to-hardware mappings[0m
+[09:17:24] [97mSYSTEM   [0m [32m✓[0m [32mInitializing event bus...[0m
+[09:17:24] [95mEVENT    [0m [32m✓[0m [32mMiddleware registered[0m
+           [2m└─[0m middleware: log_middleware
+[09:17:24] [97mSYSTEM   [0m [32m✓[0m [32mLoading application state...[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mDataAssembler initialized[0m
+[09:17:24] [97mSYSTEM   [0m [32m✓[0m [32mInitializing services...[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mLoaded 5 animation definitions[0m
+[09:17:24] [93mANIMATION[0m [32m✓[0m [32mAnimationService: 5 animations available[0m
+Can't open /dev/mem: Permission denied
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mBuilt application state: zone_idx=2[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mBuilt 9 ZoneConfig objects (includes disabled zones)[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mBuilding 9 zone objects...[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone FLOOR mode=ANIMATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone FLOOR has animation data: BREATHE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mFloor @ [0-17][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone LEFT mode=ANIMATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone LEFT has animation data: BREATHE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mLeft @ [18-21][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone TOP mode=STATIC[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mTop @ [22-24][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone RIGHT mode=ANIMATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone RIGHT has animation data: BREATHE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mRight @ [25-28][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone BOTTOM mode=STATIC[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mBottom @ [29-31][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone LAMP mode=ANIMATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone LAMP has animation data: BREATHE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mLamp @ [32-50][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone PIXEL mode=STATIC[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mPixel @ [0-29][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone PIXEL2 mode=STATIC[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mPixel2 @ [30-59][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone PREVIEW mode=ANIMATION[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mZone PREVIEW has animation data: BREATHE[0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mPreview @ [60-67][0m
+[09:17:24] [36mCONFIG   [0m [32m✓[0m [32mSuccessfully built 9 zones[0m
+[09:17:24] [92mZONE     [0m [32m✓[0m [32mZoneService initialized with 9 zones[0m
+[09:17:24] [94mHARDWARE [0m [32m✓[0m [32mHardwareCoordinator: Initializing hardware layer...[0m
+[09:17:24] [94mHARDWARE [0m [2m·[0m [2mWS281xStrip init: color_order=BRG, strip_type_const=0x1008, order_map=(2, 0, 1)[0m
+[09:17:24] [94mHARDWARE [0m [2m·[0m [2mCreating PixelStrip with strip_type_const=0x1008[0m
+[09:17:24] [94mHARDWARE [0m [2m·[0m [2mPixelStrip created with strip_type parameter - library will handle color order[0m
+[09:17:24] [38;5;141mTASK     [0m [32m✓[0m [32m[Task 1] LogBroadcaster: WebSocket log streaming worker - Completed successfully[0m
+[09:17:24] [97mSYSTEM   [0m [31m✗[0m [31mFatal error: ws2811_init failed with code -5 (mmap() failed)[0m
+[09:17:24] [97mSYSTEM   [0m [31m✗[0m [31mFatal error: ws2811_init failed with code -5 (mmap() failed)[0m
+           [2m└─[0m exc_info: True

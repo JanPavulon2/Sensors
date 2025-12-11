@@ -5,12 +5,14 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
+from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence, TYPE_CHECKING
 from models.color import Color
 from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
 
-
+if TYPE_CHECKING:
+    from models.frame_v2 import BaseFrameV2
+    
 class BaseAnimation:
     """
     Base class for all LED animations
@@ -61,8 +63,6 @@ class BaseAnimation:
             frame = await self.step()
             if frame is not None:
                 yield frame
-
-            await asyncio.sleep(self._frame_delay())
           
     # ------------------------------------------------------------
     # To be implemented by subclasses
@@ -80,16 +80,6 @@ class BaseAnimation:
         """Live parameter update"""
         self.params[param] = value
       
-    def _frame_delay(self) -> float:
-        """
-        Calculate delay based on speed.
-        Speed 100 ←→ 50 FPS
-        Speed 1   ←→ 10 FPS
-        """
-        min_delay = 0.02  # 50 FPS
-        max_delay = 0.1   # 10 FPS
-        return max_delay - (self.speed / 100) * (max_delay - min_delay)
-    
     def set_base_color(self, color: Color):
         """Cache zone color for animations that need current colors"""
         self.base_color = color
@@ -105,29 +95,3 @@ class BaseAnimation:
     def get_base_brightness(self) -> Optional[int]:
         """Get cached brightness for zone"""
         return self.base_brightness
-
-    # async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Color]]:
-    #     """
-    #     Generate simplified preview frames for preview panel (8 pixels)
-
-    #     Override this in subclasses to provide custom preview visualization.
-    #     Default implementation shows static color.
-
-    #     Args:
-    #         pixel_count: Number of preview pixels (default: 8)
-
-    #     Yields:
-    #         List of (r, g, b) tuples, one per pixel
-
-    #     Example:
-    #         async for frame in animation.run_preview(8):
-    #             preview_panel.show_frame(frame)
-    #     """
-    #     self.running = True
-    #     # Default: show static color
-    #     static_color = Color.from_rgb(100, 100, 100)
-    #     frame = [static_color] * pixel_count
-
-    #     while self.running:
-    #         yield frame
-    #         await asyncio.sleep(self._calculate_frame_delay())

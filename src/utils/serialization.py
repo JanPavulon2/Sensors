@@ -160,22 +160,21 @@ class Serializer:
     # ========================================================================
 
     @staticmethod
-    def animation_to_dict(anim) -> Dict[str, Any]:
+    def animation_to_dict(anim_config) -> Dict[str, Any]:
         """
-        Serialize animation to dict
+        Serialize animation config to dict
 
         Args:
-            anim: AnimationCombined object
+            anim_config: AnimationConfig object
 
         Returns:
-            Dict with id, display_name, description, enabled, parameters
+            Dict with id, display_name, description, parameters
         """
         return {
-            "id": anim.config.id.name,
-            "display_name": anim.config.display_name,
-            "description": anim.config.description,
-            "enabled": anim.state.enabled,
-            "parameters": Serializer.params_enum_to_str(anim.get_all_params()),
+            "id": anim_config.id.name,
+            "display_name": anim_config.display_name,
+            "description": anim_config.description,
+            "parameters": [p.name for p in anim_config.parameters],
         }
 
     # ========================================================================

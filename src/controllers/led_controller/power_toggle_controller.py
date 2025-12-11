@@ -142,14 +142,9 @@ class PowerToggleController:
         # Run all fades concurrently
         await asyncio.gather(*fades)
 
-        # If there are animated zones, restart the global animation
+        # Per-zone animations are now handled by AnimationModeController
+        # This will be refactored in Phase 3
         if has_animated_zones:
-            current_anim = self.animation_service.get_current()
-            if current_anim:
-                anim_id = current_anim.config.id
-                params = current_anim.build_params_for_engine()
-                safe_params = Serializer.params_enum_to_str(params)
-                log.info("Power ON - restarting animation for animated zones")
-                await self.animation_engine.start(anim_id, **safe_params)
+            log.info("Per-zone animations will be restarted by AnimationModeController")
 
         log.info("Power ON complete")

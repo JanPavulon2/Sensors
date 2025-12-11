@@ -1,83 +1,70 @@
-"""Animation service - Business logic for animations"""
+"""Animation service - Provides animation definitions and parameter building"""
 
-from typing import List, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING, Any
 from models.enums import AnimationID, ParamID
-from models.domain import AnimationCombined
+from models.domain import AnimationConfig
 from services.data_assembler import DataAssembler
 from utils.logger import get_logger, LogCategory
+
+if TYPE_CHECKING:
+    from models.domain import ZoneCombined
 
 log = get_logger().for_category(LogCategory.ANIMATION)
 
 
 class AnimationService:
-    """High-level animation operations"""
+    """Provides access to animation definitions and builds engine parameters"""
 
     def __init__(self, assembler: DataAssembler):
         self.assembler = assembler
-        self.animations = assembler.build_animations()
-        self._by_id = {anim.config.id: anim for anim in self.animations}
+        self.animations: List[AnimationConfig] = assembler.build_animations()
+        self._by_id = {anim.id: anim for anim in self.animations}
 
-        self.available_ids: list[AnimationID] = list(self._by_id.keys())
+        log.info(f"AnimationService: {len(self.animations)} animations available")
 
-        log.info(f"AnimationService initialized with {len(self.animations)} animations: {[a.name for a in self.available_ids]}")
-
-    def get_animation(self, animation_id: AnimationID) -> AnimationCombined:
-        """Get animation by ID"""
+    def get_animation(self, animation_id: AnimationID) -> AnimationConfig:
+        """Get animation definition by ID"""
         return self._by_id[animation_id]
 
-    def get_all(self) -> List[AnimationCombined]:
-        """Get all animations"""
+    def get_all(self) -> List[AnimationConfig]:
+        """Get all animation definitions"""
         return self.animations
 
-    def get_current(self) -> Optional[AnimationCombined]:
-        """Get currently enabled animation"""
-        return next((anim for anim in self.animations if anim.state.enabled), None)
+    def build_params_for_zone(
+        self,
+        anim_id: AnimationID,
+        zone_animation_params: Dict[ParamID, Any],
+        zone: 'ZoneCombined'
+    ) -> Dict[ParamID, Any]:
+        """
+        Build parameter dict for animation engine.
 
-    def set_current(self, animation_id: AnimationID) -> AnimationCombined:
-        """Set current animation (disables all others)"""
-        for anim in self.animations:
-            anim.state.enabled = (anim.config.id == animation_id)
+        Takes zone's stored animation parameters and supplements with defaults
+        (like zone color for animations that need it).
 
-        current = self.get_animation(animation_id)
-        log.debug(f"AnimService: set current → {current.config.display_name}")
-        self.save()
-        return current
+        Args:
+            anim_id: Which animation
+            zone_animation_params: Parameters from zone.state.animation.parameter_values
+            zone: ZoneCombined for accessing color/brightness
 
-    def start(self, animation_id: AnimationID) -> AnimationCombined:
-        """Start animation"""
-        anim = self.get_animation(animation_id)
-        if anim.start():
-            self.save()
-        return anim
+        Returns:
+            Dict[ParamID, value] ready for engine
+        """
+        anim_config = self.get_animation(anim_id)
+        params: Dict[ParamID, Any] = {}
 
-    def stop(self, animation_id: AnimationID) -> AnimationCombined:
-        """Stop animation"""
-        anim = self.get_animation(animation_id)
-        if anim.stop():
-            self.save()
-        return anim
+        # Use zone's stored params
+        for param_id in anim_config.parameters:
+            if param_id in zone_animation_params:
+                params[param_id] = zone_animation_params[param_id]
 
-    def stop_all(self) -> None:
-        """Stop all animations"""
-        for anim in self.animations:
-            anim.state.enabled = False
-        log.info("Stopped all animations")
-        self.save()
+        # Add zone color if animation supports it (all animations use hue)
+        if ParamID.ANIM_PRIMARY_COLOR_HUE in anim_config.parameters:
+            params[ParamID.ANIM_PRIMARY_COLOR_HUE] = zone.state.color.to_hue()
 
-    def adjust_parameter(self, animation_id: AnimationID, param_id: ParamID, delta: int) -> None:
-        """Adjust animation parameter by delta steps"""
-        anim = self.get_animation(animation_id)
-        anim.adjust_param(param_id, delta)
-        log.info(f"Adjusted {anim.config.display_name}.{param_id.name}: {anim.get_param_value(param_id)}")
-        self.save()
+        return params
 
-    def set_parameter(self, animation_id: AnimationID, param_id: ParamID, value: any) -> None:
-        """Set animation parameter value directly"""
-        anim = self.get_animation(animation_id)
-        anim.set_param_value(param_id, value)
-        log.info(f"Set {anim.config.display_name}.{param_id.name} = {value}")
-        self.save()
-
-    def save(self) -> None:
-        """Persist current state"""
-        self.assembler.save_animation_state(self.animations)
+    
+    def stop_all(self):
+        """Compatibility no-op (V3 animations run via AnimationEngine)."""
+        log.debug("AnimationService.stop_all(): no-op (V3 engine handles tasks)")

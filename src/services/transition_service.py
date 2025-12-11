@@ -21,7 +21,7 @@ import time
 from typing import Optional, List, Tuple, Callable, Dict
 from models.transition import TransitionType, TransitionConfig
 from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, ZoneID
-from models.frame import PixelFrame
+from models.frame_v2 import PixelFrameV2
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
 from models.color import Color
@@ -221,12 +221,12 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
-                    pixel_frame = PixelFrame(
+                    pixel_frame = PixelFrameV2(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit transition frame to FrameManager: {e}")
                     # No fallback to direct show() - prevents race condition with FrameManager
@@ -283,12 +283,12 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(target_frame)
-                    pixel_frame = PixelFrame(
+                    pixel_frame = PixelFrameV2(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit instant transition frame: {e}")
             else:
@@ -333,12 +333,12 @@ class TransitionService:
                 if self.frame_manager:
                     try:
                         zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
-                        pixel_frame = PixelFrame(
+                        pixel_frame = PixelFrameV2(
                             priority=FramePriority.TRANSITION,
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
                         )
-                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                        await self.frame_manager.push_frame(pixel_frame)
                     except Exception as e:
                         log.error(f"Failed to submit fade in step {step}: {e}")
                 else:
@@ -381,12 +381,12 @@ class TransitionService:
             if self.frame_manager:
                 black_frame = [Color.black()] * len(target_frame)
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                pixel_frame = PixelFrame(
+                pixel_frame = PixelFrameV2(
                     priority=FramePriority.TRANSITION,
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict
                 )
-                await self.frame_manager.submit_pixel_frame(pixel_frame)
+                await self.frame_manager.push_frame(pixel_frame)
             self.last_show_time = time.perf_counter()
 
         # Fade in to target
@@ -429,12 +429,12 @@ class TransitionService:
                 if self.frame_manager:
                     black_frame = [Color.black()] * len(new_frame)
                     zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                    pixel_frame = PixelFrame(
+                    pixel_frame = PixelFrameV2(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 await self.fade_in(new_frame, config)
 
     async def crossfade(
@@ -468,12 +468,12 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
-                    pixel_frame = PixelFrame(
+                    pixel_frame = PixelFrameV2(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit instant crossfade frame: {e}")
             else:
@@ -486,12 +486,12 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
-                    pixel_frame = PixelFrame(
+                    pixel_frame = PixelFrameV2(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit size-mismatch frame: {e}")
             return
@@ -524,12 +524,12 @@ class TransitionService:
                 if self.frame_manager:
                     try:
                         zone_pixels_dict = self._get_zone_pixels_dict(interpolated_frame)
-                        pixel_frame = PixelFrame(
+                        pixel_frame = PixelFrameV2(
                             priority=FramePriority.TRANSITION,
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
                         )
-                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                        await self.frame_manager.push_frame(pixel_frame)
                     except Exception as e:
                         log.error(f"Failed to submit crossfade step {step}: {e}")
                 else:
@@ -562,11 +562,11 @@ class TransitionService:
                 # Submit black frame via FrameManager (as Color objects)
                 black_frame = [Color.black()] * self.strip.pixel_count
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                pixel_frame = PixelFrame(
+                pixel_frame = PixelFrameV2(
                     priority=FramePriority.TRANSITION,
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict
                 )
-                await self.frame_manager.submit_pixel_frame(pixel_frame)
+                await self.frame_manager.push_frame(pixel_frame)
             await asyncio.sleep(config.duration_ms / 1000)
 

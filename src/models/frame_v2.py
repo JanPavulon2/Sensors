@@ -3,17 +3,19 @@ Atomic frame models for centralized rendering system (FrameManager V3).
 
 Each frame type represents a different rendering granularity:
 
-✔ SingleZoneFrame – one zone → one Color
-✔ MultiZoneFrame  – many zones → one Color each
-✔ PixelFrameV2    – many zones → pixel list (List[Color])
+✔ SingleZoneFrame - one zone → one Color
+✔ MultiZoneFrame  - many zones → one Color each
+✔ PixelFrameV2    - many zones → pixel list (List[Color])
 """
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Union
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.color import Color
 
+# Payload type: one zone → either a single Color or list of Colors
+ZoneUpdateValue = Union[Color, List[Color]]
 
 # =====================================================================
 # Base class (TTL, priority, source)
@@ -50,6 +52,10 @@ class SingleZoneFrame(BaseFrameV2):
 
     def as_zone_update(self) -> Dict[ZoneID, Color]:
         return {self.zone_id: self.color}
+    
+    @property
+    def zone_colors(self) -> dict:
+        return {self.zone_id: self.color}
 
 # =====================================================================
 # 2) MultiZoneFrame — many zones → one Color per zone
@@ -81,15 +87,7 @@ class PixelFrameV2(BaseFrameV2):
     def as_zone_update(self) -> Dict[ZoneID, List[Color]]:
         return self.zone_pixels
     
-import time
-from typing import Union
 
-from models.enums import ZoneID, FramePriority, FrameSource
-from models.color import Color
-
-
-# Payload type: one zone → either a single Color or list of Colors
-ZoneUpdateValue = Union[Color, List[Color]]
 
 
 @dataclass

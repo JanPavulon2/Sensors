@@ -1,9 +1,10 @@
 """Zone domain models"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from models.color import Color
-from models.enums import ParamID, ZoneID, ZoneRenderMode, AnimationID
+from models.enums import ParamID, ZoneID, ZoneRenderMode
 from models.domain.parameter import ParameterCombined
+from models.domain.animation import AnimationState
 from typing import Dict, Any, Optional
 from utils.enum_helper import EnumHelper 
 
@@ -20,17 +21,6 @@ class ZoneConfig:
     end_index: int
     gpio: int = 18       # GPIO pin for this zone's LED strip (default: 18)
 
-    @property
-    def tag(self) -> str:
-        """Tag = lowercase zone id name (e.g., 'lamp', 'strip')"""
-        return self.id.name.lower()
-    
-    @property
-    def total_leds(self) -> int:
-        """Total physical LEDs (pixel_count * 3)"""
-        return self.pixel_count * 3
-
-
 @dataclass
 class ZoneState:
     """
@@ -38,13 +28,12 @@ class ZoneState:
 
     Preserves all state for mode switching:
     - color: Used by STATIC mode, preserved when in ANIMATION
-    - animation_id + animation_parameters: Used by ANIMATION mode, preserved when in STATIC
+    - animation: Used by ANIMATION mode, preserved when in STATIC
     """
     id: ZoneID
     color: Color
     mode: ZoneRenderMode = ZoneRenderMode.STATIC
-    animation_id: Optional[AnimationID] = None
-    animation_parameters: Optional[Dict[ParamID, Any]] = None
+    animation: Optional[AnimationState] = None
     
 
 @dataclass
@@ -52,7 +41,7 @@ class ZoneCombined:
     """Zone with config, state, and parameters"""
     config: ZoneConfig
     state: ZoneState
-    parameters: Dict[ParamID, ParameterCombined]
+    parameters: Dict[ParamID, ParameterCombined] = field(default_factory=dict)
 
     def get_param_value(self, param_id: ParamID) -> Any:
         """Get current parameter value"""

@@ -1,6 +1,5 @@
 import pytest
-from models.domain.parameter import ParameterCombined
-from src.animations.breatheV2 import BreatheAnimationV2
+from animations.breathe import BreatheAnimation
 from models.domain.zone import ZoneCombined, ZoneConfig, ZoneState
 from models.enums import AnimationID, ParamID, ZoneID, ZoneRenderMode
 from models.color import Color
@@ -27,17 +26,18 @@ async def test_breathe_animation_step_basic():
         )
 
         
-        parameters=dict[ParamID.ANIM_SPEED, ParameterCombined()]
+        #parameters=dict[ParamID.ANIM_SPEED, ParameterCombined()]
         
         zone = ZoneCombined(
                 config,
-                state,
-                parameters=dict
+                state
         )
 
-        anim = BreatheAnimationV2(zone, speed=100, intensity=100)
+        anim = BreatheAnimation(zone, speed=100, intensity=100)
         frame = await anim.step()
 
         assert frame.zone_id == ZoneID.TOP
-        assert frame.color.brightness >= 0
-        assert frame.color.brightness <= 100
+        r, g, b = frame.color.to_rgb()
+        assert 0 <= r <= 255
+        assert 0 <= g <= 255
+        assert 0 <= b <= 255

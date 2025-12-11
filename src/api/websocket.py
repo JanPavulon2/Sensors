@@ -5,13 +5,14 @@ This module provides WebSocket endpoints for streaming application logs
 to connected clients in real-time.
 """
 
+import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
-import logging
+from utils.logger import get_category_logger, LogCategory
 import sys
 import traceback
 
 # Get Python logger for internal errors only (avoid infinite recursion)
-logger = logging.getLogger(__name__)
+log = get_category_logger(LogCategory.WEBSOCKET)
 
 
 async def websocket_logs_endpoint(websocket: WebSocket):
@@ -48,10 +49,10 @@ async def websocket_logs_endpoint(websocket: WebSocket):
         # Accept the connection FIRST, before doing anything else
         await websocket.accept()
         client_addr = websocket.client  # Safe to access AFTER accept()
-        logger.info(f"WebSocket connection accepted from {client_addr}")
+        log.info(f"WebSocket connection accepted from {client_addr}")
 
         # NOW try to initialize the broadcaster
-        logger.debug("Initializing broadcaster for log streaming")
+        log.debug("Initializing broadcaster for log streaming")
 
         # Lazy import to avoid circular dependency
         from services.log_broadcaster import get_broadcaster
@@ -59,35 +60,41 @@ async def websocket_logs_endpoint(websocket: WebSocket):
         broadcaster = get_broadcaster()
 
         if broadcaster is None:
-            logger.error("Broadcaster is None - WebSocket initialization failed")
+            log.error("Broadcaster is None - WebSocket initialization failed")
             await websocket.close(code=1008, reason="Server initialization error")
             return
 
         # Register connection with broadcaster's manager (add to active connections)
-        logger.info(f"WebSocket {client_addr} registered with broadcaster")
+        log.info(f"WebSocket {client_addr} registered with broadcaster")
         async with broadcaster.manager._lock:
             broadcaster.manager.active_connections.add(websocket)
 
-        logger.info(f"Active WebSocket connections: {broadcaster.manager.get_connection_count()}")
+        log.info(f"Active WebSocket connections: {broadcaster.manager.get_connection_count()}")
 
         # Keep connection open indefinitely
         # Messages are sent asynchronously by the broadcaster
         while True:
             # This receive just keeps the connection alive and detects disconnects
             # The actual sending happens in the broadcaster's broadcast() method
-            data = await websocket.receive_text()
+            try:
+                data = await websocket.receive_text()
+            except asyncio.CancelledError:
+                log.debug("WS cancelled (shutdown)")
+                break
             # Ignore any incoming data (this is a one-way stream)
 
     except WebSocketDisconnect:
         # Client disconnected normally
-        logger.info(f"WebSocket client {client_addr} disconnected normally")
+        log.info(f"WebSocket client {client_addr} disconnected normally")
         if broadcaster:
             await broadcaster.manager.disconnect(websocket)
     except Exception as e:
         # Any other error
-        logger.error(f"WebSocket error from {client_addr}: {type(e).__name__}: {e}", exc_info=True)
+        log.error(f"WebSocket error from {client_addr}: {type(e).__name__}: {e}", exc_info=True)
         if broadcaster:
             try:
                 await broadcaster.manager.disconnect(websocket)
             except Exception as disconnect_error:
-                logger.error(f"Error disconnecting after exception: {disconnect_error}")
+                log.error(f"Error disconnecting after exception: {disconnect_error}")
+
+    

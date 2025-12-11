@@ -217,7 +217,7 @@ class ZoneAPIService:
                 brightness=zone.brightness,
                 enabled=zone.config.enabled,
                 render_mode=zone.state.mode.name,
-                animation_id=zone.state.animation_id.name if zone.state.animation_id else None
+                animation_id=zone.state.animation.id.name if zone.state.animation else None
             ),
             gpio=zone.config.gpio,
             layout=None  # TODO: Add layout support in future

@@ -2,53 +2,52 @@
 # Animation metadata and parameter assignments
 # (Parameter definitions are in parameters.yaml)
 
-# Animation definitions (list format for consistency with zones)
+# Animation definitions (map format indexed by animation ID)
 animations:
-  - id: BREATHE
+  BREATHE:
     name: Breathe
-    tag: breathe
+    class: BreatheAnimation
     description: "Smooth breathing effect"
     enabled: true
     order: 1
-    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    parameters: [ANIM_INTENSITY]
 
-  - id: SNAKE
+  SNAKE:
     name: Snake
-    tag: snake
+    class: SnakeAnimation
     description: "Sequential zone chase"
     enabled: true
-    order: 2
-    parameters: [ANIM_LENGTH]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    order: 3
+    parameters: [ANIM_LENGTH]
 
-  - id: COLOR_CYCLE
+  COLOR_CYCLE:
     name: Color Cycle
-    tag: color_cycle
+    class: ColorCycleAnimation
     description: "All zones cycle through presets"
     enabled: true
-    order: 3
-    parameters: []  # Only SPEED (PRIMARY_COLOR_HUE unused)
+    order: 4
+    parameters: []
 
-  - id: COLOR_SNAKE
+  COLOR_SNAKE:
     name: Color Snake
-    tag: color_snake
+    class: ColorSnakeAnimation
     description: "Multi-pixel rainbow snake"
     enabled: true
-    order: 4
-    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    order: 5
+    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]
 
-  - id: COLOR_FADE
+  COLOR_FADE:
     name: Color Fade
-    tag: color_fade
+    class: ColorFadeAnimation
     description: "Rainbow hue cycling"
     enabled: true
-    order: 5
-    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    order: 6
+    parameters: [ANIM_INTENSITY]
 
-  # TEMPORARY: Matrix disabled for testing
-  # - id: MATRIX
+  # MATRIX:
   #   name: Matrix
-  #   tag: matrix
+  #   class: MatrixAnimation
   #   description: "Digital rain effect (Matrix)"
   #   enabled: false
-  #   order: 6
+  #   order: 7
   #   parameters: [ANIM_LENGTH, ANIM_INTENSITY]

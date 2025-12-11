@@ -31,47 +31,43 @@ from models.color import Color
 class AnimationShutdownHandler(IShutdownHandler):
     """
     Shutdown handler for animation engine.
-
-    Stops all running animations and animation service (FrameManager).
-    Must run BEFORE LEDShutdownHandler to prevent race conditions where
-    FrameManager continues submitting frames after LEDs are cleared.
-
-    Priority: 105 (runs FIRST, before LED clearing)
+    Stops all running animation tasks before LED cleanup.
     """
 
-    def __init__(self, led_controller: LightingController):
-        """
-        Initialize animation shutdown handler.
-
-        Args:
-            led_controller: LightingController with animation engine
-        """
-        self.led_controller = led_controller
+    def __init__(
+        self, 
+        lighting_controller: LightingController
+    ):
+        self.lighting_controller = lighting_controller
 
     @property
     def shutdown_priority(self) -> int:
-        """Animations shutdown FIRST (before LEDs cleared)."""
-        return 105
+        return 130  # FIRST
 
     async def shutdown(self) -> None:
-        """Stop animation engine and service."""
         log.info("Stopping animations...")
 
-        # Stop animation service
+        # 1) Stop AnimationEngine tasks
         try:
-            self.led_controller.animation_mode_controller.animation_service.stop_all()
-            log.debug("✓ Animation service stopped")
+            animation_service = self.lighting_controller.animation_mode_controller.animation_service
+            
+            if animation_service:
+                animation_service.stop_all()
+                log.debug("AnimationService stopped")
+        
         except Exception as e:
-            log.error(f"Error stopping animation service: {e}")
-
-        # Stop animation engine
+            log.error(f"Error stopping AnimationService: {e}")
+                            
+        
+        
+        # --- 2) Stop new AnimationEngine
         try:
-            if (
-                self.led_controller.animation_engine
-                and self.led_controller.animation_engine.is_running()
-            ):
-                await self.led_controller.animation_engine.stop()
-                log.debug("✓ Animation engine stopped")
-        except Exception as e:
-            log.error(f"Error stopping animation engine: {e}")
+            engine = self.lighting_controller.animation_engine
 
+            if engine and engine.tasks:
+                await engine.stop_all()
+                log.debug("✓ AnimationEngine stopped")
+
+        except Exception as e:
+            log.error(f"Error stopping AnimationEngine: {e}")
+            

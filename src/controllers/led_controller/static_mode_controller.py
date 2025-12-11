@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import math
-from typing import Dict
 from models.enums import ParamID, FramePriority, FrameSource, ZoneRenderMode
 from models.domain import ZoneCombined
-from models.frame import ZoneFrame
+from models.frame_v2 import MultiZoneFrame, SingleZoneFrame
 from services import ServiceContainer
 from utils.logger import get_logger, LogCategory
 from lifecycle.task_registry import create_tracked_task, TaskCategory
@@ -34,6 +33,7 @@ class StaticModeController:
 
         self.zone_ids = [z.config.id for z in self.zone_service.get_all()]
         self.current_param = self.app_state_service.get_state().current_param
+        
         self.pulse_task = None
         self.pulse_active = False
         self.first_enter = True
@@ -50,23 +50,27 @@ class StaticModeController:
         log.info("Initializing STATIC mode...")
 
         static_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
-        if static_zones:
-            log.debug(f"STATIC: Submitting {len(static_zones)} static zones")
-            zone_colors = {
-                z.config.id: z.state.color.with_brightness(z.brightness)
-                for z in static_zones
-            }
-            frame = ZoneFrame(
-                zone_colors=zone_colors,
-                priority=FramePriority.MANUAL,
-                source=FrameSource.STATIC,
-                ttl=10.0  # Long TTL for initial state (persists until changed)
-            )
-            asyncio.create_task(self.frame_manager.submit_zone_frame(frame))
-            log.info(f"STATIC initialized: {len(static_zones)} zones rendered")
-        else:
-            log.info("STATIC: No static zones to initialize")
-
+        
+        if not static_zones:
+            log.info("No static zones to initialize")
+            return
+        
+        zones_colors = {
+            z.config.id: z.state.color.with_brightness(z.brightness)
+            for z in static_zones
+        }
+        
+        frame = MultiZoneFrame(
+            zone_colors=zones_colors,   
+            priority=FramePriority.MANUAL,
+            source=FrameSource.STATIC,
+            ttl=10.0,
+        )
+        
+        asyncio.create_task(self.frame_manager.push_frame(frame))
+        
+        log.info(f"Static initialized: {len(static_zones)} zones rendered")
+        
         # Mark first_enter as complete so enter_mode behaves normally
         self.first_enter = False
 
@@ -77,35 +81,33 @@ class StaticModeController:
         On first call (during app startup), skips rendering (initialize handles it).
         On subsequent calls (mode toggle), renders zones normally via FrameManager.
         """
-        log.info("Entering STATIC mode")
+        log.info("Entering static mode")
 
         is_first_enter = self.first_enter
         log.debug(f"STATIC enter_mode: first_enter={is_first_enter}")
 
-        # Skip rendering on first enter (initialize handles it)
-        if is_first_enter:
-            log.debug("STATIC: Skipping render (first enter - handled by initialize)")
+        if self.first_enter:
+            log.debug("STATIC: First enter → no-op (initialize already rendered)")
             self.first_enter = False
         else:
-            # Subsequent enters: render all STATIC zones
-            log.debug(f"STATIC: Rendering {len(self.zone_service.get_all())} zones")
             static_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
-            if static_zones:
-                zone_colors = {
-                    z.config.id: z.state.color.with_brightness(z.brightness)
-                    for z in static_zones
-                }
-                frame = ZoneFrame(
-                    zone_colors=zone_colors,
-                    priority=FramePriority.MANUAL,
-                    source=FrameSource.STATIC,
-                    ttl=1.5
-                )
-                asyncio.create_task(self.frame_manager.submit_zone_frame(frame))
-            log.debug("STATIC: Rendering complete")
+            zone_colors = {
+                z.config.id: z.state.color.with_brightness(z.brightness)
+                for z in static_zones
+            }
 
-        # Start pulse if edit mode is enabled AND not first enter
-        if not is_first_enter and self.app_state_service.get_state().edit_mode:
+            frame = MultiZoneFrame(
+                zone_colors=zone_colors,
+                priority=FramePriority.MANUAL,
+                source=FrameSource.STATIC,
+                ttl=1.5,
+            )
+            
+            asyncio.create_task(self.frame_manager.push_frame(frame))
+
+        
+        # Start pulsing if edit mode is ON
+        if self.app_state_service.get_state().edit_mode:
             self._start_pulse()
 
     async def exit_mode(self):
@@ -115,7 +117,7 @@ class StaticModeController:
         Called when switching away from STATIC mode.
         Properly awaits pulse task cancellation for clean async shutdown.
         """
-        log.info("Exiting STATIC mode")
+        log.info("Exiting static mode")
         await self._stop_pulse_async()
 
     def on_edit_mode_change(self, enabled: bool):
@@ -155,14 +157,14 @@ class StaticModeController:
 
     def _submit_zone_update(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
-        zone_colors = {zone.config.id: zone.state.color.with_brightness(zone.brightness)}
-        frame = ZoneFrame(
-            zone_colors=zone_colors,
+        frame = SingleZoneFrame(
+            zone_id=zone.config.id,
+            color=zone.state.color.with_brightness(zone.brightness),
             priority=FramePriority.MANUAL,
             source=FrameSource.STATIC,
-            ttl=1.5
+            ttl=1.5,
         )
-        asyncio.create_task(self.frame_manager.submit_zone_frame(frame))
+        asyncio.create_task(self.frame_manager.push_frame(frame))
 
     def cycle_parameter(self):
         """Cycle through editable parameters"""
@@ -180,20 +182,22 @@ class StaticModeController:
 
     def _start_pulse(self):
         # DEBUG: Skip pulse if testing static mode only
-        try:
-            from main_asyncio import DEBUG_NOPULSE
-            if DEBUG_NOPULSE:
-                return
-        except ImportError:
-            pass
+        # try:
+        #     from main_asyncio import DEBUG_NOPULSE
+        #     if DEBUG_NOPULSE:
+        #         return
+        # except ImportError:
+        #     pass
 
-        if not self.pulse_active:
-            self.pulse_active = True
-            self.pulse_task = create_tracked_task(
-                self._pulse_task(),
-                category=TaskCategory.BACKGROUND,
-                description="StaticMode: brightness pulse animation"
-            )
+        if self.pulse_active:
+            return
+        
+        self.pulse_active = True
+        self.pulse_task = create_tracked_task(
+            self._pulse_task(),
+            category=TaskCategory.BACKGROUND,
+            description="StaticMode: brightness pulse animation"
+        )
 
     def _stop_pulse(self):
         """Stop pulse animation (synchronous version for normal mode changes)"""
@@ -236,15 +240,16 @@ class StaticModeController:
                 pulse_brightness = int(base * scale)
 
                 # Create ZoneFrame with pulsed brightness
-                zone_colors = {current_zone.config.id: current_zone.state.color.with_brightness(pulse_brightness)}
-                zone_frame = ZoneFrame(
+                color = current_zone.state.color.with_brightness(pulse_brightness)
+                frame = SingleZoneFrame(
+                    zone_id=current_zone.id,
+                    color=color,
                     priority=FramePriority.PULSE,
                     source=FrameSource.PULSE,
-                    zone_colors=zone_colors,
-                    ttl=1.5
+                    ttl=1.0,
                 )
 
-                await self.frame_manager.submit_zone_frame(zone_frame)
+                await self.frame_manager.push_frame(frame)
 
                 await asyncio.sleep(cycle / steps)
 

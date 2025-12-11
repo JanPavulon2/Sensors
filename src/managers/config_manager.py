@@ -176,7 +176,8 @@ class ConfigManager:
         # AnimationManager - always initialize with fallback to empty
         try:
             self.animation_manager = AnimationManager(self.data)
-            self.animation_manager.print_summary()
+            anims = self.animation_manager.get_all_animations()
+            log.info(f"AnimationManager initialized with {len(anims)} animations")
         except Exception as ex:
             log.error("Failed to initialize AnimationManager, using empty", error=str(ex))
             self.animation_manager = AnimationManager({})

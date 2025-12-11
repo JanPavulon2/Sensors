@@ -31,17 +31,14 @@ Warstwa: RENDER / INFRASTRUCTURE
 from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque
+from typing import Dict, List, Optional, Deque, cast
 from collections import deque
 
 from utils.logger import get_logger
-from models.enums import LogCategory, FramePriority, ZoneID
+from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
-from models.frame import (
-    FullStripFrame, ZoneFrame, PixelFrame, PreviewFrame,
-    MainStripFrame
-)
-from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2
+from models.frame import PreviewFrame
+from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2, MainStripFrame, ZoneUpdateValue
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
@@ -142,23 +139,28 @@ class FrameManager:
 
     def add_zone_strip(self, strip: ZoneStrip) -> None:
         """Register a LED strip (ZoneStrip)."""
-        
+
         if strip in self.zone_strips:
             return
-        
+
         self.zone_strips.append(strip)
         log.info(f"FrameManager: added strip {strip}")
-        
+
         # Initialize zone render states for all zones in this strip
-        for zone_id in strip.mapper.all_zone_ids():
+        strip_zone_ids = strip.mapper.all_zone_ids()
+        log.info(f"add_zone_strip: strip has {len(strip_zone_ids)} zones: {[z.name for z in strip_zone_ids]}")
+
+        for zone_id in strip_zone_ids:
             if zone_id not in self.zone_render_states:
                 zone_length = strip.mapper.get_zone_length(zone_id)
                 self.zone_render_states[zone_id] = ZoneRenderState(
                     zone_id=zone_id,
                     pixels=[Color.black()] * zone_length,
                 )
-                log.debug(f"Added main strip: {strip} (initialized {len(strip.mapper.all_zone_ids())} zones)")
+                log.debug(f"  Initialized render state for {zone_id.name} ({zone_length} pixels)")
 
+        log.info(f"Added main strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
+        
     def remove_zone_strip(self, strip: ZoneStrip) -> None:
         """Unregister a LED strip."""
         
@@ -179,7 +181,9 @@ class FrameManager:
         from models.frame_v2 import (
             SingleZoneFrame, MultiZoneFrame, PixelFrameV2
         )
-        from models.frame import MainStripFrame
+
+        log.debug(f"FrameManager.push_frame: received {type(frame).__name__} from {getattr(frame, 'source', '?')} "
+            f"priority={getattr(frame, 'priority', '?')} zone={getattr(frame, 'zone_id', '?')}")
 
         async with self._lock:
 
@@ -190,9 +194,10 @@ class FrameManager:
                     ttl=frame.ttl,
                     source=frame.source,
                     partial=True,
-                    updates={frame.zone_id: frame.color},
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], {frame.zone_id: frame.color}),
                 )
                 self.main_queues[msf.priority.value].append(msf)
+                log.debug(f"Queued SingleZoneFrame: {frame.zone_id.name} (priority={msf.priority.name})")
                 return
 
             # --- MultiZoneFrame -----------------------------------
@@ -202,7 +207,7 @@ class FrameManager:
                     ttl=frame.ttl,
                     source=frame.source,
                     partial=True,
-                    updates=frame.zone_colors,     # dict[ZoneID, Color]
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_colors),     # dict[ZoneID, Color]
                 )
                 self.main_queues[msf.priority.value].append(msf)
                 return
@@ -214,30 +219,12 @@ class FrameManager:
                     ttl=frame.ttl,
                     source=frame.source,
                     partial=True,
-                    updates={frame.zone_pixels},
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_pixels),
                 )
                 self.main_queues[msf.priority.value].append(msf)
                 return
 
             raise TypeError(f"Unsupported frame type: {type(frame)}")
-        
-    async def submit_full_strip_frame(self, frame: FullStripFrame) -> None:
-        """Submit a full-strip frame (single color for all zones)."""
-        
-        async with self._lock:
-            self.main_queues[frame.priority.value].append(frame)
-
-    async def submit_zone_frame(self, frame: ZoneFrame) -> None:
-        """Submit a per-zone frame."""
-        
-        async with self._lock:
-            self.main_queues[frame.priority.value].append(frame)
-
-    async def submit_pixel_frame(self, frame: PixelFrame) -> None:
-        """Submit a per-pixel frame."""
-        
-        async with self._lock:
-            self.main_queues[frame.priority.value].append(frame)
 
     # === Control API ===
 
@@ -328,7 +315,8 @@ class FrameManager:
 
             # Select and render frames
             try:
-                frame = await self._select_frame_by_priority()
+                # frame = await self._select_frame_by_priority()
+                frame = await self._drain_frames_of_highest_priority()
                 
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
@@ -359,6 +347,71 @@ class FrameManager:
             await asyncio.sleep(frame_delay)
 
     # === Frame Selection ===
+
+    async def _drain_frames_of_highest_priority(self) -> Optional[MainStripFrame]:
+        """
+        Pobierz wszystkie nieprzeterminowane ramki z najwyższego niepustego priorytetu
+        i zmerguj je w jedną MainStripFrame (updates dict).
+        """
+        async with self._lock:
+            # Liczymy ile ramek czeka w każdej kolejce
+            queue_status = {p: len(q) for p, q in self.main_queues.items()}
+            has_frames = any(count > 0 for count in queue_status.values())
+            if has_frames:
+                log.debug(f"_drain: Queue status: {queue_status}")
+
+            # znajdź najwyższy priorytet, który ma coś w kolejce
+            for priority_value in sorted(self.main_queues.keys(), reverse=True):
+                queue = self.main_queues[priority_value]
+                if not queue:
+                    continue
+
+                merged_updates = {}
+                ttl = 0.0
+                source = None
+                priority_enum = None
+                frames_processed = 0
+                frames_expired = 0
+
+                # wyciągnij wszystko co jest w kolejce teraz (maxlen=2, ale ogólnie)
+                while queue:
+                    frame = queue.popleft()
+                    frames_processed += 1
+                    if frame.is_expired():
+                        frames_expired += 1
+                        # log.debug(f"_drain: Frame expired: {type(frame).__name__}")
+                        continue
+
+                    # frame może być różnych typów (MainStripFrame / wrappers)
+                    # Normalizujemy: oczekujemy atrybutu .updates (zone->Color or zone->list)
+                    updates = getattr(frame, "updates", None)
+                    if updates:
+                        # prosty overwrite: ostatnia wartość ma pierwszeństwo dla danego zone
+                        for zid, val in updates.items():
+                            merged_updates[zid] = val
+
+                    # merge TTL/pole źródła/priorytetu - weź minimalne TTL / pierwszy source
+                    ttl = max(ttl, getattr(frame, "ttl", 0.0))
+                    if source is None:
+                        source = getattr(frame, "source", None)
+                    if priority_enum is None:
+                        priority_enum = getattr(frame, "priority", None)
+
+                if merged_updates:
+                    # Build MainStripFrame from merged updates
+                    msf = MainStripFrame(
+                        priority=priority_enum or FramePriority.ANIMATION,
+                        ttl=ttl or 0.1,
+                        source=source or FrameSource.ANIMATION,
+                        partial=True,
+                        updates=merged_updates,
+                    )
+                    # log.debug(f"_drain: Drained {frames_processed} frames ({frames_expired} expired) from priority {priority_enum.name if priority_enum else '?'}, got {len(merged_updates)} zones")
+                    return msf
+                # else:
+                    # log.debug(f"_drain: Processed {frames_processed} frames from priority {priority_value}, all expired or empty")
+                # jeżeli wszystkie ramki wygasły, sprawdź następny priorytet
+        return None        
 
     async def _select_frame_by_priority(self) -> Optional[MainStripFrame]:
         """
@@ -391,79 +444,123 @@ class FrameManager:
         """
         # Render main strip
         if main_frame:
+            log.debug(f"_render_atomic: rendering frame with {len(getattr(main_frame, 'updates', {}))} zone updates")
             self._render_frame(main_frame)
+        else:
+             log.debug(f"_render_atomic: no frame to render")
 
     def _render_frame(self, frame: MainStripFrame) -> None:
-        """
-        Unified render pipeline:
-        1. Frame → logical zone update (as_zone_update)
-        2. Filter to zones on this strip
-        3. Normalize to actual pixel counts
-        4. Update ZoneRenderState
-        5. Apply to hardware via ZoneStrip
-        """
-        updates = frame.as_zone_update()  # ZoneID -> Color | [Color]
+        """High-level render pipeline."""
+        updates = frame.as_zone_update()
+        merged = self._merge_updates(frame, updates)
 
-        # 1) Łączymy z poprzednim stanem
-        # merged = {
-        #     zone_id: updates.get(zone_id, self.zone_render_states[zone_id].pixels)
-        #     for zone_id in self.zone_render_states.keys()
-        # }
-        # === MERGE LOGIC ===
-        
-        is_partial = getattr(frame, "partial", False)
-        
-        if is_partial:
-            log.debug(f"Frame is partial, merging.")
-            # Use existing merge helper (partial → merge with previous state)
-            merged = self._merge_partial_update(updates)
-        else: 
-            log.debug(f"Frame is full. Building whole.")
-            merged = {}
-                 
-            for zone_id, state in self.zone_render_states.items():
-                if zone_id in updates:
-                    new_val = updates[zone_id]
-
-                    if isinstance(new_val, Color):
-                        # single Color → expand to full zone
-                        merged[zone_id] = [new_val] * len(state.pixels)
-                    else:
-                        # list of Colors → normalize length
-                        pix = list(new_val[:len(state.pixels)])
-                        if len(pix) < len(state.pixels):
-                            pix += [Color.black()] * (len(state.pixels) - len(pix))
-                        merged[zone_id] = pix
-                else:
-                    # zones untouched → keep existing state
-                    merged[zone_id] = list(state.pixels)  
-                    
-            # update render states for full-frame case
-            for zone_id, pix in merged.items():
-                self.zone_render_states[zone_id].pixels = pix 
-
-        # === DMA SKIP ===
-        frame_hash = self._hash_merged_frame(merged)
-        
-        if frame_hash == self.last_rendered_frame_hash:
-            self.dma_skipped += 1
+        if self._should_skip_dma(merged):
             return
-        self.last_rendered_frame_hash = frame_hash
-        
-        # === RENDER TO STRIPS ===
-        for strip in self.zone_strips:
-            try:
-                zone_ids = strip.mapper.all_zone_ids()
-                strip_frame = {
-                    z: merged[z] for z in zone_ids
-                }
-                strip.show_full_pixel_frame(strip_frame)
-            except Exception as e:
-                log.error(f"Render error on strip {strip}: {e}")
+
+        self._render_to_all_strips(merged)
 
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
         
+    def _merge_updates(self, frame: MainStripFrame, updates):
+        """Dispatch merging strategy."""
+        if getattr(frame, "partial", False):
+            return self._merge_partial_update(updates)
+        return self._merge_full_update(updates)    
+    
+    def _merge_full_update(self, updates):
+        """Merge full-frame updates into new zone_render_states."""
+        merged = {}
+
+        for zone_id, state in self.zone_render_states.items():
+            if zone_id in updates:
+                new_val = updates[zone_id]
+                merged[zone_id] = self._expand_or_trim_zone(new_val, len(state.pixels))
+            else:
+                merged[zone_id] = list(state.pixels)
+
+        # update zone render state
+        for zid, pix in merged.items():
+            self.zone_render_states[zid].pixels = pix
+
+        return merged
+    
+    def _expand_or_trim_zone(self, val, expected_len):
+        """Normalize Color or list[Color] to exact pixel count."""
+        if isinstance(val, Color):
+            return [val] * expected_len
+
+        pix = list(val[:expected_len])
+        if len(pix) < expected_len:
+            pix += [Color.black()] * (expected_len - len(pix))
+        return pix
+    
+    def _should_skip_dma(self, merged):
+        """Compute hash of merged frame to skip redundant DMA transfers."""
+        frame_hash = self._hash_merged_frame(merged)
+        if frame_hash == self.last_rendered_frame_hash:
+            self.dma_skipped += 1
+            return True
+
+        self.last_rendered_frame_hash = frame_hash
+        return False
+    
+    def _render_to_all_strips(self, merged):
+        """Render merged frame to every registered ZoneStrip."""
+        for strip in self.zone_strips:
+            try:
+                strip_frame = self._prepare_strip_frame(strip, merged)
+                self._validate_strip_frame(strip, strip_frame)
+                self._apply_strip_frame(strip, strip_frame)
+            except Exception as e:
+                log.error(f"Render error on strip {strip}: {e}", exc_info=True)
+    
+        
+    def _prepare_strip_frame(self, strip, merged):
+        """Extract only zones belonging to this strip."""
+        zone_ids = strip.mapper.all_zone_ids()
+
+        return {
+            z: merged.get(z, list(self.zone_render_states[z].pixels))
+            for z in zone_ids
+        }
+    
+    def _validate_strip_frame(self, strip, strip_frame):
+        """Check lengths, mapping, and hardware buffer size."""
+        pixel_count = getattr(strip, "pixel_count", None)
+        zone_ids = list(strip_frame.keys())
+
+        log.info(f"Rendering → {strip} ({pixel_count} px), zones={ [z.name for z in zone_ids] }")
+
+        # zone length validation
+        for z in zone_ids:
+            expected = strip.mapper.get_zone_length(z)
+            actual = len(strip_frame[z])
+            if expected != actual:
+                log.warn(f"LENGTH MISMATCH {z.name} on {strip}: expected {expected}, got {actual}")
+
+            try:
+                idx = strip.mapper.get_indices(z)
+            except Exception:
+                idx = []
+            log.debug(f"Zone {z.name}: phys={len(idx)}, sample={idx[:6]}")
+
+        # hardware frame sanity check
+        try:
+            hw = strip.hardware.get_frame()
+            if len(hw) != pixel_count:
+                log.warn(f"hardware.get_frame(): {len(hw)} != {pixel_count}")
+        except Exception as ex:
+            log.debug(f"hardware.get_frame() failed: {ex}", exc_info=True)
+    
+    def _apply_strip_frame(self, strip, strip_frame):
+        """Send pixel data to hardware."""
+        log.debug(
+            f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "
+            f"{[z.name for z in strip_frame.keys()]}"
+        )
+        strip.show_full_pixel_frame(strip_frame)
+        log.debug(f"show_full_pixel_frame completed on {strip}")
     # ============================================================
     # Helpers
     # ============================================================
@@ -486,6 +583,9 @@ class FrameManager:
                     merged[zone_id] = pix
             else:
                 merged[zone_id] = list(state.pixels)
+
+        # Debug: log which zones are in merged
+        log.debug(f"_merge_partial_update: updates has {len(updates)} zones {list(updates.keys())}, merged has {len(merged)} zones {list(merged.keys())}")
 
         # Aktualizujemy ZoneRenderState
         for zone_id, pix in merged.items():

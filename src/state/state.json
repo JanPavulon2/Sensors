@@ -1,49 +1,37 @@
 {
-  "animations": {
-    "SNAKE": {
-      "enabled": false,
-      "parameters": {
-        "ANIM_SPEED": 80,
-        "ANIM_PRIMARY_COLOR_HUE": 0,
-        "ANIM_LENGTH": 5
-      }
-    },
-    "BREATHE": {
-      "enabled": false,
-      "parameters": {
-        "ANIM_SPEED": 50,
-        "ANIM_INTENSITY": 100
-      }
-    }
-  },
   "zones": {
     "floor": {
       "color": {
-        "mode": "HUE",
-        "hue": 300
+        "mode": "PRESET",
+        "preset_name": "red"
       },
-      "brightness": 100,
+      "brightness": 25.0,
       "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {
-          "ANIM_SPEED": 50,
-          "ANIM_INTENSITY": 100
+          "ANIM_SPEED": 60
         }
       }
     },
     "left": {
       "color": {
-        "mode": "HUE",
-        "hue": 130
+        "mode": "PRESET",
+        "preset_name": "green"
       },
       "brightness": 25.0,
-      "mode": "STATIC"
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 100
+        }
+      }
     },
     "top": {
       "color": {
-        "mode": "HUE",
-        "hue": 285
+        "mode": "PRESET",
+        "preset_name": "blue"
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -54,23 +42,35 @@
         "preset_name": "indigo"
       },
       "brightness": 87.5,
-      "mode": "STATIC"
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 40
+        }
+      }
     },
     "bottom": {
-      "color": {
-        "mode": "HUE",
-        "hue": 120
-      },
-      "brightness": 100,
-      "mode": "STATIC"
-    },
-    "lamp": {
       "color": {
         "mode": "PRESET",
         "preset_name": "ocean"
       },
-      "brightness": 100,
+      "brightness": 20,
       "mode": "STATIC"
+    },
+    "lamp": {
+      "color": {
+        "mode": "HUE",
+        "hue": 179
+      },
+      "brightness": 100,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 40
+        }
+      }
     },
     "back": {
       "color": {
@@ -89,19 +89,25 @@
     },
     "pixel": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "lime"
+        "mode": "HUE",
+        "hue": 129
       },
-      "brightness": 37.5,
+      "brightness": 100,
       "mode": "STATIC"
     },
     "preview": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "pink"
+        "preset_name": "red"
       },
       "brightness": 12.5,
-      "mode": "STATIC"
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 20
+        }
+      }
     },
     "pixel2": {
       "color": {
@@ -109,21 +115,13 @@
         "preset_name": "cyan"
       },
       "brightness": 50.0,
-      "mode": "STATIC",
-      "animation": {
-        "id": "SNAKE",
-        "parameters": {
-          "ANIM_SPEED": 50,
-          "ANIM_PRIMARY_COLOR_HUE": 0,
-          "ANIM_LENGTH": 5
-        }
-      }
+      "mode": "STATIC"
     }
   },
   "current_animation": {
     "id": "BREATHE",
     "parameters": {
-      "ANIM_SPEED": 50,
+      "ANIM_SPEED": 40,
       "ANIM_PRIMARY_COLOR_HUE": 0,
       "ANIM_INTENSITY": 100
     }

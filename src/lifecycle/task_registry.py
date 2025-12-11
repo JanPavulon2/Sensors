@@ -133,6 +133,8 @@ class TaskRegistry:
     - Assist shutdown coordinator by exposing active tasks
     """
 
+    broadcasting_enabled = True
+    
     _instance: Optional["TaskRegistry"] = None
 
     def __init__(self) -> None:
@@ -255,6 +257,9 @@ class TaskRegistry:
     # -----------------------------
     async def _broadcast_task_event(self, event_type: str, task_data: dict[str, Any]) -> None:
         """Broadcast a task event to connected WebSocket clients."""
+        if not TaskRegistry.broadcasting_enabled:
+            return
+        
         try:
             from api.websocket_tasks import broadcast_task_update
             await broadcast_task_update(event_type, task_data)

@@ -2,11 +2,13 @@
 System endpoints - Task introspection, health, and monitoring
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, List
+from fastapi import APIRouter, Depends
+from typing import Dict, Any
 from datetime import datetime, timezone
 from lifecycle.task_registry import TaskRegistry
 from utils.logger import get_logger, LogCategory
+from api.dependencies import get_service_container
+from api.schemas.animation import AnimationResponse, AnimationListResponse
 
 log = get_logger().for_category(LogCategory.API)
 
@@ -185,3 +187,45 @@ async def health_check() -> Dict[str, Any]:
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+# ============================================================================
+# ANIMATION ENDPOINTS
+# ============================================================================
+
+@router.get(
+    "/animations",
+    response_model=AnimationListResponse,
+    summary="List all animations",
+    description="Get all available animation definitions"
+)
+async def list_animations(
+    services = Depends(get_service_container)
+) -> AnimationListResponse:
+    """
+    Get all available animations.
+
+    Returns all animation definitions from animations.yaml with their
+    parameters and descriptions.
+
+    **Returns:**
+    - animations: List of animation definitions
+    - count: Total number of animations
+    """
+    animation_service = services.animation_service
+    animations = animation_service.get_all()
+
+    animation_responses = [
+        AnimationResponse(
+            id=anim.id.name,
+            display_name=anim.display_name,
+            description=anim.description,
+            parameters=[p.name for p in anim.parameters]
+        )
+        for anim in animations
+    ]
+
+    return AnimationListResponse(
+        animations=animation_responses,
+        count=len(animation_responses)
+    )

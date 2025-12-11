@@ -2,31 +2,17 @@
 Animation system for LED strips
 
 Provides base classes and engine for managing LED animations.
+
+Current implementation:
+- engine_v2: Per-zone animation engine (active)
+- base: Base animation class
+- breathe, color_fade, etc.: Animation implementations
 """
 
-# from animations.base import BaseAnimation
-# from animations.engine import AnimationEngine
-# from animations.breathe import BreatheAnimation
-# from animations.color_fade import ColorFadeAnimation
-# from animations.snake import SnakeAnimation
-# from animations.color_snake import ColorSnakeAnimation
-# from animations.color_cycle import ColorCycleAnimation
-
-# __all__ = [
-#     'BaseAnimation',
-#     'AnimationEngine',
-#     'BreatheAnimation',
-#     'ColorFadeAnimation',
-#     'SnakeAnimation',
-#     'ColorSnakeAnimation',
-#     'ColorCycleAnimation'
-# ]
-
 __all__ = [
-    "engine",
+    "engine_v2",
     "base",
     "breathe",
-    "breatheV2",
     "color_fade",
     "color_cycle",
     "color_snake",

@@ -9,5 +9,8 @@ export * from './useAuth';
 // Zones
 export * from './useZones';
 
+// Animations
+export * from './useAnimations';
+
 // System
 export * from './useSystem';
