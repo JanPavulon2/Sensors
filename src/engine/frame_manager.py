@@ -37,13 +37,11 @@ from collections import deque
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
-from models.frame import PreviewFrame
 from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2, MainStripFrame, ZoneUpdateValue
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
 log = get_logger().for_category(LogCategory.RENDER_ENGINE)
-
 
 class WS2811Timing:
     """
@@ -179,12 +177,8 @@ class FrameManager:
         and wraps them into MainStripFrame for the queue system.
         """
 
-        from models.frame_v2 import (
-            SingleZoneFrame, MultiZoneFrame, PixelFrameV2
-        )
-
-        log.debug(f"FrameManager.push_frame: received {type(frame).__name__} from {getattr(frame, 'source', '?')} "
-            f"priority={getattr(frame, 'priority', '?')} zone={getattr(frame, 'zone_id', '?')}")
+        # log.debug(f"FrameManager.push_frame: received {type(frame).__name__} from {getattr(frame, 'source', '?')} "
+        #    f"priority={getattr(frame, 'priority', '?')} zone={getattr(frame, 'zone_id', '?')}")
 
         async with self._lock:
 
@@ -198,7 +192,7 @@ class FrameManager:
                     updates=cast(Dict[ZoneID, ZoneUpdateValue], {frame.zone_id: frame.color}),
                 )
                 self.main_queues[msf.priority.value].append(msf)
-                log.debug(f"Queued SingleZoneFrame: {frame.zone_id.name} (priority={msf.priority.name})")
+                # log.debug(f"Queued SingleZoneFrame: {frame.zone_id.name} (priority={msf.priority.name})")
                 return
 
             # --- MultiZoneFrame -----------------------------------
@@ -358,8 +352,8 @@ class FrameManager:
             # Liczymy ile ramek czeka w każdej kolejce
             queue_status = {p: len(q) for p, q in self.main_queues.items()}
             has_frames = any(count > 0 for count in queue_status.values())
-            if has_frames:
-                log.debug(f"_drain: Queue status: {queue_status}")
+            # if has_frames:
+            #     log.debug(f"_drain: Queue status: {queue_status}")
 
             # znajdź najwyższy priorytet, który ma coś w kolejce
             for priority_value in sorted(self.main_queues.keys(), reverse=True):
@@ -445,10 +439,10 @@ class FrameManager:
         """
         # Render main strip
         if main_frame:
-            log.debug(f"_render_atomic: rendering frame with {len(getattr(main_frame, 'updates', {}))} zone updates")
+            # log.debug(f"_render_atomic: rendering frame with {len(getattr(main_frame, 'updates', {}))} zone updates")
             self._render_frame(main_frame)
-        else:
-             log.debug(f"_render_atomic: no frame to render")
+        # else:
+            # log.debug(f"_render_atomic: no frame to render")
 
     def _render_frame(self, frame: MainStripFrame) -> None:
         """High-level render pipeline."""
@@ -531,7 +525,7 @@ class FrameManager:
         pixel_count = getattr(strip, "pixel_count", None)
         zone_ids = list(strip_frame.keys())
 
-        log.info(f"Rendering → {strip} ({pixel_count} px), zones={ [z.name for z in zone_ids] }")
+        # log.debug(f"Rendering → {strip} ({pixel_count} px), zones={ [z.name for z in zone_ids] }")
 
         # zone length validation
         for z in zone_ids:
@@ -544,7 +538,7 @@ class FrameManager:
                 idx = strip.mapper.get_indices(z)
             except Exception:
                 idx = []
-            log.debug(f"Zone {z.name}: phys={len(idx)}, sample={idx[:6]}")
+            # log.debug(f"Zone {z.name}: phys={len(idx)}, sample={idx[:6]}")
 
         # hardware frame sanity check
         try:
@@ -556,12 +550,13 @@ class FrameManager:
     
     def _apply_strip_frame(self, strip, strip_frame):
         """Send pixel data to hardware."""
-        log.debug(
-            f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "
-            f"{[z.name for z in strip_frame.keys()]}"
-        )
+        #log.debug(
+        #    f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "
+        #    f"{[z.name for z in strip_frame.keys()]}"
+        # )
         strip.show_full_pixel_frame(strip_frame)
-        log.debug(f"show_full_pixel_frame completed on {strip}")
+        # log.debug(f"show_full_pixel_frame completed on {strip}")
+    
     # ============================================================
     # Helpers
     # ============================================================
@@ -586,7 +581,7 @@ class FrameManager:
                 merged[zone_id] = list(state.pixels)
 
         # Debug: log which zones are in merged
-        log.debug(f"_merge_partial_update: updates has {len(updates)} zones {list(updates.keys())}, merged has {len(merged)} zones {list(merged.keys())}")
+        # log.debug(f"_merge_partial_update: updates has {len(updates)} zones {list(updates.keys())}, merged has {len(merged)} zones {list(merged.keys())}")
 
         # Aktualizujemy ZoneRenderState
         for zone_id, pix in merged.items():

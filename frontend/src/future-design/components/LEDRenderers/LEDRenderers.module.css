@@ -1,0 +1,43 @@
+/**
+ * LED Renderers Styles
+ * Minimal CSS for shape-based LED rendering components
+ */
+
+/* Shared styles for all LED containers */
+.ledContainer {
+  background: rgba(10, 14, 20, 0.9);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+}
+
+/* Individual LED pixel styling */
+.ledPixel {
+  transition: background-color 100ms ease-out, box-shadow 100ms ease-out;
+  border-radius: var(--radius-sm);
+}
+
+/* Circle layout specific */
+.circleContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Matrix layout specific */
+.matrixContainer {
+  display: grid;
+  gap: 0.25rem;
+  padding: var(--space-2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ledContainer {
+    border-radius: var(--radius-sm);
+  }
+
+  .ledPixel {
+    border-radius: 1px;
+  }
+}

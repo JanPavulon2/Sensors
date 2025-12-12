@@ -31,6 +31,12 @@
   color: var(--theme-text-muted);
 }
 
+.demoSection {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--theme-border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
 .content {
   flex: 1;
   padding: var(--space-4);

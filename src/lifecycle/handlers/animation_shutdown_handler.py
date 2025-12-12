@@ -66,7 +66,7 @@ class AnimationShutdownHandler(IShutdownHandler):
 
             if engine and engine.tasks:
                 await engine.stop_all()
-                log.debug("✓ AnimationEngine stopped")
+                log.debug("AnimationEngine stopped")
 
         except Exception as e:
             log.error(f"Error stopping AnimationEngine: {e}")

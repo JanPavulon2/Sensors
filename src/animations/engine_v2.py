@@ -171,8 +171,8 @@ class AnimationEngine:
                 try:
                     frame = await animation.step()
                     frame_count += 1
-                    if frame_count % 60 == 0:
-                        log.debug(f"[{zone_id.name}] Animation frame #{frame_count}")
+                    # if frame_count % 60 == 0:
+                    #     log.debug(f"[{zone_id.name}] Animation frame #{frame_count}")
 
                 except Exception as e:
                     log.error(f"Animation step error on {zone_id.name}: {e}", exc_info=True)

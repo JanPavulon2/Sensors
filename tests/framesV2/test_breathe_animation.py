@@ -1,6 +1,7 @@
 import pytest
 from animations.breathe import BreatheAnimation
 from models.domain.zone import ZoneCombined, ZoneConfig, ZoneState
+from models.domain.animation import AnimationState
 from models.enums import AnimationID, ParamID, ZoneID, ZoneRenderMode
 from models.color import Color
 
@@ -8,21 +9,21 @@ from models.color import Color
 @pytest.mark.asyncio
 async def test_breathe_animation_step_basic():
         config=ZoneConfig(
-                id=ZoneID.TOP, 
-                display_name="TOP", 
+                id=ZoneID.TOP,
+                display_name="TOP",
                 pixel_count=4,
                 enabled=True,
                 reversed=False,
                 order=1,
-                start_index=0, 
+                start_index=0,
                 end_index=4,
                 gpio=18)
-        
+
         state=ZoneState(
                 id=ZoneID.TOP,
-                color=Color.red(), 
+                color=Color.red(),
                 mode=ZoneRenderMode.ANIMATION,
-                animation_id=AnimationID.BREATHE
+                animation=AnimationState(id=AnimationID.BREATHE)
         )
 
         

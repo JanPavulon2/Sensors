@@ -31,11 +31,9 @@ class StaticModeController:
         self.event_bus = services.event_bus
         self.color_manager = services.color_manager
 
-        self.zone_ids = [z.config.id for z in self.zone_service.get_all()]
+        self.zones_ids = [z.config.id for z in self.zone_service.get_all()]
         self.current_param = self.app_state_service.get_state().current_param
-        
-        self.pulse_task = None
-        self.pulse_active = False
+
         self.first_enter = True
 
     # --- Mode Entry/Exit ---
@@ -84,20 +82,20 @@ class StaticModeController:
         log.info("Entering static mode")
 
         is_first_enter = self.first_enter
-        log.debug(f"STATIC enter_mode: first_enter={is_first_enter}")
+        log.debug(f"Static mode controller - enter_mode: first_enter={is_first_enter}")
 
         if self.first_enter:
-            log.debug("STATIC: First enter → no-op (initialize already rendered)")
+            log.debug("Static mode controller: First enter → no-op (initialize already rendered)")
             self.first_enter = False
         else:
             static_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
-            zone_colors = {
+            zones_colors = {
                 z.config.id: z.state.color.with_brightness(z.brightness)
                 for z in static_zones
             }
 
             frame = MultiZoneFrame(
-                zone_colors=zone_colors,
+                zone_colors=zones_colors,
                 priority=FramePriority.MANUAL,
                 source=FrameSource.STATIC,
                 ttl=1.5,
@@ -107,8 +105,8 @@ class StaticModeController:
 
         
         # Start pulsing if edit mode is ON
-        if self.app_state_service.get_state().edit_mode:
-            self._start_pulse()
+        # if self.app_state_service.get_state().edit_mode:
+        #     self._start_pulse()
 
     async def exit_mode(self):
         """
@@ -117,22 +115,22 @@ class StaticModeController:
         Called when switching away from STATIC mode.
         Properly awaits pulse task cancellation for clean async shutdown.
         """
-        log.info("Exiting static mode")
-        await self._stop_pulse_async()
+        # log.info("Exiting static mode")
+        # await self._stop_pulse_async()
 
     def on_edit_mode_change(self, enabled: bool):
         """Start or stop pulsing"""
-        if enabled:
-            self._start_pulse()
-        else:
-            self._stop_pulse()
+        # if enabled:
+        #     self._start_pulse()
+        # else:
+        #     self._stop_pulse()
 
     # --- Parameter Adjustment ---
 
     def adjust_param(self, delta: int):
         # Read current zone index fresh from state (not cached)
         # current_index = self.app_state_service.get_state().current_zone_index
-        # zone_id = self.zone_ids[current_index]
+        # zone_id = self.zones_ids[current_index]
         zone = self._get_current_zone()
         zone_id = zone.id
         
@@ -150,8 +148,8 @@ class StaticModeController:
         zone = self.zone_service.get_zone(zone_id)
         
         # Only render if NOT pulsing
-        if not self.pulse_active:
-            self._submit_zone_update(zone)
+        #if not self.pulse_active:
+        self._submit_zone_update(zone)
         log.info("Zone parameter changed", zone=zone.config.display_name, param=self.current_param.name)
 
 
@@ -180,83 +178,83 @@ class StaticModeController:
         self.app_state_service.set_current_param(self.current_param)
         log.info(f"Cycled param to {self.current_param.name}")
 
-    def _start_pulse(self):
-        # DEBUG: Skip pulse if testing static mode only
-        # try:
-        #     from main_asyncio import DEBUG_NOPULSE
-        #     if DEBUG_NOPULSE:
-        #         return
-        # except ImportError:
-        #     pass
+    # def _start_pulse(self):
+    #     # DEBUG: Skip pulse if testing static mode only
+    #     # try:
+    #     #     from main_asyncio import DEBUG_NOPULSE
+    #     #     if DEBUG_NOPULSE:
+    #     #         return
+    #     # except ImportError:
+    #     #     pass
 
-        if self.pulse_active:
-            return
+    #     if self.pulse_active:
+    #         return
         
-        self.pulse_active = True
-        self.pulse_task = create_tracked_task(
-            self._pulse_task(),
-            category=TaskCategory.BACKGROUND,
-            description="StaticMode: brightness pulse animation"
-        )
+    #     self.pulse_active = True
+    #     self.pulse_task = create_tracked_task(
+    #         self._pulse_task(),
+    #         category=TaskCategory.BACKGROUND,
+    #         description="StaticMode: brightness pulse animation"
+    #     )
 
-    def _stop_pulse(self):
-        """Stop pulse animation (synchronous version for normal mode changes)"""
-        self.pulse_active = False
-        if self.pulse_task:
-            self.pulse_task.cancel()
-            self.pulse_task = None
+    # def _stop_pulse(self):
+    #     """Stop pulse animation (synchronous version for normal mode changes)"""
+    #     self.pulse_active = False
+    #     if self.pulse_task:
+    #         self.pulse_task.cancel()
+    #         self.pulse_task = None
 
-    async def _stop_pulse_async(self):
-        """Stop pulse animation asynchronously (for shutdown cleanup)"""
-        self.pulse_active = False
-        if self.pulse_task and not self.pulse_task.done():
-            self.pulse_task.cancel()
-            try:
-                await self.pulse_task
-            except asyncio.CancelledError:
-                pass
-            self.pulse_task = None
+    # async def _stop_pulse_async(self):
+    #     """Stop pulse animation asynchronously (for shutdown cleanup)"""
+    #     self.pulse_active = False
+    #     if self.pulse_task and not self.pulse_task.done():
+    #         self.pulse_task.cancel()
+    #         try:
+    #             await self.pulse_task
+    #         except asyncio.CancelledError:
+    #             pass
+    #         self.pulse_task = None
 
-    async def _pulse_task(self):
-        """
-        Pulse animation for the currently selected zone.
+    # async def _pulse_task(self):
+    #     """
+    #     Pulse animation for the currently selected zone.
 
-        Submits ZoneFrame with PULSE priority directly to FrameManager.
-        Follows zone selection changes dynamically.
-        """
-        cycle = 1.0
-        steps = 40
-        while self.pulse_active:
-            for step in range(steps):
-                if not self.pulse_active:
-                    break
+    #     Submits ZoneFrame with PULSE priority directly to FrameManager.
+    #     Follows zone selection changes dynamically.
+    #     """
+    #     cycle = 1.0
+    #     steps = 40
+    #     while self.pulse_active:
+    #         for step in range(steps):
+    #             if not self.pulse_active:
+    #                 break
 
-                # Get current zone EACH step (allows pulse to follow zone cycling)
-                current_zone = self._get_current_zone()
-                base = current_zone.brightness
+    #             # Get current zone EACH step (allows pulse to follow zone cycling)
+    #             current_zone = self._get_current_zone()
+    #             base = current_zone.brightness
 
-                # Calculate brightness factor (0.2 to 1.0)
-                scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
-                pulse_brightness = int(base * scale)
+    #             # Calculate brightness factor (0.2 to 1.0)
+    #             scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
+    #             pulse_brightness = int(base * scale)
 
-                # Create ZoneFrame with pulsed brightness
-                color = current_zone.state.color.with_brightness(pulse_brightness)
-                frame = SingleZoneFrame(
-                    zone_id=current_zone.id,
-                    color=color,
-                    priority=FramePriority.PULSE,
-                    source=FrameSource.PULSE,
-                    ttl=1.0,
-                )
+    #             # Create ZoneFrame with pulsed brightness
+    #             color = current_zone.state.color.with_brightness(pulse_brightness)
+    #             frame = SingleZoneFrame(
+    #                 zone_id=current_zone.id,
+    #                 color=color,
+    #                 priority=FramePriority.PULSE,
+    #                 source=FrameSource.PULSE,
+    #                 ttl=1.0,
+    #             )
 
-                await self.frame_manager.push_frame(frame)
+    #             await self.frame_manager.push_frame(frame)
 
-                await asyncio.sleep(cycle / steps)
+    #             await asyncio.sleep(cycle / steps)
 
     # --- Helper methods ---
 
     def _get_current_zone(self) -> ZoneCombined:
         """Get currently selected zone from app state"""
         current_index = self.app_state_service.get_state().current_zone_index
-        current_zone_id = self.zone_ids[current_index]
+        current_zone_id = self.zones_ids[current_index]
         return self.zone_service.get_zone(current_zone_id)

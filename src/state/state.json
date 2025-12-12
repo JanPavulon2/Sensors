@@ -2,11 +2,15 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "RGB",
+        "rgb": [
+          86,
+          52,
+          76
+        ]
       },
-      "brightness": 25.0,
-      "mode": "ANIMATION",
+      "brightness": 0.0,
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -16,10 +20,14 @@
     },
     "left": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "green"
+        "mode": "RGB",
+        "rgb": [
+          0,
+          62,
+          0
+        ]
       },
-      "brightness": 25.0,
+      "brightness": 0.0,
       "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
@@ -30,8 +38,12 @@
     },
     "top": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "blue"
+        "mode": "RGB",
+        "rgb": [
+          31,
+          31,
+          47
+        ]
       },
       "brightness": 100,
       "mode": "STATIC"
@@ -41,8 +53,8 @@
         "mode": "PRESET",
         "preset_name": "indigo"
       },
-      "brightness": 87.5,
-      "mode": "ANIMATION",
+      "brightness": 100,
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -60,11 +72,15 @@
     },
     "lamp": {
       "color": {
-        "mode": "HUE",
-        "hue": 179
+        "mode": "RGB",
+        "rgb": [
+          133,
+          177,
+          51
+        ]
       },
       "brightness": 100,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -89,19 +105,23 @@
     },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 129
+        "mode": "PRESET",
+        "preset_name": "blue"
       },
-      "brightness": 100,
+      "brightness": 12.5,
       "mode": "STATIC"
     },
     "preview": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "RGB",
+        "rgb": [
+          0,
+          240,
+          255
+        ]
       },
       "brightness": 12.5,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -111,10 +131,14 @@
     },
     "pixel2": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "cyan"
+        "mode": "RGB",
+        "rgb": [
+          227,
+          0,
+          0
+        ]
       },
-      "brightness": 50.0,
+      "brightness": 100,
       "mode": "STATIC"
     }
   },

@@ -44,7 +44,7 @@ class ApplicationStateService:
         self._save_task: Optional[asyncio.Task] = None
         self._save_delay = 0.5  # 500ms debounce window
 
-        # log.info(f"ApplicationStateService initialized: {self.state.main_mode.name} mode")
+        # log.info(f"ApplicationStateService initialized: {self.state.edit_mode} mode")
 
     # === Internal Methods ===
 

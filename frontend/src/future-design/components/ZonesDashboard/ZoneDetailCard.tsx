@@ -14,9 +14,10 @@ import type { ZoneCombined, AnimationID } from '../../types/index';
 import { hueToRGB, getDefaultPresets } from '../../utils/colors';
 import { ColorControlPanel } from '../ColorControl/ColorControlPanel';
 import { AnimationControlPanel } from '../AnimationControl/AnimationControlPanel';
+import { LEDShapeRenderer } from '../LEDRenderers/LEDShapeRenderer';
 import styles from './ZonesDashboard.module.css';
 
-type RGBColor = [number, number, number];
+export type RGBColor = [number, number, number];
 
 interface ZoneDetailCardProps {
   zone: ZoneCombined;
@@ -56,7 +57,7 @@ export const ZoneDetailCard: React.FC<ZoneDetailCardProps> = ({
 
   // Collapsible section states
   const [expandedSections, setExpandedSections] = useState({
-    animation: true,
+    animation: false,
     color: true,
     status: false,
   });
@@ -172,18 +173,39 @@ export const ZoneDetailCard: React.FC<ZoneDetailCardProps> = ({
         {/* Preview */}
         <div className={styles.previewSection}>
           <h4 className={styles.sectionLabel}>Live Preview</h4>
-          <div className={styles.ledStripContainer}>
-            {ledColors.map((color, idx) => (
-              <div
-                key={idx}
-                className={styles.ledPixel}
-                style={{
-                  backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-                  boxShadow: `0 0 8px rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`,
-                }}
+          {(() => {
+            // Calculate dimensions based on shape
+            const shape = zone.shapeConfig?.shape || 'strip';
+            const orientation = zone.shapeConfig?.shape === 'strip' && 'orientation' in zone.shapeConfig
+              ? zone.shapeConfig.orientation
+              : 'horizontal';
+            let width = 560, height = 80;
+
+            if (shape === 'strip' && orientation === 'vertical') {
+              // Vertical strips need more height, less width
+              width = 100;
+              height = 300;
+            } else if (shape === 'circle') {
+              // Circles need square space
+              width = 300;
+              height = 300;
+            } else if (shape === 'matrix') {
+              // Matrices need more space
+              width = 320;
+              height = 240;
+            }
+            // Default horizontal strip: 560x80
+
+            return (
+              <LEDShapeRenderer
+                pixelCount={zone.pixelCount}
+                ledColors={ledColors}
+                shapeConfig={zone.shapeConfig}
+                width={width}
+                height={height}
               />
-            ))}
-          </div>
+            );
+          })()}
         </div>
 
         {/* Status Section (Collapsible) */}
@@ -232,6 +254,27 @@ export const ZoneDetailCard: React.FC<ZoneDetailCardProps> = ({
           )}
         </div>
 
+        {/* Color Section (Collapsible) */}
+        <div className={styles.collapsibleSection}>
+          <button
+            className={styles.sectionHeader}
+            onClick={() => toggleSection('color')}
+          >
+            <span>{expandedSections.color ? '▼' : '▶'} Color</span>
+          </button>
+          {expandedSections.color && (
+            <div className={styles.sectionContent}>
+              <ColorControlPanel
+                color={zone.color}
+                brightness={zone.brightness || 100}
+                onColorChange={handleColorChange}
+                onBrightnessChange={handleBrightnessChange}
+                compact
+              />
+            </div>
+          )}
+        </div>
+
         {/* Animation Section (Collapsible) */}
         <div className={styles.collapsibleSection}>
           <button
@@ -253,27 +296,6 @@ export const ZoneDetailCard: React.FC<ZoneDetailCardProps> = ({
                 enabled={zone.enabled !== false}
                 onAnimationChange={handleAnimationChange}
                 onParameterChange={() => {}}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Color Section (Collapsible) */}
-        <div className={styles.collapsibleSection}>
-          <button
-            className={styles.sectionHeader}
-            onClick={() => toggleSection('color')}
-          >
-            <span>{expandedSections.color ? '▼' : '▶'} Color</span>
-          </button>
-          {expandedSections.color && (
-            <div className={styles.sectionContent}>
-              <ColorControlPanel
-                color={zone.color}
-                brightness={zone.brightness || 100}
-                onColorChange={handleColorChange}
-                onBrightnessChange={handleBrightnessChange}
-                compact
               />
             </div>
           )}

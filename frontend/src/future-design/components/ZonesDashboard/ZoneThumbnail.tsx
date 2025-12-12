@@ -12,6 +12,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import type { ZoneCombined } from '../../types/index';
 import { hueToRGB, getDefaultPresets } from '../../utils/colors';
+import { LEDShapeRenderer } from '../LEDRenderers/LEDShapeRenderer';
 import styles from './ZonesDashboard.module.css';
 
 type RGBColor = [number, number, number];
@@ -99,17 +100,15 @@ export const ZoneThumbnail: React.FC<ZoneThumbnailProps> = ({
 
   return (
     <div className={`${styles.thumbnail} ${isSelected ? styles.selected : ''}`} onClick={onClick}>
-      <div className={styles.thumbnailLedStrip}>
-        {ledColors.map((color, idx) => (
-          <div
-            key={idx}
-            className={styles.thumbnailLedPixel}
-            style={{
-              backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-              boxShadow: `0 0 4px rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`,
-            }}
-          />
-        ))}
+      <div style={{ padding: '0.25rem' }}>
+        <LEDShapeRenderer
+          pixelCount={zone.pixelCount}
+          ledColors={ledColors}
+          shapeConfig={zone.shapeConfig}
+          width={110}
+          height={32}
+          isCompact
+        />
       </div>
       <div className={styles.info}>
         <h4 className={styles.name}>{zone.displayName}</h4>

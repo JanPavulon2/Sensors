@@ -259,7 +259,7 @@ async def main():
                     log.error(f"Hardware polling error: {error}", exc_info=True)
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:
-            log.debug("Hardware polling loop cancelled.")
+            log.debug("Hardware polling loop cancelled", category=LogCategory.HARDWARE)
             raise
         
     polling_task =  create_tracked_task(

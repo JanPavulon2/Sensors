@@ -10,9 +10,10 @@ import asyncio
 import json
 import logging
 from typing import Set
+from utils.logger import get_category_logger, LogCategory
 
 # Get Python logger for internal errors only
-logger = logging.getLogger(__name__)
+logger = get_category_logger(LogCategory.WEBSOCKET)
 
 # Track active task WebSocket connections
 _active_task_websockets: Set[WebSocket] = set()
@@ -116,7 +117,7 @@ async def websocket_tasks_endpoint(websocket: WebSocket):
                 # Proper disconnect - re-raise to outer handler
                 raise
             except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON from {client_addr}: {data}")
+                logger.warn(f"Invalid JSON from {client_addr}: {data}")
             except RuntimeError as e:
                 # RuntimeError is raised when trying to receive after disconnect message
                 if "disconnect message" in str(e).lower():
@@ -184,4 +185,4 @@ async def _handle_task_command(
         })
 
     else:
-        logger.warning(f"Unknown task command: {cmd}")
+        logger.warn(f"Unknown task command: {cmd}")

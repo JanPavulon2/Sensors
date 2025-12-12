@@ -24,6 +24,29 @@ export interface ColorPreset {
   hex?: string;
 }
 
+// ============ Zone Shape System ============
+
+export type ZoneShape = 'strip' | 'circle' | 'matrix';
+
+export type StripOrientation = 'horizontal' | 'vertical';
+
+export interface StripConfig {
+  shape: 'strip';
+  orientation: StripOrientation;
+}
+
+export interface CircleConfig {
+  shape: 'circle';
+}
+
+export interface MatrixConfig {
+  shape: 'matrix';
+  rows: number;
+  columns: number;
+}
+
+export type ShapeConfig = StripConfig | CircleConfig | MatrixConfig;
+
 // ============ Zone System ============
 
 export type ZoneID = string;
@@ -38,6 +61,7 @@ export interface ZoneConfig {
   startIndex: number;
   endIndex: number;
   gpio: number;
+  shapeConfig?: ShapeConfig; // defaults to horizontal strip if not specified
 }
 
 export interface ZoneState {

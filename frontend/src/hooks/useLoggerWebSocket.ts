@@ -58,6 +58,12 @@ export const useLoggerWebSocket = ({
     if (!enabled) return;
 
     const connect = () => {
+      // Prevent creating duplicate connections if one is already active
+      if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+        console.log('Logger WebSocket connection already exists, skipping reconnect');
+        return;
+      }
+
       try {
         wsRef.current = new WebSocket(url);
 
@@ -94,11 +100,15 @@ export const useLoggerWebSocket = ({
 
         wsRef.current.onclose = () => {
           console.log('Logger WebSocket disconnected, attempting reconnect...');
+          // Clear the ref so next connect() call will create a fresh connection
+          wsRef.current = null;
           // Attempt reconnect after 3 seconds
           reconnectTimeoutRef.current = setTimeout(connect, 3000);
         };
       } catch (error) {
         console.error('Failed to connect to logger WebSocket:', error);
+        // Clear the ref on error so next attempt creates a fresh connection
+        wsRef.current = null;
         // Attempt reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       }
@@ -107,11 +117,17 @@ export const useLoggerWebSocket = ({
     connect();
 
     return () => {
+      // Clear any pending reconnect attempts
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
+      // Close the connection and clear the ref to prevent stale closures
       if (wsRef.current) {
+        // Remove the onclose handler temporarily to prevent reconnect scheduling during cleanup
+        wsRef.current.onclose = null;
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [enabled, url, handleMessage]); // Only stable dependencies - no store methods

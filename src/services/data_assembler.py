@@ -107,12 +107,8 @@ class DataAssembler:
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
 
-        # Schedule new save with debounce delay
-        self._save_task = create_tracked_task(
-            self._debounced_save(),
-            category=TaskCategory.SYSTEM,
-            description="DataAssembler: debounced state save"
-        )
+        # Schedule new save with debounce delay using normal asyncio task
+        self._save_task = asyncio.create_task(self._debounced_save())
 
     def build_animations(self) -> List[AnimationConfig]:
         """Build animation config objects from YAML"""
