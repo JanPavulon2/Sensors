@@ -19,6 +19,9 @@ class ZoneService:
         self._by_id = {zone.config.id: zone for zone in self.zones}
         self.app_state_service = app_state_service
 
+        # Track which zone was last modified to enable selective saves
+        self._last_modified_zone_id: Optional[ZoneID] = None
+
         log.info(f"ZoneService initialized with {len(self.zones)} zones")
 
     def get_zone(self, zone_id: ZoneID) -> ZoneCombined:
@@ -31,7 +34,7 @@ class ZoneService:
 
     def get_selected_zone(self) -> Optional[ZoneCombined]:
         """
-        Get currently selected zone based on ApplicationState.current_zone_index
+        Get currently selected zone based on ApplicationState.selected_zone_index
 
         Per-zone mode: The selected zone determines which zone's mode and parameters
         are being edited. A zone is always selected (even if not visible due to lack
@@ -45,7 +48,7 @@ class ZoneService:
             return None
 
         app_state = self.app_state_service.get_state()
-        zone_index = app_state.current_zone_index
+        zone_index = app_state.selected_zone_index
 
         if 0 <= zone_index < len(self.zones):
             return self.zones[zone_index]
@@ -70,28 +73,28 @@ class ZoneService:
         zone = self.get_zone(zone_id)
         zone.state.color = color
         log.info(f"Set {zone.config.display_name} color: {color.mode.name}")
-        self.save()
+        self._save_zone(zone_id)
 
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
         """Set zone brightness"""
         zone = self.get_zone(zone_id)
         zone.set_param_value(ParamID.ZONE_BRIGHTNESS, brightness)
         log.info(f"Set {zone.config.display_name} brightness: {brightness}%")
-        self.save()
+        self._save_zone(zone_id)
 
     def adjust_parameter(self, zone_id: ZoneID, param_id: ParamID, delta: int) -> None:
         """Adjust zone parameter by delta steps"""
         zone = self.get_zone(zone_id)
         zone.adjust_param(param_id, delta)
         log.info(f"Adjusted {zone.config.display_name}.{param_id.name}: {zone.get_param_value(param_id)}")
-        self.save()
+        self._save_zone(zone_id)
 
     def set_parameter(self, zone_id: ZoneID, param_id: ParamID, value: Any) -> None:
         """Set zone parameter value directly"""
         zone = self.get_zone(zone_id)
         zone.set_param_value(param_id, value)
         log.info(f"Set {zone.config.display_name}.{param_id.name} = {value}")
-        self.save()
+        self._save_zone(zone_id)
 
     def get_rgb(self, zone_id: ZoneID) -> tuple[int, int, int]:
         """Get zone RGB color with brightness applied"""
@@ -147,6 +150,21 @@ class ZoneService:
                 print(f"GPIO {gpio}: {len(zones)} zones")
         """
         return sorted(set(zone.config.gpio for zone in self.zones))
+
+    def _save_zone(self, zone_id: ZoneID) -> None:
+        """
+        Save only the specified zone to state.json.
+
+        This is more efficient than saving all zones when only one was modified.
+        The assembler's debouncing will batch rapid saves within 500ms window.
+
+        Args:
+            zone_id: ID of the zone to save
+        """
+        self._last_modified_zone_id = zone_id
+        zone = self.get_zone(zone_id)
+        # Pass only the modified zone to reduce I/O (assembler handles debouncing)
+        self.assembler.save_zone_state([zone])
 
     def save(self) -> None:
         """Persist current state"""
