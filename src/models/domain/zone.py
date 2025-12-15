@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from models.color import Color
 from models.enums import ParamID, ZoneID, ZoneRenderMode
-from models.domain.parameter import ParameterCombined
 from models.domain.animation import AnimationState
 from typing import Dict, Any, Optional
 from utils.enum_helper import EnumHelper 
@@ -43,7 +42,6 @@ class ZoneCombined:
     """Zone with config, state, and parameters"""
     config: ZoneConfig
     state: ZoneState
-    parameters: Dict[ParamID, ParameterCombined] = field(default_factory=dict)
 
     @property
     def id(self) -> ZoneID:

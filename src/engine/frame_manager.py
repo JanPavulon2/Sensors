@@ -346,13 +346,23 @@ class FrameManager:
     # === Frame Selection ===
 
     async def _drain_frames(self) -> Optional[MainStripFrame]:
+        """
+        Drain and merge frames from all priority queues.
+
+        Strategy:
+        1. Collect ANIMATION frames (continuous animation source)
+        2. Overlay higher priorities (PULSE, TRANSITION, DEBUG)
+        3. Fill gaps with lower priorities (MANUAL, IDLE) for zones without animations
+
+        Result: Complete frame with animations, overlays, and fallbacks merged intelligently.
+        """
         async with self._lock:
             merged_updates = {}
             highest_priority = None
             ttl = 0.0
             source = None
-            
-            # 1. Zawsze najpierw zbierz ANIMATION (ciągłe źródło)
+
+            # 1. Always collect ANIMATION first (base layer - continuous animations)
             anim_queue = self.main_queues.get(FramePriority.ANIMATION.value)
             if anim_queue:
                 while anim_queue:
@@ -364,11 +374,11 @@ class FrameManager:
                     ttl = max(ttl, frame.ttl)
                     source = source or frame.source
                     highest_priority = FramePriority.ANIMATION
-              
-            # 2. Następnie overlaye (PULSE, DEBUG, itd.)
+
+            # 2. Apply overlays (PULSE, DEBUG, TRANSITION - higher priority than ANIMATION)
             for priority_value in sorted(self.main_queues.keys(), reverse=True):
                 if priority_value <= FramePriority.ANIMATION.value:
-                    continue
+                    continue  # Will handle lower priorities separately
 
                 queue = self.main_queues[priority_value]
                 while queue:
@@ -376,11 +386,32 @@ class FrameManager:
                     if frame.is_expired():
                         continue
                     for zid, val in frame.updates.items():
-                        merged_updates[zid] = val
+                        merged_updates[zid] = val  # Override ANIMATION for this zone
                     ttl = max(ttl, frame.ttl)
                     source = source or frame.source
                     highest_priority = frame.priority
-            
+
+            # 3. Fill gaps with lower priorities (MANUAL for static zones, IDLE fallback)
+            for priority_value in sorted(self.main_queues.keys()):
+                if priority_value >= FramePriority.ANIMATION.value:
+                    continue  # Already handled above
+
+                queue = self.main_queues[priority_value]
+                while queue:
+                    frame = queue.popleft()
+                    if frame.is_expired():
+                        continue
+                    # Only fill zones that don't have updates yet
+                    for zid, val in frame.updates.items():
+                        if zid not in merged_updates:
+                            merged_updates[zid] = val
+                    ttl = max(ttl, frame.ttl)
+                    if source is None:
+                        source = frame.source
+                    # Update highest_priority if this is our first frame
+                    if highest_priority is None:
+                        highest_priority = frame.priority
+
             if not merged_updates or not source:
                 return None
 
@@ -390,63 +421,7 @@ class FrameManager:
                 source=source,
                 partial=True,
                 updates=merged_updates,
-            )
-                        
-            # Liczymy ile ramek czeka w każdej kolejce
-            queue_status = {p: len(q) for p, q in self.main_queues.items()}
-            has_frames = any(count > 0 for count in queue_status.values())
-            if has_frames:
-                animation_queue_len = len(self.main_queues.get(FramePriority.ANIMATION.value, []))
-                pulse_queue_len = len(self.main_queues.get(FramePriority.PULSE.value, []))
-                log.debug(f"Frame queue status - ANIMATION: {animation_queue_len}, PULSE: {pulse_queue_len}, other: {queue_status}")
-
-            merged_updates = {}
-            highest_priority = None
-            ttl = 0.0
-            source = None
-
-            # Drain highest priority frames first (but collect all)
-            for priority_value in sorted(self.main_queues.keys(), reverse=True):
-                queue = self.main_queues[priority_value]
-                if not queue:
-                    continue
-
-                merged_updates = {}
-                ttl = 0.0
-                source = None
-                priority_enum = None
-                frames_processed = 0
-                frames_expired = 0
-                while queue:
-                    frame = queue.popleft()
-                    frames_processed += 1
-                    if frame.is_expired():
-                        frames_expired += 1
-                        continue
-
-                    updates = getattr(frame, "updates", None)
-                    if updates:
-                        for zid, val in updates.items():
-                            merged_updates[zid] = val
-
-                    ttl = max(ttl, getattr(frame, "ttl", 0.0))
-                    if source is None:
-                        source = getattr(frame, "source", None)
-                    if priority_enum is None:
-                        priority_enum = getattr(frame, "priority", None)
-
-                if merged_updates:
-                    msf = MainStripFrame(
-                        priority=priority_enum or FramePriority.ANIMATION,
-                        ttl=ttl or 0.1,
-                        source=source or FrameSource.ANIMATION,
-                        partial=True,
-                        updates=merged_updates,
-                    )
-                    log.debug(f"Frame: drained priority {priority_value}, {len(merged_updates)} zones")
-                    return msf
-
-        return None        
+            )        
 
     async def _select_frame_by_priority(self) -> Optional[MainStripFrame]:
         """

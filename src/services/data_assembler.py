@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from models.enums import ParamID, AnimationID, ZoneID, ZoneRenderMode
 from models.domain import (
-    ParameterConfig, ParameterState, ParameterCombined,
+    ParameterConfig, ParameterState,
     AnimationConfig, AnimationState,
     ZoneConfig, ZoneState, ZoneCombined,
     ApplicationState

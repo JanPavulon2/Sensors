@@ -58,7 +58,8 @@ class SelectedZoneIndicator:
         self._zone_is_on: bool = True
         self._zone_color: Optional[Color] = None
         self._zone_brightness: int = 100  # 0–100
-
+        
+        self._restart_scheduled = False
         
         # ---- task state ----
         self._running: bool = False
@@ -118,7 +119,18 @@ class SelectedZoneIndicator:
     # ------------------------------------------------------------------
     # Task lifecycle
     # ------------------------------------------------------------------
+    def _schedule_restart(self):
+        if self._restart_scheduled:
+            return
 
+        self._restart_scheduled = True
+        asyncio.create_task(self._restart_soon())
+    
+    async def _restart_soon(self):
+        await asyncio.sleep(0)  # pozwól event loopowi zebrać zmiany
+        self._restart_scheduled = False
+        await self._restart_if_active()
+        
     def _start(self) -> None:
         if self._running:
             return
@@ -129,11 +141,14 @@ class SelectedZoneIndicator:
 
         log.info("Indicator starting")
         self._running = True
-        self._task = create_tracked_task(
-            self._loop(),
-            category=TaskCategory.RENDER,
-            description=f"Selected Zone Indicator ({self._selected_zone_id.name if self._selected_zone_id else 'unknown'})"
-        )
+        
+        self._task = asyncio.create_task(self._loop())
+         
+        # create_tracked_task(
+        #     self._loop(),
+        #     category=TaskCategory.RENDER,
+        #     description=f"Selected Zone Indicator ({self._selected_zone_id.name if self._selected_zone_id else 'unknown'})"
+        # )
 
     def _stop(self) -> None:
         self._running = False
