@@ -47,6 +47,7 @@ class LightingController:
         self.event_bus = event_bus
         self.gpio_manager = gpio_manager
         self.services = service_container
+        
         self.zone_service = service_container.zone_service
         self.animation_service = service_container.animation_service
         self.app_state_service = service_container.app_state_service
@@ -76,7 +77,9 @@ class LightingController:
         )
         
         self.selected_zone_indicator = SelectedZoneIndicator(
-            frame_manager=self.frame_manager)
+            frame_manager=self.frame_manager,
+            event_bus=event_bus
+        )
 
         # TODO: Disabled - needs direct FrameManager rendering implementation
         # log.info("Initializing lamp white mode controller")
@@ -125,20 +128,14 @@ class LightingController:
 
         # Static zones render immediately (await to ensure frames are submitted)
         await self.static_mode_controller.initialize()
-        asyncio.create_task(self.animation_mode_controller.initialize())
+        await self.animation_mode_controller.initialize()
 
         # Initialize the active zone indicator with the selected zone
         selected_zone = self.zone_service.get_selected_zone()
         if selected_zone:
-            self.selected_zone_indicator.on_selected_zone_changed(selected_zone.id)
-            self.selected_zone_indicator.on_zone_render_mode_changed(selected_zone.state.mode)
-            self.selected_zone_indicator.on_zone_is_on_changed(selected_zone.state.is_on)
-            self.selected_zone_indicator.on_zone_color_changed(selected_zone.state.color)
-            self.selected_zone_indicator.on_edit_mode_changed(self.app_state_service.get_state().edit_mode)
-
+            self._sync_indicator(selected_zone)
+        
         log.info("Zone controller initialization coordinated")
-
-    
     # ------------------------------------------------------------------
     # EVENT BUS SUBSCRIPTIONS
     # ------------------------------------------------------------------
@@ -255,12 +252,9 @@ class LightingController:
     def _handle_modulator_click(self):
         """
         Modulator click: Cycle parameter based on selected zone's mode.
-
-        Per-zone mode: Routes to appropriate controller based on zone's mode
-        - STATIC zone: Cycle zone parameters (COLOR → BRIGHTNESS → ...)
-        - ANIMATION zone: Cycle animation parameters (SPEED → INTENSITY → ...)
         """
-        if not self.app_state_service.get_state():
+        
+        if not self.app_state_service.get_state().edit_mode:
             log.info("Modulator click ignored when not in edit mode")
             return
 
@@ -302,15 +296,23 @@ class LightingController:
             is_on=zone.state.is_on,
         )
         
+        self._sync_indicator(zone)
+        
+        if zone.state.mode == ZoneRenderMode.STATIC:
+            self.static_mode_controller.submit_zone(zone)
+
+    def _sync_indicator(self, zone):
         self.selected_zone_indicator.on_selected_zone_changed(zone.id)
         self.selected_zone_indicator.on_zone_render_mode_changed(zone.state.mode)
-        self.selected_zone_indicator.on_zone_is_on_changed(zone.state.is_on)
-        self.selected_zone_indicator.on_zone_color_changed(zone.state.color)
+        self.selected_zone_indicator.on_edit_mode_changed(
+            self.app_state_service.get_state().edit_mode
+        )
 
-        # 🔧 PATCH: re-render STATIC zone immediately
-        # if zone.state.mode == ZoneRenderMode.STATIC:
-        #     self.static_mode_controller.()
-
+        # initial state snapshot
+        self.selected_zone_indicator._zone_color = zone.state.color
+        self.selected_zone_indicator._zone_brightness = zone.brightness
+        self.selected_zone_indicator._zone_is_on = zone.state.is_on
+        
     def _toggle_edit_mode(self):
         """Toggle edit mode and notify controllers"""
         edit_mode_enabled = not self.app_state_service.get_state().edit_mode
@@ -322,10 +324,7 @@ class LightingController:
         """
         Set the render mode of the selectedly selected zone.
 
-        This is called directly by keyboard events (Z - static/X - animation/C - off).
-
-        Properly handles cleanup of old mode before applying new mode by delegating
-        to the mode controllers' enter_mode() and exit_mode() methods.
+        This is called directly by keyboard events (Z - static/X - animation).
         """
         selected_zone = self.zone_service.get_selected_zone()
         if not selected_zone:
@@ -342,7 +341,6 @@ class LightingController:
         log.info(f"Zone {zone_id.name} render mode:  {selected_zone_render_mode.name} → {target_mode.name}")
 
         if selected_zone_render_mode == ZoneRenderMode.ANIMATION:
-            log.debug(f"Exiting ANIMATION mode for {zone_id.name}")
             await self.animation_engine.stop_for_zone(zone_id)
         
         # Update state
@@ -350,12 +348,11 @@ class LightingController:
         self.zone_service.save_state()
 
         self.selected_zone_indicator.on_zone_render_mode_changed(target_mode)
-        self.selected_zone_indicator.on_zone_color_changed(selected_zone.state.color)
-
+        
         # SETUP: Enter new mode after switching
         if target_mode == ZoneRenderMode.STATIC:
             log.debug(f"Entering STATIC mode for {zone_id.name}")
-            self.static_mode_controller.render_zone()
+            self.static_mode_controller.submit_zone(selected_zone)
 
         elif target_mode == ZoneRenderMode.ANIMATION:
             log.debug(f"Entering ANIMATION mode for {zone_id.name}")
@@ -393,12 +390,6 @@ class LightingController:
             await self.animation_engine.start_for_zone(zone_id, anim_id, safe_params)
             log.info(f"Started {anim_id.name} animation for zone {zone_id.name}")
 
-        # elif target_mode == ZoneRenderMode.OFF:
-        #     log.debug(f"Entering OFF mode for {zone_id.name}")
-        #     # OFF mode: ensure animation is stopped
-        #     if self.animation_engine.is_running():
-        #         await self.animation_engine.stop()
-
     # ------------------------------------------------------------------
     # PRIVATE METHODS
     # ------------------------------------------------------------------
@@ -414,68 +405,3 @@ class LightingController:
         anim_id = selected_zone.state.animation.id
         log.info(f"Entering frame-by-frame mode for animation: {anim_id.name} (to be implemented in Phase 3)")
         # TODO: Build params and call frame_playback_controller with per-zone parameters
-
-    async def _toggle_zone_mode(self):
-        """
-        Toggle selectedly selected zone between STATIC ↔ ANIMATION mode.
-
-        Per-zone architecture: Only affects the selected zone, not all zones.
-
-        Flow:
-        1. Get selectedly selected zone
-        2. Stop any animations running on this zone
-        3. Toggle zone mode (STATIC ↔ ANIMATION)
-        4. Start animation if switching to ANIMATION, or render static color if STATIC
-        """
-        selected_zone = self.zone_service.get_selected_zone()
-        if not selected_zone:
-            log.warn("No zone selected for mode toggle")
-            return
-
-        zone_id = selected_zone.config.id
-        log.info(f"Toggling zone mode for {zone_id.name}...")
-
-        # 1. Determine next mode
-        if selected_zone.state.mode == ZoneRenderMode.STATIC:
-            next_mode = ZoneRenderMode.ANIMATION
-        else:
-            next_mode = ZoneRenderMode.STATIC
-
-        # 2. Stop any animation running on this zone
-        # if self.animation_engine.is_running(selected_zone.id):
-        #     selected_anim_id = self.animation_engine.set(selected_zone.id)
-        #     log.debug(f"Stopping animation {selected_anim_id.name if selected_anim_id else '?'}")
-        #     await self.animation_engine.stop_for_zone(zone_id)
-
-        # 3. Update zone mode
-        selected_zone.state.mode = next_mode
-        self.zone_service.save_state()
-        log.info(f"Zone {zone_id.name} mode toggled to {next_mode.name}")
-
-        # Notify indicator of render mode change
-        self.selected_zone_indicator.on_zone_render_mode_changed(next_mode)
-
-        log.info(f"Zone {zone_id.name}: Switching to {next_mode.name} mode")
-        
-    # ------------------------------------------------------------------
-    # CORE OPERATIONS
-    # ------------------------------------------------------------------
-    def clear_all(self) -> None:
-        """Turn off all LEDs by clearing all registered zone strips."""
-        for strip in self.frame_manager.zone_strips:
-            strip.clear()
-        log.info("All LEDs cleared")
-
-    async def stop_all(self) -> None:
-        """Stop all async operations gracefully."""
-        
-        log.debug("Stopping animation engine...")
-        await self.animation_engine.stop_all()
-
-        log.debug("Stopping indicator engine...")
-        await self.selected_zone_indicator.stop_async()
-        
-        log.debug("Clearing all LEDs...")
-        self.clear_all()
-
-        log.debug("LEDController stopped.")

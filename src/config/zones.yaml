@@ -11,47 +11,54 @@ zones:
     order: 1 
     reversed: false
 
-  - id: LEFT
-    name: Left
-    tag: left
-    pixel_count: 4       # 9 physical LEDs (3 * 3)
+  - id: CIRCLE
+    name: Circle
+    tag: circle
+    pixel_count: 14       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 2
 
-  - id: TOP
-    name: Top
-    tag: top
-    pixel_count: 3       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 3
+  # - id: LEFT
+  #   name: Left
+  #   tag: left
+  #   pixel_count: 4       # 9 physical LEDs (3 * 3)
+  #   enabled: true
+  #   order: 2
 
-  - id: RIGHT
-    name: Right
-    tag: right
-    pixel_count: 4       # 9 physical LEDs (3 * 3)
-    enabled: true
-    order: 4
+  # - id: TOP
+  #   name: Top
+  #   tag: top
+  #   pixel_count: 3       # 12 physical LEDs (4 * 3)
+  #   enabled: true
+  #   order: 3
 
-  - id: BOTTOM
-    name: Bottom
-    tag: bottom
-    pixel_count: 3       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 5
+  # - id: RIGHT
+  #   name: Right
+  #   tag: right
+  #   pixel_count: 4       # 9 physical LEDs (3 * 3)
+  #   enabled: true
+  #   order: 4
+
+  # - id: BOTTOM
+  #   name: Bottom
+  #   tag: bottom
+  #   pixel_count: 3       # 12 physical LEDs (4 * 3)
+  #   enabled: true
+  #   order: 5
 
   - id: LAMP
     name: Lamp
     tag: lamp
     pixel_count: 19      # 57 physical LEDs (19 * 3)
     enabled: true
-    order: 6
+    order: 3
 
   - id: PIXEL
     name: Pixel
     tag: pixel
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 7
+    order: 4
     reversed: false
 
   - id: PIXEL2
@@ -59,7 +66,7 @@ zones:
     tag: pixel2
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 8
+    order: 5
     reversed: false
 
   - id: PREVIEW
@@ -67,7 +74,7 @@ zones:
     tag: preview
     pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
     enabled: true
-    order: 9
+    order: 6
     reversed: true
 
   # - id: DESK

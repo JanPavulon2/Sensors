@@ -165,7 +165,7 @@ async def main():
     log.info("Initializing services...")
     animation_service = AnimationService(assembler)
     app_state_service = ApplicationStateService(assembler)
-    zone_service = ZoneService(assembler, app_state_service)
+    zone_service = ZoneService(assembler, app_state_service, event_bus)
 
 
     # ========================================================================
@@ -179,7 +179,7 @@ async def main():
         all_zones = zone_service.get_all()
     )
     
-    hardware.control_panel.event_bus = event_bus
+    # hardware.control_panel.event_bus = event_bus
     
     control_panel_controller = ControlPanelController(
         control_panel=hardware.control_panel, 

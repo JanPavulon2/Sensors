@@ -427,6 +427,9 @@ def create_tracked_task(
     loop = loop or asyncio.get_running_loop()
     task = loop.create_task(coro)
 
+    # Set task name to description for better logging in shutdown
+    task.set_name(description)
+
     TaskRegistry.instance().register(
         task=task,
         category=category,

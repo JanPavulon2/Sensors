@@ -124,13 +124,13 @@ class StaticModeController:
         if target == ZoneEditTarget.BRIGHTNESS:
             self.zone_service.adjust_brightness(zone.id, delta)
 
-        
+
         elif target == ZoneEditTarget.COLOR_HUE:
             self.zone_service.set_color(
                 zone.id,
                 zone.state.color.adjust_hue(delta * 10),
             )
-            
+
         elif target == ZoneEditTarget.COLOR_PRESET:
             self.zone_service.set_color(
                 zone.id,
@@ -141,29 +141,16 @@ class StaticModeController:
             log.warn("Unsupported ZoneEditTarget", target=target)
             return
 
-        updated_zone = self.zone_service.get_zone(zone.id)
-        self._submit_zone_update(updated_zone)
-
+        
+        self.submit_zone(zone)
+        
         log.info(
             "Static zone edited",
             zone=zone.config.display_name,
             target=target.name,
         )
 
-    def render_zone(self) -> None:
-        """
-        Render currently selected zone (used when entering STATIC mode).
-
-        Called when switching a zone to STATIC render mode to display it immediately.
-        """
-        zone = self.zone_service.get_selected_zone()
-        if not zone:
-            log.warn("render_zone: no selected zone")
-            return
-
-        self._submit_zone_update(zone)
-
-    def _submit_zone_update(self, zone: ZoneCombined):
+    def submit_zone(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
         frame = SingleZoneFrame(
             zone_id=zone.config.id,

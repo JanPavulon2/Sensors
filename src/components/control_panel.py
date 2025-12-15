@@ -33,7 +33,6 @@ class ControlPanel:
     def __init__(
         self,
         hardware_manager: HardwareManager,
-        event_bus: EventBus,
         gpio_manager: GPIOManager
     ):
         """
@@ -45,7 +44,6 @@ class ControlPanel:
             gpio_manager: GPIOManager for GPIO pin registration
         """
         self.hardware_manager = hardware_manager
-        self.event_bus = event_bus
         self.gpio_manager = gpio_manager
 
         # Selector (Encoder) - multi-purpose selector

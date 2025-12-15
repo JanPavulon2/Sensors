@@ -517,7 +517,7 @@ class FramePlaybackController:
         try:
             
             # KILL CURRENT RUNNING ANIMATION
-            await self.animation_engine.stop()
+            await self.animation_engine.stop_all()
             await asyncio.sleep(0)
             
             # Load animation frames
@@ -566,7 +566,7 @@ class FramePlaybackController:
             log.debug("Animation rendering resumed")
 
             
-            await self.animation_engine.start(self._animation_id, **self._animation_params)
+            # await self.animation_engine.start(self._animation_id, **self._animation_params)
 
             self.frame_manager.resume()
             

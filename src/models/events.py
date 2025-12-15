@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Generic, TypeVar
 import time
-from models.enums import EncoderSource, ButtonID, KeyboardSource
+from models.color import Color
+from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode
 
 
 class EventType(Enum):
@@ -26,6 +27,8 @@ class EventType(Enum):
     WEB_COMMAND = auto()
     MQTT_COMMAND = auto()
     SYSTEM_EVENT = auto()
+    
+    ZONE_STATE_CHANGED = auto()
 
 TSource = TypeVar("TSource", bound=Enum)
 
@@ -123,3 +126,45 @@ class KeyboardKeyPressEvent(Event[KeyboardSource]):
     @property
     def modifiers(self) -> List[str]:
         return self.data["modifiers"]
+      
+@dataclass
+class ZoneStateChangedEvent(Event[EventSource]):
+    """
+    Zone state changed event - fired when zone color, brightness, or is_on changes.
+
+    Unlike hardware events, this comes from the ZoneService (source=EventSource.ZONE_SERVICE)
+    and carries structured zone state data in addition to the generic data dict.
+    """
+    zone_id: ZoneID
+    color: Optional[Color] = None
+    brightness: Optional[int] = None
+    is_on: Optional[bool] = None
+    render_mode: Optional[ZoneRenderMode] = None
+
+    def __init__(
+        self,
+        zone_id: ZoneID,
+        color: Optional[Color] = None,
+        brightness: Optional[int] = None,
+        is_on: Optional[bool] = None,
+        render_mode: Optional[ZoneRenderMode] = None,
+    ):
+        # Initialize parent Event with structured data
+        super().__init__(
+            type=EventType.ZONE_STATE_CHANGED,
+            source=EventSource.ZONE_SERVICE,
+            data={
+                "zone_id": zone_id.name,
+                "color": str(color) if color else None,
+                "brightness": brightness,
+                "is_on": is_on,
+                "render_mode": render_mode.name if render_mode else None,
+            },
+            timestamp=time.time(),
+        )
+        # Store structured data for type-safe access
+        self.zone_id = zone_id
+        self.color = color
+        self.brightness = brightness
+        self.is_on = is_on
+        self.render_mode = render_mode

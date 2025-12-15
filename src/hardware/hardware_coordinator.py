@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING, List
 
 from components import ControlPanel
 from hardware.gpio.gpio_manager import GPIOManager
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
+from zone_layer.zone_strip import ZoneStrip
 
 if TYPE_CHECKING:
     from managers.hardware_manager import HardwareManager
@@ -24,8 +26,8 @@ class HardwareCoordinator:
     """
 
     def __init__(self, hardware_manager: HardwareManager, gpio_manager: GPIOManager):
-        self.hw = hardware_manager
-        self.gpio = gpio_manager
+        self.hardware_manager = hardware_manager
+        self.gpio_manager = gpio_manager
 
     def initialize(self, all_zones) -> "HardwareBundle":
         from hardware.zone_strip_factory import ZoneStripFactory
@@ -33,18 +35,17 @@ class HardwareCoordinator:
         log.info("HardwareCoordinator: Initializing hardware layer...")
 
         control_panel = ControlPanel(
-            self.hw,
-            None,            # EventBus injected later by Application Coordinator
-            self.gpio
+            self.hardware_manager,
+            self.gpio_manager
         )
 
-        zone_strips = ZoneStripFactory.create(all_zones, self.hw)
+        zone_strips = ZoneStripFactory.create(all_zones, self.hardware_manager)
 
         return HardwareBundle(
             control_panel=control_panel,
             zone_strips=zone_strips,
-            gpio_manager=self.gpio,
-            hardware_manager=self.hw
+            gpio_manager=self.gpio_manager,
+            hardware_manager=self.hardware_manager
         )
 
 
@@ -53,7 +54,13 @@ class HardwareBundle:
     Bundles all hardware objects for higher-level application init.
     """
 
-    def __init__(self, control_panel, zone_strips, gpio_manager, hardware_manager):
+    def __init__(
+        self, 
+        control_panel: ControlPanel, 
+        zone_strips: Dict[int, ZoneStrip], 
+        gpio_manager: GPIOManager, 
+        hardware_manager: HardwareManager
+    ):
         self.control_panel = control_panel
         self.zone_strips = zone_strips
         self.gpio_manager = gpio_manager

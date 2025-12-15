@@ -9,13 +9,12 @@ Current implementation:
 - breathe, color_fade, etc.: Animation implementations
 """
 
+# from .engine import AnimationEngine 
+# from .base import BaseFrame, BaseAnimation
+# from .breathe import BreatheAnimation
+
 __all__ = [
     "engine",
     "base",
-    "breathe",
-    "color_fade",
-    "color_cycle",
-    "color_snake",
-    "snake",
-    "matrix",
+    "breathe"
 ]

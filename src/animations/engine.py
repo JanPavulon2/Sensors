@@ -50,15 +50,18 @@ class AnimationEngine:
         """
         self.frame_manager = frame_manager
         self.zone_service = zone_service
-        
+
         # active tasks: zone_id → asyncio.Task
         self.tasks: Dict[ZoneID, asyncio.Task] = {}
-        
+
         # remembering what runs where
         self.active_anim_ids: Dict[ZoneID, AnimationID] = {}
         self.active_params: Dict[ZoneID, dict] = {}
-        
+
         self._lock = asyncio.Lock()
+
+        # Frame submission control for frame-by-frame debugging
+        self._frozen = False
     
     # ============================================================
     # Core control methods
@@ -111,7 +114,10 @@ class AnimationEngine:
             task = asyncio.create_task(self._run_loop(zone_id, anim))
             self.tasks[zone_id] = task
 
-            log.info(f"Started animation {anim_id.name} on zone {zone_id.name}. Active zones: {list(self.tasks.keys())}")
+            log.info(
+                f"Started animation {anim_id.name} on zone {zone_id.name}",
+                animated_zones=", ".join(z.name for z in self.tasks.keys())
+            )
             
     async def stop_for_zone(self, zone_id: ZoneID):
         """Stop animation for a single zone."""
@@ -184,6 +190,15 @@ class AnimationEngine:
                 except Exception as e:
                     log.error(f"Failed to push frame for {zone_id.name}: {e}", exc_info=True)
 
+                if not self._frozen:
+                    try:
+                        await self.frame_manager.push_frame(frame)
+                    except Exception as e:
+                        log.error(
+                           f"Failed to push frame for {zone_id.name}: {e}",
+                           exc_info=True
+                        )
+                        
                 # yield to event loop (FrameManager drives actual refresh rate)
                 await asyncio.sleep(0)
 
@@ -203,17 +218,6 @@ class AnimationEngine:
     def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
         """Get name of currently running animation"""
         return self.active_anim_ids.get(zone_id)
-
-    # def update_param(self, param: str, value):
-    #     """
-    #     Update parameter of running animation
-
-    #     Args:
-    #         param: Parameter name ('speed', 'color', etc.)
-    #         value: New value
-    #     """
-    #     if self.current_animation:
-    #         self.current_animation.update_param(param, value)
 
     def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
         """

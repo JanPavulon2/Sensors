@@ -47,10 +47,7 @@ hardware_mappings:
   - hardware_id: MAIN_12V
     zones:
       - FLOOR
-      - LEFT
-      - TOP
-      - RIGHT
-      - BOTTOM
+      - CIRCLE
       - LAMP
 
   - hardware_id: AUX_5V

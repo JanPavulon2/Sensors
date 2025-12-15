@@ -1,11 +1,14 @@
 """Zone service - Business logic for zones"""
 
+import asyncio
 from typing import List, Optional
 from models.enums import ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
+from models.events import EventType, ZoneStateChangedEvent
 from services.data_assembler import DataAssembler
 from services.application_state_service import ApplicationStateService
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.ZONE)
@@ -13,12 +16,13 @@ log = get_logger().for_category(LogCategory.ZONE)
 class ZoneService:
     """High-level zone operations"""
 
-    def __init__(self, assembler: DataAssembler, app_state_service: ApplicationStateService):
+    def __init__(self, assembler: DataAssembler, app_state_service: ApplicationStateService, event_bus: EventBus):
         self.assembler = assembler
         self.zones = assembler.build_zones()
         self._by_id = {zone.config.id: zone for zone in self.zones}
         self.app_state_service = app_state_service
-
+        self.event_bus = event_bus
+        
         # Track which zone was last modified to enable selective saves
         self._last_modified_zone_id: Optional[ZoneID] = None
 
@@ -68,20 +72,41 @@ class ZoneService:
     def set_color(self, zone_id: ZoneID, color: Color) -> None:
         zone = self.get_zone(zone_id)
         zone.state.color = color
+        
         self._save_zone(zone_id)
         
-        log.info("Zone color set", zone=zone.config.display_name)
+        log.info(
+            "Zone color set", 
+            zone=zone.config.display_name,
+            color=color
+        )
+        
+        
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                color=color,
+            )
+        ))
+
 
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
         zone = self.get_zone(zone_id)
         zone.state.brightness = max(0, min(100, brightness))
         self._save_zone(zone_id)
-       
+
         log.info(
             "Zone brightness set",
             zone=zone.config.display_name,
             brightness=zone.state.brightness,
         )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                brightness=zone.state.brightness,
+            )
+        ))
 
     def adjust_brightness(self, zone_id: ZoneID, delta: int) -> None:
         zone = self.get_zone(zone_id)
@@ -93,6 +118,13 @@ class ZoneService:
             zone=zone.config.display_name,
             brightness=zone.state.brightness,
         )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                brightness=zone.state.brightness,
+            )
+        ))
         
     def set_is_on(self, zone_id: ZoneID, is_on: bool) -> None:
         zone = self.get_zone(zone_id)
@@ -104,6 +136,13 @@ class ZoneService:
             zone=zone.config.display_name,
             is_on=is_on,
         )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                is_on=is_on,
+            )
+        ))
         
     # ------------------------------------------------------------------
     # Persistence

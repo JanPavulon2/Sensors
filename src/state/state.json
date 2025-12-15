@@ -2,12 +2,16 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "HUE",
-        "hue": 292
+        "mode": "RGB",
+        "rgb": [
+          148,
+          70,
+          6
+        ]
       },
-      "brightness": 88,
+      "brightness": 100,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -89,7 +93,7 @@
       },
       "brightness": 48,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -117,11 +121,11 @@
     "pixel": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "blue"
+        "preset_name": "lime"
       },
-      "brightness": 13,
+      "brightness": 5,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -152,12 +156,8 @@
     },
     "pixel2": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          227,
-          0,
-          0
-        ]
+        "mode": "PRESET",
+        "preset_name": "amber"
       },
       "brightness": 100,
       "is_on": true,
@@ -167,6 +167,19 @@
         "parameters": {
           "ANIM_SPEED": 20
         }
+      }
+    },
+    "circle": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "warm_white"
+      },
+      "brightness": 100,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {}
       }
     }
   },

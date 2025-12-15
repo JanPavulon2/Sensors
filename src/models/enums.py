@@ -39,7 +39,12 @@ class EncoderSource(Enum):
 class KeyboardSource(Enum):
     EVDEV = auto(),
     STDIN = auto()
-    
+
+class EventSource(Enum):
+    """Event source identifiers for application events"""
+    ZONE_SERVICE = auto()  # Events from zone state changes
+    APPLICATION = auto()   # Generic application events
+
 class BuzzerID(Enum):
     """Buzzer identifiers"""
     ACTIVE = auto()   # 
@@ -61,6 +66,7 @@ class ButtonID(Enum):
 class ZoneID(Enum):
     """Zone identifiers"""
     FLOOR = auto()
+    CIRCLE = auto()
     LEFT = auto()
     TOP = auto()
     RIGHT = auto()

@@ -6,8 +6,10 @@ from typing import Optional
 
 from models.enums import ZoneID, ZoneRenderMode, FramePriority, FrameSource
 from models.color import Color
+from models.events import EventType, ZoneStateChangedEvent
 from models.frame import SingleZoneFrame
 from engine.frame_manager import FrameManager
+from services.event_bus import EventBus
 from lifecycle.task_registry import create_tracked_task, TaskCategory
 from utils.logger import get_logger, LogCategory
 
@@ -42,7 +44,11 @@ class SelectedZoneIndicator:
     OFF_ZONE_COLOR = Color.blue()
     OFF_ZONE_TTL = 0.25
     
-    def __init__(self, frame_manager: FrameManager):
+    def __init__(
+        self, 
+        frame_manager: FrameManager, 
+        event_bus: EventBus
+    ):
         self.frame_manager = frame_manager
 
         # ---- context (pushed from controller) ----
@@ -58,10 +64,38 @@ class SelectedZoneIndicator:
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
 
+        event_bus.subscribe(
+            EventType.ZONE_STATE_CHANGED,
+            self._on_zone_state_changed
+        )
+        
     # ------------------------------------------------------------------
     # Context update API (called by LightingController)
     # ------------------------------------------------------------------
 
+    def _on_zone_state_changed(self, e: ZoneStateChangedEvent) -> None:
+        """Handle zone state change events from EventBus"""
+        if e.zone_id != self._selected_zone_id:
+            return
+
+        changed = False
+        if e.color is not None:
+            self._zone_color = e.color
+            changed = True
+
+        if e.brightness is not None:
+            self._zone_brightness = e.brightness
+            changed = True
+
+        if e.is_on is not None:
+            self._zone_is_on = e.is_on
+            changed = True
+
+        # Restart indicator to use updated values
+        if changed:
+            log.debug(f"Zone {e.zone_id.name} state changed, restarting indicator")
+            self._restart_if_active()
+        
     def on_selected_zone_changed(self, zone_id: ZoneID) -> None:
         self._selected_zone_id = zone_id
         log.debug(f"On selected zone → {zone_id.name}")
@@ -70,15 +104,6 @@ class SelectedZoneIndicator:
     def on_zone_render_mode_changed(self, mode: ZoneRenderMode) -> None:
         self._render_mode = mode
         log.debug(f"On render mode changed → {mode.name}")
-        self._restart_if_active()
-
-    def on_zone_color_changed(self, color: Color) -> None:
-        self._zone_color = color
-        log.debug(f"On zone color changed → {color}")
-
-    def on_zone_is_on_changed(self, is_on: bool) -> None:
-        self._zone_is_on = is_on
-        log.info(f"On zone is on changed -> {is_on}")
         self._restart_if_active()
 
     def on_edit_mode_changed(self, enabled: bool) -> None:
@@ -107,7 +132,7 @@ class SelectedZoneIndicator:
         self._task = create_tracked_task(
             self._loop(),
             category=TaskCategory.RENDER,
-            description="Selected Zone Indicator"
+            description=f"Selected Zone Indicator ({self._selected_zone_id.name if self._selected_zone_id else 'unknown'})"
         )
 
     def _stop(self) -> None:
@@ -130,6 +155,7 @@ class SelectedZoneIndicator:
     def _restart_if_active(self) -> None:
         if not self._edit_mode:
             return
+        log.debug(f"Indicator restarting for {self._selected_zone_id.name if self._selected_zone_id else '?'} (mode={self._render_mode.name if self._render_mode else '?'})")
         self._stop()
         self._start()
 
@@ -184,6 +210,10 @@ class SelectedZoneIndicator:
             brightness_pct = max(0, min(100, int(scale * 100)))
             color = base_color.with_brightness(brightness_pct)
         
+            if not self._selected_zone_id:
+                log.warn("Selected zone id empty")
+                return
+            
             frame = SingleZoneFrame(
                 zone_id=self._selected_zone_id,
                 color=color,
@@ -196,6 +226,10 @@ class SelectedZoneIndicator:
             await asyncio.sleep(cycle / steps)
 
     async def _render_animation_blink(self) -> None:
+        if not self._selected_zone_id:
+            log.warn("Selected zone id empty")
+            return
+        
         frame = SingleZoneFrame(
             zone_id=self._selected_zone_id,
             color=self.ANIMATION_HIGHLIGHT_COLOR,
@@ -208,6 +242,10 @@ class SelectedZoneIndicator:
         await asyncio.sleep(self.ANIMATION_BLINK_INTERVAL)
 
     async def _render_off_zone(self) -> None:
+        if not self._selected_zone_id:
+            log.warn("Selected zone id empty")
+            return
+        
         frame = SingleZoneFrame(
             zone_id=self._selected_zone_id,
             color=self.OFF_ZONE_COLOR,
