@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from models.enums import ZoneID, AnimationID
 from models.color import Color
-from animations.engine_v2 import AnimationEngine
+from animations.engine import AnimationEngine
 from engine.frame_manager import FrameManager
 from services.zone_service import ZoneService
 

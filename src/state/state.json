@@ -2,15 +2,12 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          86,
-          52,
-          76
-        ]
+        "mode": "HUE",
+        "hue": 292
       },
-      "brightness": 0.0,
-      "mode": "STATIC",
+      "brightness": 88,
+      "is_on": true,
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -27,8 +24,9 @@
           0
         ]
       },
-      "brightness": 0.0,
-      "mode": "ANIMATION",
+      "brightness": 0,
+      "is_on": true,
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -38,48 +36,59 @@
     },
     "top": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          31,
-          31,
-          47
-        ]
-      },
-      "brightness": 100,
-      "mode": "STATIC"
-    },
-    "right": {
-      "color": {
         "mode": "PRESET",
-        "preset_name": "indigo"
+        "preset_name": "orange"
       },
       "brightness": 100,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
-          "ANIM_SPEED": 40
+          "ANIM_SPEED": 20
+        }
+      }
+    },
+    "right": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "yellow"
+      },
+      "brightness": 100,
+      "is_on": true,
+      "mode": "STATIC",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 60,
+          "ANIM_PRIMARY_COLOR_HUE": 50
         }
       }
     },
     "bottom": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "ocean"
+        "preset_name": "sky_blue"
       },
-      "brightness": 20,
-      "mode": "STATIC"
+      "brightness": 58,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 20,
+          "ANIM_PRIMARY_COLOR_HUE": 230,
+          "ANIM_INTENSITY": 7
+        }
+      }
     },
     "lamp": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          133,
-          177,
-          51
-        ]
+        "mode": "PRESET",
+        "preset_name": "violet"
       },
-      "brightness": 100,
+      "brightness": 48,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
@@ -93,14 +102,16 @@
         "mode": "HUE",
         "hue": 264
       },
-      "brightness": 0
+      "brightness": 0,
+      "is_on": true
     },
     "desk": {
       "color": {
         "mode": "PRESET",
         "preset_name": "pink"
       },
-      "brightness": 62.5,
+      "brightness": 63,
+      "is_on": true,
       "mode": "STATIC"
     },
     "pixel": {
@@ -108,8 +119,17 @@
         "mode": "PRESET",
         "preset_name": "blue"
       },
-      "brightness": 12.5,
-      "mode": "STATIC"
+      "brightness": 13,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 1,
+          "ANIM_PRIMARY_COLOR_HUE": 0,
+          "ANIM_INTENSITY": 58
+        }
+      }
     },
     "preview": {
       "color": {
@@ -120,7 +140,8 @@
           255
         ]
       },
-      "brightness": 12.5,
+      "brightness": 13,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
@@ -139,7 +160,14 @@
         ]
       },
       "brightness": 100,
-      "mode": "STATIC"
+      "is_on": true,
+      "mode": "STATIC",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {
+          "ANIM_SPEED": 20
+        }
+      }
     }
   },
   "current_animation": {
@@ -152,15 +180,7 @@
   },
   "application": {
     "edit_mode_on": true,
-    "lamp_white_mode_on": true,
-    "lamp_white_saved_state": {
-      "color": {
-        "mode": "HUE",
-        "hue": 319
-      },
-      "brightness": 0
-    },
-    "active_parameter": "ZONE_BRIGHTNESS",
+    "selected_parameter_id": "ANIM_PRIMARY_COLOR_HUE",
     "selected_zone_index": 2,
     "frame_by_frame_mode": false,
     "save_on_change": false

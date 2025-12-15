@@ -20,16 +20,13 @@ def test_load_parameters():
 
     # Check all expected parameters exist
     expected = [
-        ParamID.ZONE_COLOR,
-        ParamID.ZONE_BRIGHTNESS,
-        ParamID.ZONE_REVERSED,
         ParamID.ANIM_SPEED,
-        ParamID.ANIM_COLOR_1,
+        ParamID.ANIM_PRIMARY_COLOR_HUE,
         ParamID.ANIM_INTENSITY,
-        ParamID.ANIM_COLOR_2,
-        ParamID.ANIM_COLOR_3,
-        ParamID.LENGTH,
-        ParamID.HUE_OFFSET,
+        ParamID.ANIM_SECONDARY_COLOR_HUE,
+        ParamID.ANIM_TERTIARY_COLOR_HUE,
+        ParamID.ANIM_LENGTH,
+        ParamID.ANIM_HUE_OFFSET,
     ]
 
     for param_id in expected:
@@ -44,19 +41,14 @@ def test_parameter_types():
 
     print('✓ test_parameter_types')
 
-    # Zone parameters
-    assert params[ParamID.ZONE_COLOR].type == ParameterType.COLOR
-    assert params[ParamID.ZONE_BRIGHTNESS].type == ParameterType.PERCENTAGE
-    assert params[ParamID.ZONE_REVERSED].type == ParameterType.BOOLEAN
-
     # Animation base parameters
     assert params[ParamID.ANIM_SPEED].type == ParameterType.PERCENTAGE
-    assert params[ParamID.ANIM_COLOR_1].type == ParameterType.COLOR
+    assert params[ParamID.ANIM_PRIMARY_COLOR_HUE].type == ParameterType.COLOR
 
     # Additional animation parameters
     assert params[ParamID.ANIM_INTENSITY].type == ParameterType.PERCENTAGE
-    assert params[ParamID.LENGTH].type == ParameterType.RANGE_CUSTOM
-    assert params[ParamID.HUE_OFFSET].type == ParameterType.RANGE_CUSTOM
+    assert params[ParamID.ANIM_LENGTH].type == ParameterType.RANGE_CUSTOM
+    assert params[ParamID.ANIM_HUE_OFFSET].type == ParameterType.RANGE_CUSTOM
 
     print('  All parameter types correct')
 
@@ -64,7 +56,7 @@ def test_parameter_types():
 def test_percentage_parameter():
     """Test PERCENTAGE parameter (brightness)"""
     params = load_parameters()
-    brightness = params[ParamID.ZONE_BRIGHTNESS]
+    # brightness = params[ParamID.ZONE_BRIGHTNESS]
 
     print('✓ test_percentage_parameter')
 
@@ -96,7 +88,7 @@ def test_percentage_parameter():
 def test_range_custom_parameter():
     """Test RANGE_CUSTOM parameter (length)"""
     params = load_parameters()
-    length = params[ParamID.LENGTH]
+    length = params[ParamID.ANIM_LENGTH]
 
     print('✓ test_range_custom_parameter')
 

@@ -6,7 +6,7 @@ from models.color import Color
 from engine.frame_manager import FrameManager
 from services.zone_service import ZoneService
 from models.domain.zone import ZoneCombined, ZoneState, ZoneConfig
-from animations.engine_v2 import AnimationEngine
+from animations.engine import AnimationEngine
 
 
 @pytest.fixture

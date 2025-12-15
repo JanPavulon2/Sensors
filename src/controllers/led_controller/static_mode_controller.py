@@ -7,151 +7,161 @@ Renders zone states to FrameManager as ZoneFrames (one color per zone).
 from __future__ import annotations
 
 import asyncio
-import math
-from models.enums import ParamID, FramePriority, FrameSource, ZoneRenderMode
+from models.enums import FramePriority, FrameSource, ZoneEditTarget, ZoneRenderMode
 from models.domain import ZoneCombined
-from models.frame_v2 import MultiZoneFrame, SingleZoneFrame
+from models.frame import MultiZoneFrame, SingleZoneFrame
 from services import ServiceContainer
+from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
-from lifecycle.task_registry import create_tracked_task, TaskCategory
 
-log = get_logger().for_category(LogCategory.GENERAL)
+log = get_logger().for_category(LogCategory.STATIC_CONTROLLER)
 
-class StaticModeController:
+
+class StaticModeController:    
+    """
+    Handles editing of zones in STATIC render mode.
+
+    Responsibilities:
+    - adjust zone parameters (hue, preset, brightness)
+    - push updated frames to FrameManager
+    - render initial STATIC zones on startup
+
+    Does NOT:
+    - manage zone selection
+    - manage edit mode
+    - run animation loops
+    """
+    
+    EDIT_TARGETS = [
+        ZoneEditTarget.COLOR_HUE,
+        ZoneEditTarget.COLOR_PRESET,
+        ZoneEditTarget.BRIGHTNESS,
+    ]
+
     def __init__(self, services: ServiceContainer):
-        """
-        Initialize static mode controller with dependency injection.
-
-        Args:
-            services: ServiceContainer with all core services and managers
-        """
-        self.zone_service = services.zone_service
+        self.zone_service: ZoneService = services.zone_service
         self.app_state_service = services.app_state_service
         self.frame_manager = services.frame_manager
-        self.event_bus = services.event_bus
         self.color_manager = services.color_manager
 
-        self.zones_ids = [z.config.id for z in self.zone_service.get_all()]
-        self.current_param = self.app_state_service.get_state().current_param
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
 
-        self.first_enter = True
-
-    # --- Mode Entry/Exit ---
-
-    def initialize(self):
+    async def initialize(self):
         """
-        Initialize static mode during app startup.
+        Render all zones that start in STATIC mode.
 
-        Queries all STATIC zones and submits initial frame to FrameManager.
         Called once during LightingController initialization.
+        Must be async to ensure frames are submitted to FrameManager before returning.
         """
-        log.info("Initializing STATIC mode...")
+
+        log.info("Initializing static mode controller...")
 
         static_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
-        
         if not static_zones:
             log.info("No static zones to initialize")
             return
-        
-        zones_colors = {
-            z.config.id: z.state.color.with_brightness(z.brightness)
-            for z in static_zones
-        }
-        
+
+        zones_colors={}
+
+        for zone in static_zones:
+            if not zone.state.is_on:
+                zones_colors[zone.id] = zone.state.color.black()
+            else:
+                zones_colors[zone.id] = zone.state.color.with_brightness(zone.brightness)
+
+        # Ensure valid edit target
+        state = self.app_state_service.get_state()
+        if state.selected_zone_edit_target not in self.EDIT_TARGETS:
+            self.app_state_service.set_selected_zone_edit_target(ZoneEditTarget.BRIGHTNESS)
+            
         frame = MultiZoneFrame(
-            zone_colors=zones_colors,   
+            zone_colors=zones_colors,
             priority=FramePriority.MANUAL,
             source=FrameSource.STATIC,
             ttl=10.0,
         )
-        
-        asyncio.create_task(self.frame_manager.push_frame(frame))
-        
-        log.info(f"Static initialized: {len(static_zones)} zones rendered")
-        
-        # Mark first_enter as complete so enter_mode behaves normally
-        self.first_enter = False
+        await self.frame_manager.push_frame(frame)
 
-    def enter_mode(self):
+        log.info(f"Rendered {len(zones_colors)} STATIC zones")
+
+    # ------------------------------------------------------------------
+    # Parameter editing
+    # ------------------------------------------------------------------
+
+    def cycle_edit_target(self) -> None:
         """
-        Switch to static mode: reapply zone states and start pulse if edit mode is on
-
-        On first call (during app startup), skips rendering (initialize handles it).
-        On subsequent calls (mode toggle), renders zones normally via FrameManager.
+        Cycle through zone edit targets (brightness → color → preset).
         """
-        log.info("Entering static mode")
+        state = self.app_state_service.get_state()
+        current = state.selected_zone_edit_target
 
-        is_first_enter = self.first_enter
-        log.debug(f"Static mode controller - enter_mode: first_enter={is_first_enter}")
-
-        if self.first_enter:
-            log.debug("Static mode controller: First enter → no-op (initialize already rendered)")
-            self.first_enter = False
+        if current not in self.EDIT_TARGETS:
+            next_target = self.EDIT_TARGETS[0]
         else:
-            static_zones = self.zone_service.get_by_render_mode(ZoneRenderMode.STATIC)
-            zones_colors = {
-                z.config.id: z.state.color.with_brightness(z.brightness)
-                for z in static_zones
-            }
+            idx = self.EDIT_TARGETS.index(current)
+            next_target = self.EDIT_TARGETS[(idx + 1) % len(self.EDIT_TARGETS)]
 
-            frame = MultiZoneFrame(
-                zone_colors=zones_colors,
-                priority=FramePriority.MANUAL,
-                source=FrameSource.STATIC,
-                ttl=1.5,
+        self.app_state_service.set_selected_zone_edit_target(next_target)
+
+        log.info(
+            "Zone edit target changed",
+            target=next_target.name,
+        )
+
+    def adjust_selected_target(self, delta: int) -> None:
+        """
+        Adjust currently selected parameter for the selected zone.
+        """
+        zone = self.zone_service.get_selected_zone()
+        if not zone:
+            log.debug("StaticModeController.adjust_param: no selected zone")
+            return
+
+        target = self.app_state_service.get_state().selected_zone_edit_target
+
+        if target == ZoneEditTarget.BRIGHTNESS:
+            self.zone_service.adjust_brightness(zone.id, delta)
+
+        
+        elif target == ZoneEditTarget.COLOR_HUE:
+            self.zone_service.set_color(
+                zone.id,
+                zone.state.color.adjust_hue(delta * 10),
             )
             
-            asyncio.create_task(self.frame_manager.push_frame(frame))
+        elif target == ZoneEditTarget.COLOR_PRESET:
+            self.zone_service.set_color(
+                zone.id,
+                zone.state.color.next_preset(delta, self.color_manager),
+            )
 
-        
-        # Start pulsing if edit mode is ON
-        # if self.app_state_service.get_state().edit_mode:
-        #     self._start_pulse()
+        else:
+            log.warn("Unsupported ZoneEditTarget", target=target)
+            return
 
-    async def exit_mode(self):
+        updated_zone = self.zone_service.get_zone(zone.id)
+        self._submit_zone_update(updated_zone)
+
+        log.info(
+            "Static zone edited",
+            zone=zone.config.display_name,
+            target=target.name,
+        )
+
+    def render_zone(self) -> None:
         """
-        Exit static mode: stop pulsing and cleanup
+        Render currently selected zone (used when entering STATIC mode).
 
-        Called when switching away from STATIC mode.
-        Properly awaits pulse task cancellation for clean async shutdown.
+        Called when switching a zone to STATIC render mode to display it immediately.
         """
-        # log.info("Exiting static mode")
-        # await self._stop_pulse_async()
+        zone = self.zone_service.get_selected_zone()
+        if not zone:
+            log.warn("render_zone: no selected zone")
+            return
 
-    def on_edit_mode_change(self, enabled: bool):
-        """Start or stop pulsing"""
-        # if enabled:
-        #     self._start_pulse()
-        # else:
-        #     self._stop_pulse()
-
-    # --- Parameter Adjustment ---
-
-    def adjust_param(self, delta: int):
-        # Read current zone index fresh from state (not cached)
-        # current_index = self.app_state_service.get_state().current_zone_index
-        # zone_id = self.zones_ids[current_index]
-        zone = self._get_current_zone()
-        zone_id = zone.id
-        
-        if self.current_param == ParamID.ZONE_BRIGHTNESS:
-            self.zone_service.adjust_parameter(zone_id, ParamID.ZONE_BRIGHTNESS, delta)
-            
-        elif self.current_param == ParamID.ZONE_COLOR_HUE:
-            new_color = zone.state.color.adjust_hue(delta * 10)
-            self.zone_service.set_color(zone_id, new_color)
-            
-        elif self.current_param == ParamID.ZONE_COLOR_PRESET:
-            new_color = zone.state.color.next_preset(delta, self.color_manager)
-            self.zone_service.set_color(zone_id, new_color)
-
-        zone = self.zone_service.get_zone(zone_id)
-        
-        # Only render if NOT pulsing
-        #if not self.pulse_active:
         self._submit_zone_update(zone)
-        log.info("Zone parameter changed", zone=zone.config.display_name, param=self.current_param.name)
-
 
     def _submit_zone_update(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
@@ -160,101 +170,6 @@ class StaticModeController:
             color=zone.state.color.with_brightness(zone.brightness),
             priority=FramePriority.MANUAL,
             source=FrameSource.STATIC,
-            ttl=1.5,
+            ttl=10.0,  # Match initialize() TTL to keep static zones persistent
         )
         asyncio.create_task(self.frame_manager.push_frame(frame))
-
-    def cycle_parameter(self):
-        """Cycle through editable parameters"""
-        params = [ParamID.ZONE_COLOR_HUE, ParamID.ZONE_COLOR_PRESET, ParamID.ZONE_BRIGHTNESS]
-
-        # If current param is not in list (e.g., ANIM_SPEED from animation mode), start from first param
-        if self.current_param not in params:
-            self.current_param = params[0]
-        else:
-            current_index = params.index(self.current_param)
-            self.current_param = params[(current_index + 1) % len(params)]
-
-        self.app_state_service.set_current_param(self.current_param)
-        log.info(f"Cycled param to {self.current_param.name}")
-
-    # def _start_pulse(self):
-    #     # DEBUG: Skip pulse if testing static mode only
-    #     # try:
-    #     #     from main_asyncio import DEBUG_NOPULSE
-    #     #     if DEBUG_NOPULSE:
-    #     #         return
-    #     # except ImportError:
-    #     #     pass
-
-    #     if self.pulse_active:
-    #         return
-        
-    #     self.pulse_active = True
-    #     self.pulse_task = create_tracked_task(
-    #         self._pulse_task(),
-    #         category=TaskCategory.BACKGROUND,
-    #         description="StaticMode: brightness pulse animation"
-    #     )
-
-    # def _stop_pulse(self):
-    #     """Stop pulse animation (synchronous version for normal mode changes)"""
-    #     self.pulse_active = False
-    #     if self.pulse_task:
-    #         self.pulse_task.cancel()
-    #         self.pulse_task = None
-
-    # async def _stop_pulse_async(self):
-    #     """Stop pulse animation asynchronously (for shutdown cleanup)"""
-    #     self.pulse_active = False
-    #     if self.pulse_task and not self.pulse_task.done():
-    #         self.pulse_task.cancel()
-    #         try:
-    #             await self.pulse_task
-    #         except asyncio.CancelledError:
-    #             pass
-    #         self.pulse_task = None
-
-    # async def _pulse_task(self):
-    #     """
-    #     Pulse animation for the currently selected zone.
-
-    #     Submits ZoneFrame with PULSE priority directly to FrameManager.
-    #     Follows zone selection changes dynamically.
-    #     """
-    #     cycle = 1.0
-    #     steps = 40
-    #     while self.pulse_active:
-    #         for step in range(steps):
-    #             if not self.pulse_active:
-    #                 break
-
-    #             # Get current zone EACH step (allows pulse to follow zone cycling)
-    #             current_zone = self._get_current_zone()
-    #             base = current_zone.brightness
-
-    #             # Calculate brightness factor (0.2 to 1.0)
-    #             scale = 0.2 + 0.8 * (math.sin(step / steps * 2 * math.pi - math.pi/2) + 1) / 2
-    #             pulse_brightness = int(base * scale)
-
-    #             # Create ZoneFrame with pulsed brightness
-    #             color = current_zone.state.color.with_brightness(pulse_brightness)
-    #             frame = SingleZoneFrame(
-    #                 zone_id=current_zone.id,
-    #                 color=color,
-    #                 priority=FramePriority.PULSE,
-    #                 source=FrameSource.PULSE,
-    #                 ttl=1.0,
-    #             )
-
-    #             await self.frame_manager.push_frame(frame)
-
-    #             await asyncio.sleep(cycle / steps)
-
-    # --- Helper methods ---
-
-    def _get_current_zone(self) -> ZoneCombined:
-        """Get currently selected zone from app state"""
-        current_index = self.app_state_service.get_state().current_zone_index
-        current_zone_id = self.zones_ids[current_index]
-        return self.zone_service.get_zone(current_zone_id)

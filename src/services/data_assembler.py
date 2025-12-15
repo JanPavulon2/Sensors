@@ -152,7 +152,8 @@ class DataAssembler:
                 else:
                     color_dict = zone_state_data.get("color", {"mode": "HUE", "hue": 0})
                     color = Color.from_dict(color_dict, self.color_manager)
-                    brightness = zone_state_data.get("brightness", 100)
+                    brightness = int(zone_state_data.get("brightness", 100))
+                    is_on = zone_state_data.get("is_on", True)
 
                     # Load zone mode with fallback to STATIC
                     try:
@@ -187,23 +188,15 @@ class DataAssembler:
                 zone_state = ZoneState(
                     id=zone_config.id,
                     color=color,
+                    brightness=brightness,
+                    is_on=is_on,
                     mode=mode,
                     animation=animation_state
                 )
 
-                params_combined = {}
-                brightness_config = param_configs.get(ParamID.ZONE_BRIGHTNESS)
-                if brightness_config:
-                    brightness_state = ParameterState(id=ParamID.ZONE_BRIGHTNESS, value=brightness)
-                    params_combined[ParamID.ZONE_BRIGHTNESS] = ParameterCombined(
-                        config=brightness_config,
-                        state=brightness_state
-                    )
-
                 zone_combined = ZoneCombined(
                     config=zone_config,
-                    state=zone_state,
-                    parameters=params_combined
+                    state=zone_state
                 )
 
                 zones.append(zone_combined)
@@ -233,8 +226,9 @@ class DataAssembler:
                 zone_key = zone.config.id.name.lower()
                 zone_data = {
                     "color": zone.state.color.to_dict(),
-                    "brightness": zone.brightness,  # Read from property (gets from parameters)
-                    "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION, OFF)
+                    "brightness": zone.state.brightness,
+                    "is_on": zone.state.is_on,
+                    "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION)
                 }
 
                 # Save animation state if zone has animation settings
@@ -273,22 +267,20 @@ class DataAssembler:
 
             # Parse enums with fallback to dataclass defaults
             try:
-                param_str = app_data.get("active_parameter")
-                current_param = Serializer.str_to_enum(param_str, ParamID) if param_str else ApplicationState.current_param
+                param_str = app_data.get("selected_parameter_id")
+                selected_param_id = Serializer.str_to_enum(param_str, ParamID) if param_str else ApplicationState.selected_param_id
             except ValueError:
-                current_param = ApplicationState.current_param  # Dataclass default
+                selected_param_id = ApplicationState.selected_param_id  # Dataclass default
 
             state = ApplicationState(
                 edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
-                lamp_white_mode=app_data.get("lamp_white_mode_on", ApplicationState.lamp_white_mode),
-                lamp_white_saved_state=app_data.get("lamp_white_saved_state", ApplicationState.lamp_white_saved_state),
-                current_zone_index=int(app_data.get("selected_zone_index", ApplicationState.current_zone_index)),
-                current_param=current_param,
+                selected_zone_index=int(app_data.get("selected_zone_index", ApplicationState.selected_zone_index)),
+                selected_param_id=selected_param_id,
                 frame_by_frame_mode=app_data.get("frame_by_frame_mode", ApplicationState.frame_by_frame_mode),
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
             )
 
-            log.info(f"Built application state: zone_idx={state.current_zone_index}")
+            log.info(f"Built application state: zone_idx={state.selected_zone_index}")
             return state
 
         except Exception as e:
@@ -307,10 +299,9 @@ class DataAssembler:
 
             state_json["application"] = {
                 "edit_mode_on": app_state.edit_mode,
-                "lamp_white_mode_on": app_state.lamp_white_mode,
-                "lamp_white_saved_state": app_state.lamp_white_saved_state,
-                "active_parameter": Serializer.enum_to_str(app_state.current_param),
-                "selected_zone_index": app_state.current_zone_index,
+                "selected_parameter_id": Serializer.enum_to_str(app_state.selected_param_id),
+                "selected_zone_index": app_state.selected_zone_index,
+                "selected_zone_edit_target": app_state.selected_zone_edit_target,
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,
                 "save_on_change": app_state.save_on_change,
             }

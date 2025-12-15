@@ -227,6 +227,51 @@ class AnimationEngine:
             return task is not None and not task.done()
 
         return any(not t.done() for t in self.tasks.values())
+
+    def create_animation_instance(self, anim_id: AnimationID, zone_id: Optional[ZoneID] = None, **params):
+        """
+        Create an animation instance for offline use (frame-by-frame debugging).
+
+        Does not start the animation - just creates the instance.
+        Used by FramePlaybackController for preloading animation frames.
+
+        Args:
+            anim_id: Animation ID to instantiate
+            zone_id: Zone to attach animation to (uses first available if not provided)
+            **params: Animation parameters (speed, etc.)
+
+        Returns:
+            Animation instance or None if animation type not found
+        """
+        AnimClass = self.ANIMATIONS.get(anim_id)
+        if AnimClass is None:
+            log.error(f"Animation {anim_id} not registered")
+            return None
+
+        # Get zone (use first available if not specified)
+        if zone_id is None:
+            all_zones = self.zone_service.get_all()
+            if not all_zones:
+                log.error("No zones available for animation instance")
+                return None
+            zone = all_zones[0]
+        else:
+            zone = self.zone_service.get_zone(zone_id)
+            if not zone:
+                log.error(f"Zone {zone_id} not found")
+                return None
+
+        # Extract speed and other params
+        safe_params = params.copy()
+        speed = safe_params.pop("speed", 50)
+
+        # Create instance
+        try:
+            anim = AnimClass(zone=zone, speed=speed, **safe_params)
+            return anim
+        except Exception as e:
+            log.error(f"Failed to create animation instance: {e}")
+            return None
     
     # def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
     #     """

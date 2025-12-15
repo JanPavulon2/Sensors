@@ -3,7 +3,7 @@ import asyncio
 from models.enums import ZoneID, AnimationID, FramePriority, FrameSource
 from models.color import Color
 from engine.frame_manager import FrameManager
-from animations.engine_v2 import AnimationEngine
+from animations.engine import AnimationEngine
 
 class DummyZone:
     """Minimal stub for ZoneCombined"""
