@@ -12,7 +12,7 @@ from animations.breathe import BreatheAnimation
 from engine.frame_manager import FrameManager
 from models.enums import AnimationID, ZoneID, FramePriority, FrameSource
 # from animations.registry import ANIMATION_REGISTRY
-from models.frame_v2 import SingleZoneFrame
+from models.frame import SingleZoneFrame
 from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
 
@@ -200,6 +200,10 @@ class AnimationEngine:
     # RUNTIME HELPERS
     # ------------------------------------------------------------------
 
+    def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
+        """Get name of currently running animation"""
+        return self.active_anim_ids.get(zone_id)
+
     # def update_param(self, param: str, value):
     #     """
     #     Update parameter of running animation
@@ -247,9 +251,6 @@ class AnimationEngine:
     #             return True
     #     return False
 
-    def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
-        """Get name of currently running animation"""
-        return self.active_anim_ids.get(zone_id)
 
     # def get_current_animation(self) -> Optional['BaseAnimation']:
     #     """Get name of currently running animation"""

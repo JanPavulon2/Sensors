@@ -11,7 +11,7 @@ from animations.base import BaseAnimation
 from models.color import Color
 from models.domain import ZoneCombined
 from models.enums import ZoneID, FramePriority, FrameSource
-from models.frame_v2 import SingleZoneFrame
+from models.frame import SingleZoneFrame
 from utils.logger import LogCategory, get_category_logger
 
 log = get_category_logger(LogCategory.ANIMATION)

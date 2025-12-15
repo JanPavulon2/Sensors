@@ -19,14 +19,14 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from utils.logger import get_category_logger
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
-from models.frame_v2 import PixelFrameV2
+from models.frame import PixelFrame
 from models.color import Color
 from zone_layer.zone_strip import ZoneStrip
 from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
-    from animations.engine_v2 import AnimationEngine
+    from animations.engine import AnimationEngine
     from services.event_bus import EventBus
 
 log = get_category_logger(LogCategory.RENDER_ENGINE)
@@ -369,8 +369,8 @@ class FramePlaybackController:
             status=status
         )
 
-        # Render as PixelFrameV2 (the correct absolute frame)
-        frame = PixelFrameV2(
+        # Render as PixelFrame (the correct absolute frame)
+        frame = PixelFrame(
             zone_pixels={
                 zone: list(pixels)  # deep copy
                 for zone, pixels in full_state.items()},

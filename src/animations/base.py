@@ -11,7 +11,7 @@ from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
 
 if TYPE_CHECKING:
-    from models.frame_v2 import BaseFrameV2
+    from models.frame import BaseFrame
     
 class BaseAnimation:
     """
@@ -27,7 +27,7 @@ class BaseAnimation:
 
     Subclasses MUST implement async def step(self) which returns either:
         SingleZoneFrame    (zone-level color)
-        PixelFrameV2       (pixel-level override)
+        PixelFrame       (pixel-level override)
     """
 
     def __init__(
@@ -52,7 +52,7 @@ class BaseAnimation:
     # ------------------------------------------------------------
     # Main generator loop used by AnimationEngine
     # ------------------------------------------------------------
-    async def run(self) -> AsyncIterator["BaseFrameV2"]:
+    async def run(self) -> AsyncIterator["BaseFrame"]:
         """
         Every animation runs in its own task created by AnimationEngine.
         Produces frames indefinitely until stop() is called.

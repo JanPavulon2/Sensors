@@ -44,7 +44,6 @@ class TestZoneRenderStateBasics:
         assert zrs.zone_id == ZoneID.LAMP
         assert zrs.pixels == []
         assert zrs.brightness == 100
-        assert zrs.mode == ZoneRenderMode.OFF
         assert zrs.source is None
         assert zrs.dirty is True
 

@@ -97,31 +97,31 @@ class ParameterCombined:
     Example:
         >>> # Creating a parameter
         >>> config = ParameterConfig(
-        ...     id=ParamID.ZONE_BRIGHTNESS,
+        ...     id=ParamID.ANIM_SPEED,
         ...     type=ParameterType.PERCENTAGE,
-        ...     min=0, max=100, step=10, wraps=False
+        ...     min=1, max=100, step=10, wraps=False
         ... )
         >>> state = ParameterState(
-        ...     id=ParamID.ZONE_BRIGHTNESS,
-        ...     value=80
+        ...     id=ParamID.ANIM_SPEED,
+        ...     value=50
         ... )
         >>> param = ParameterCombined(config=config, state=state)
 
         >>> # Using convenience properties
         >>> param.value  # Get current value
-        80
-        >>> param.value = 90  # Set with validation
+        50
+        >>> param.value = 60  # Set with validation
         >>> param.adjust(1)  # Adjust by steps (+10)
         >>> param.value
-        100
+        70
 
         >>> # Access configuration
         >>> param.min
-        0
+        1
         >>> param.max
         100
         >>> param.id
-        <ParamID.ZONE_BRIGHTNESS: ...>
+        <ParamID.ANIM_SPEED: ...>
 
     Notes:
         All existing methods (validate, adjust, etc.) continue working.

@@ -32,6 +32,8 @@ class ZoneState:
     """
     id: ZoneID
     color: Color
+    brightness: int
+    is_on: bool
     mode: ZoneRenderMode = ZoneRenderMode.STATIC
     animation: Optional[AnimationState] = None
     
@@ -43,84 +45,17 @@ class ZoneCombined:
     state: ZoneState
     parameters: Dict[ParamID, ParameterCombined] = field(default_factory=dict)
 
-    def get_param_value(self, param_id: ParamID) -> Any:
-        """Get current parameter value"""
-        return self.parameters[param_id].state.value
-
-    def set_param_value(self, param_id: ParamID, value: Any) -> None:
-        """Set parameter value with validation"""
-        param = self.parameters[param_id]
-        if not param.config.validate(value):
-            value = param.config.clamp(value)
-        param.state.value = value
-
-    def adjust_param(self, param_id: ParamID, delta: int) -> None:
-        """Adjust parameter by delta steps"""
-        self.parameters[param_id].adjust(delta)
-
-    def calculate_indices(self, previous_end_index: int):
-        """
-        Calculate start/end indices based on previous zone's end index
-
-        Args:
-            previous_end_index: End index of the previous zone (-1 if this is first zone)
-        """
-        if not self.config.enabled:
-            self.start_index = -1
-            self.end_index = -1
-            return
-
-        self.start_index = previous_end_index + 1 if previous_end_index >= 0 else 0
-        self.end_index = self.start_index + self.config.pixel_count - 1
-
     @property
     def id(self) -> ZoneID:
         """Get ZoneID enum"""
         return self.config.id
     
+    @property
     def get_str_id(self) -> str:
         """Get string representation of ZoneID enum"""
         return EnumHelper.to_string(self.config.id)
     
     @property
     def brightness(self) -> int:
-        """
-        Get current brightness from parameters
-
-        Brightness is stored in parameters, not state, since it's a true parameter
-        with min/max/step configuration.
-        """
-        if ParamID.ZONE_BRIGHTNESS not in self.parameters:
-            return 100  # Default if parameter not configured
-        return self.get_param_value(ParamID.ZONE_BRIGHTNESS)
-
-    def get_rgb(self) -> tuple[int, int, int]:
-        """
-        Get current RGB color with brightness applied
-
-        Returns (0, 0, 0) if zone is disabled, otherwise returns color with brightness.
-        """
-        # Disabled zones are always black
-        if not self.config.enabled:
-            return Color.black().to_rgb()
-
-        r, g, b = self.state.color.to_rgb()
-        brightness_factor = self.brightness / 100.0
-        return (
-            int(r * brightness_factor),
-            int(g * brightness_factor),
-            int(b * brightness_factor)
-        )
-        
-    def get_color(self) -> Color:
-        """
-        Get current color 
-
-        Returns black if zone is disabled, otherwise returns color.
-        """
-        # Disabled zones are always black
-        if not self.config.enabled:
-            return Color.black()
-
-        color = self.state.color
-        return color
+        """ Get current brightness from state """
+        return self.state.brightness

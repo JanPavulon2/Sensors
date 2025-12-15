@@ -13,11 +13,9 @@ class ZoneRenderMode(Enum):
 
     STATIC: Zone displays static color (zone editing mode)
     ANIMATION: Zone displays animation
-    OFF: Zone is powered off (disabled)
     """
     STATIC = auto()
     ANIMATION = auto()
-    OFF = auto()
 
 
 class PreviewMode(Enum):
@@ -109,32 +107,20 @@ class ParameterType(Enum):
 class ParamID(Enum):
     """
     Parameter identifiers (unique across system)
-
-    Naming convention: SCOPE_NAME
-    - ZONE_* : Zone parameters (STATIC mode)
-    - ANIM_* : Animation parameters (ANIMATION mode)
-    - Generic : Reusable parameters (LENGTH, HUE_OFFSET, etc.)
     """
-
-    # === ZONE PARAMETERS (STATIC mode) ===
-    ZONE_COLOR_HUE = auto()    # Zone color adjustment via HUE (0-360°)
-    ZONE_COLOR_PRESET = auto() # Zone color selection via named presets
-    ZONE_BRIGHTNESS = auto()   # Zone brightness (0-100%)
-    ZONE_REVERSED = auto()     # Reverse pixel order (bool) - for future
-
-    # === ANIMATION PARAMETERS (ANIMATION mode) ===
-    # Base parameters (shared by all animations)
+    
     ANIM_SPEED = auto()                 # Animation speed (1-100%)
     ANIM_PRIMARY_COLOR_HUE = auto()     # Primary animation color hue (0-360°)
-
-    # Additional parameters (optional, used by specific animations)
     ANIM_SECONDARY_COLOR_HUE = auto()   # Secondary animation color hue (0-360°)
     ANIM_TERTIARY_COLOR_HUE = auto()    # Tertiary animation color hue (0-360°)
     ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
     ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
     ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
 
-
+class ZoneEditTarget(Enum):
+    COLOR_HUE = auto()
+    COLOR_PRESET = auto()
+    BRIGHTNESS = auto()
 
 class LogLevel(Enum):
     """Log severity levels"""
@@ -170,6 +156,11 @@ class LogCategory(Enum):
     EVENT = auto()       # Event bus events and handling
     RENDER_ENGINE = auto()
     
+    INDICATOR = auto()
+    ANIM_CONTROLLER = auto()
+    STATIC_CONTROLLER = auto()
+    LIGHTING_CONTROLLER = auto()
+    
     API = auto()
     WEBSOCKET = auto()
     
@@ -188,8 +179,8 @@ class FramePriority(Enum):
     """
     IDLE = 0           # No active source (black screen fallback)
     MANUAL = 10        # Manual static color settings
-    PULSE = 20         # Edit mode pulsing indicator
-    ANIMATION = 30     # Running animations
+    PULSE = 30         # Edit mode pulsing indicator
+    ANIMATION = 20     # Running animations
     TRANSITION = 40    # Crossfades, mode switches (highest)
     DEBUG = 50         # Debug overlays (for future use)
 

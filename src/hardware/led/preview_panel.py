@@ -1,5 +1,5 @@
 """
-PreviewPanel (v2) - logical preview generator
+PreviewPanel - logical preview generator
 
 PreviewPanel w opcji A:
 - NIE jest driverem PixelStrip.
@@ -21,14 +21,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Sequence
 
-from utils.logger import get_logger
+from utils.logger import get_logger, LogCategory
 from models.color import Color
 from models.enums import ZoneID, FramePriority
 from models.frame import PreviewFrame  # zakładamy że PreviewFrame istnieje
 from models.domain.zone import ZoneCombined
 from engine.frame_manager import FrameManager
 
-log = get_logger().for_category("PREVIEW")  # lub LogCategory.PREVIEW jeśli masz enum
+log = get_logger().for_category(LogCategory.GENERAL)  # lub LogCategory.PREVIEW jeśli masz enum
 
 
 @dataclass

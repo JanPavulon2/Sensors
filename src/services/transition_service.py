@@ -21,7 +21,7 @@ import time
 from typing import Optional, List, Tuple, Callable, Dict
 from models.transition import TransitionType, TransitionConfig
 from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, ZoneID
-from models.frame_v2 import PixelFrameV2
+from models.frame import PixelFrame
 from utils.logger import get_category_logger
 from zone_layer.zone_strip import ZoneStrip
 from models.color import Color
@@ -221,7 +221,7 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
-                    pixel_frame = PixelFrameV2(
+                    pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
@@ -283,7 +283,7 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(target_frame)
-                    pixel_frame = PixelFrameV2(
+                    pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
@@ -333,7 +333,7 @@ class TransitionService:
                 if self.frame_manager:
                     try:
                         zone_pixels_dict = self._get_zone_pixels_dict(faded_frame)
-                        pixel_frame = PixelFrameV2(
+                        pixel_frame = PixelFrame(
                             priority=FramePriority.TRANSITION,
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
@@ -381,7 +381,7 @@ class TransitionService:
             if self.frame_manager:
                 black_frame = [Color.black()] * len(target_frame)
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                pixel_frame = PixelFrameV2(
+                pixel_frame = PixelFrame(
                     priority=FramePriority.TRANSITION,
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict
@@ -429,7 +429,7 @@ class TransitionService:
                 if self.frame_manager:
                     black_frame = [Color.black()] * len(new_frame)
                     zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                    pixel_frame = PixelFrameV2(
+                    pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
@@ -468,7 +468,7 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
-                    pixel_frame = PixelFrameV2(
+                    pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
@@ -486,7 +486,7 @@ class TransitionService:
             if self.frame_manager:
                 try:
                     zone_pixels_dict = self._get_zone_pixels_dict(to_frame)
-                    pixel_frame = PixelFrameV2(
+                    pixel_frame = PixelFrame(
                         priority=FramePriority.TRANSITION,
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
@@ -524,7 +524,7 @@ class TransitionService:
                 if self.frame_manager:
                     try:
                         zone_pixels_dict = self._get_zone_pixels_dict(interpolated_frame)
-                        pixel_frame = PixelFrameV2(
+                        pixel_frame = PixelFrame(
                             priority=FramePriority.TRANSITION,
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
@@ -562,7 +562,7 @@ class TransitionService:
                 # Submit black frame via FrameManager (as Color objects)
                 black_frame = [Color.black()] * self.strip.pixel_count
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)
-                pixel_frame = PixelFrameV2(
+                pixel_frame = PixelFrame(
                     priority=FramePriority.TRANSITION,
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict

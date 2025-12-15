@@ -14,7 +14,7 @@ Priority System:
 Only the highest-priority frame is rendered. When high-priority sources stop,
 rendering automatically falls back to lower priorities.
 
-FrameManager v2
+FrameManager 
 ---------------
 Wielokanałowy renderer LED wspierający:
 - wiele GPIO
@@ -37,7 +37,7 @@ from collections import deque
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
-from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2, MainStripFrame, ZoneUpdateValue
+from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripFrame, ZoneUpdateValue
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
@@ -172,8 +172,8 @@ class FrameManager:
     
     async def push_frame(self, frame):
         """
-        Unified V2 API endpoint.
-        Accepts SingleZoneFrame / MultiZoneFrame / PixelFrameV2
+        Unified API endpoint.
+        Accepts SingleZoneFrame / MultiZoneFrame / PixelFrame
         and wraps them into MainStripFrame for the queue system.
         """
 
@@ -205,10 +205,12 @@ class FrameManager:
                     updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_colors),     # dict[ZoneID, Color]
                 )
                 self.main_queues[msf.priority.value].append(msf)
+                log.debug(f"QueuedMultiZoneFrame: {ZoneUpdateValue} (priority={msf.priority.name})")
+                
                 return
 
-            # --- PixelFrameV2 --------------------------------------
-            if isinstance(frame, PixelFrameV2):
+            # --- PixelFrame --------------------------------------
+            if isinstance(frame, PixelFrame):
                 msf = MainStripFrame(
                     priority=frame.priority,
                     ttl=frame.ttl,

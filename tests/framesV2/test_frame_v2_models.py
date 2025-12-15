@@ -1,4 +1,4 @@
-from models.frame_v2 import SingleZoneFrame, MultiZoneFrame, PixelFrameV2
+from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.color import Color
 
@@ -28,7 +28,7 @@ def test_multi_zone_frame_update():
 
 
 def test_pixel_frame_update():
-    f = PixelFrameV2(
+    f = PixelFrame(
         priority=FramePriority.DEBUG,
         source=FrameSource.DEBUG,
         zone_pixels={

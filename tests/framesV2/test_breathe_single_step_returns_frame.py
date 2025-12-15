@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from models.enums import FramePriority, FrameSource, ZoneID
 from models.color import Color
-from models.frame_v2 import SingleZoneFrame
+from models.frame import SingleZoneFrame
 from engine.frame_manager import FrameManager
 
 

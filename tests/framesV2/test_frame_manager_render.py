@@ -1,7 +1,7 @@
 import pytest
 from models.color import Color
 from models.enums import ZoneID, FramePriority, FrameSource
-from models.frame_v2 import MultiZoneFrame
+from models.frame import MultiZoneFrame
 
 
 @pytest.mark.asyncio
