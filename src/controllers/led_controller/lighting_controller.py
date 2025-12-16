@@ -386,7 +386,7 @@ class LightingController:
                 selected_zone
             )
 
-            safe_params = Serializer.params_enum_to_str(params)
+            safe_params = Serializer.animation_params_enum_to_str(params)
             await self.animation_engine.start_for_zone(zone_id, anim_id, safe_params)
             log.info(f"Started {anim_id.name} animation for zone {zone_id.name}")
 

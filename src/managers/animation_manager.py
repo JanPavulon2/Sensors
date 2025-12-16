@@ -7,7 +7,8 @@ No base/additional parameter distinction - all animations have speed, color, plu
 
 from typing import Dict, List, Optional
 
-from models.enums import ParamID, AnimationID
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID
 from models.domain.animation import AnimationConfig
 from utils.serialization import Serializer
 from utils.logger import get_logger, LogCategory
@@ -66,7 +67,7 @@ class AnimationManager:
                 params = []
                 for param_name in param_names:
                     try:
-                        params.append(Serializer.str_to_enum(param_name, ParamID))
+                        params.append(Serializer.str_to_enum(param_name, AnimationParamID))
                     except ValueError:
                         log.warn(f"Unknown parameter '{param_name}' in animation {anim_id_str}")
 

@@ -10,6 +10,7 @@ from typing import Dict, Optional, Callable, Type, overload
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from engine.frame_manager import FrameManager
+from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneID, FramePriority, FrameSource
 # from animations.registry import ANIMATION_REGISTRY
 from models.frame import SingleZoneFrame
@@ -53,10 +54,8 @@ class AnimationEngine:
 
         # active tasks: zone_id → asyncio.Task
         self.tasks: Dict[ZoneID, asyncio.Task] = {}
-
-        # remembering what runs where
+        self.active_animations: Dict[ZoneID, BaseAnimation] = {}
         self.active_anim_ids: Dict[ZoneID, AnimationID] = {}
-        self.active_params: Dict[ZoneID, dict] = {}
 
         self._lock = asyncio.Lock()
 
@@ -96,22 +95,16 @@ class AnimationEngine:
                 log.error(f"Animation {anim_id} not registered")
                 return
 
-            safe_params = {
-                param_id.name.lower().replace("anim_", ""): value
-                for param_id, value in params.items()
-            }
-            
-            speed = safe_params.pop("speed", 50)
-
+            # Parameters already in Dict[AnimationParamID, Any] format from DataAssembler
+            # No conversion needed - pass directly to animation
             anim = AnimClass(
                 zone=zone,
-                params=safe_params
+                params=params
             )
-
+            
             # Store meta
             self.active_anim_ids[zone_id] = anim_id
-            self.active_params[zone_id] = params
-
+            self.active_animations[zone_id] = anim
             # Spawn task
             task = asyncio.create_task(self._run_loop(zone_id, anim))
             self.tasks[zone_id] = task
@@ -133,8 +126,8 @@ class AnimationEngine:
                     pass
 
             self.active_anim_ids.pop(zone_id, None)
-            self.active_params.pop(zone_id, None)
-
+            self.active_animations.pop(zone_id, None)
+            
             log.info(f"Stopped animation on zone {zone_id.name}")
             
 
@@ -148,21 +141,16 @@ class AnimationEngine:
     # Parameter update (live)
     # ------------------------------------------------------------
 
-    def update_param(self, zone_id: ZoneID, param_name: str, value):
+    def update_param(self, zone_id: ZoneID, param_id: AnimationParamID, value):
         """Update a running animation's parameter live."""
-        if zone_id not in self.tasks:
+        anim = self.active_animations.get(zone_id)
+        if not anim:
             return
-
-        params = self.active_params.get(zone_id)
-        if not params:
-            return
-
-        params[param_name] = value
-
-        # Animation instance is stored inside coroutine:
-        # the coroutine will check params each frame
+        
+        anim.set_param(param_id, value)
+        
         log.info(
-            f"Live param update on {zone_id.name}: {param_name} → {value}"
+            f"Live param update on {zone_id.name}: {param_id.name} → {value}"
         )
 
 
@@ -172,45 +160,35 @@ class AnimationEngine:
 
     async def _run_loop(self, zone_id: ZoneID, animation: BaseAnimation):
         """Run an animation until stopped."""
+        
         log.info(f"_run_loop started for {zone_id.name}")
+        frame_count = 0
+            
         try:
-            frame_count = 0
             while True:
-                try:
-                    frame = await animation.step()
-                    frame_count += 1
-                    # if frame_count % 60 == 0:
-                    #     log.debug(f"[{zone_id.name}] Animation frame #{frame_count}")
-
-                except Exception as e:
-                    log.error(f"Animation step error on {zone_id.name}: {e}", exc_info=True)
-                    await asyncio.sleep(0.05)
+                frame = await animation.step()
+                frame_count += 1
+                
+                if frame is None:
+                    await asyncio.sleep(0)
                     continue
-
-                try:
-                    await self.frame_manager.push_frame(frame)
-                except Exception as e:
-                    log.error(f"Failed to push frame for {zone_id.name}: {e}", exc_info=True)
-
-                if not self._frozen:
-                    try:
-                        await self.frame_manager.push_frame(frame)
-                    except Exception as e:
-                        log.error(
-                           f"Failed to push frame for {zone_id.name}: {e}",
-                           exc_info=True
-                        )
-                        
-                # yield to event loop (FrameManager drives actual refresh rate)
+                await self.frame_manager.push_frame(frame)
                 await asyncio.sleep(0)
 
         except asyncio.CancelledError:
             log.debug(f"Animation task for {zone_id.name} canceled")
         except Exception as e:
-            log.error(f"Animation error on {zone_id.name}: {e}", exc_info=True)
+            log.error(
+                f"Animation error on {zone_id.name}: {e}",
+                exc_info=True
+            )
         finally:
-            # remove itself if crashed
-            self.tasks.pop(zone_id, None)
+            # async with self._lock:
+            #     self.tasks.pop(zone_id, None)
+            #     self.active_animations.pop(zone_id, None)
+            # NOTE: Do NOT acquire lock here - would cause deadlock with stop_for_zone()
+            # The caller is responsible for cleaning up task dictionaries
+            
             log.info(f"Animation task for {zone_id.name} finished after {frame_count} frames")
             
     # ------------------------------------------------------------------
@@ -220,19 +198,6 @@ class AnimationEngine:
     def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
         """Get name of currently running animation"""
         return self.active_anim_ids.get(zone_id)
-
-    def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
-        """
-        Check if animations are running.
-
-        If zone_id is None → check if ANY zone has running animation.
-        If zone_id provided → check that one zone.
-        """
-        if zone_id is not None:
-            task = self.tasks.get(zone_id)
-            return task is not None and not task.done()
-
-        return any(not t.done() for t in self.tasks.values())
 
     def create_animation_instance(self, anim_id: AnimationID, zone_id: Optional[ZoneID] = None, **params):
         """
@@ -267,13 +232,18 @@ class AnimationEngine:
                 log.error(f"Zone {zone_id} not found")
                 return None
 
-        # Extract speed and other params
-        safe_params = params.copy()
-        speed = safe_params.pop("speed", 50)
+        # Convert string params to AnimationParamID enum format
+        # Expected format: {"speed": 50, "brightness": 100} → {AnimationParamID.SPEED: 50, ...}
+        from utils.serialization import Serializer
+        try:
+            enum_params = Serializer.animation_params_str_to_enum(params)
+        except Exception as e:
+            log.warn(f"Failed to convert params for {anim_id.name}: {e}, using empty params")
+            enum_params = {}
 
         # Create instance
         try:
-            anim = AnimClass(zone=zone, params=safe_params)
+            anim = AnimClass(zone=zone, params=enum_params)
             return anim
         except Exception as e:
             log.error(f"Failed to create animation instance: {e}")
