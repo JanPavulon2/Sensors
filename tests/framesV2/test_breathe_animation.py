@@ -2,7 +2,7 @@ import pytest
 from animations.breathe import BreatheAnimation
 from models.domain.zone import ZoneCombined, ZoneConfig, ZoneState
 from models.domain.animation import AnimationState
-from models.enums import AnimationID, ParamID, ZoneID, ZoneRenderMode
+from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.color import Color
 
 
@@ -26,9 +26,7 @@ async def test_breathe_animation_step_basic():
                 animation=AnimationState(id=AnimationID.BREATHE)
         )
 
-        
-        #parameters=dict[ParamID.ANIM_SPEED, ParameterCombined()]
-        
+
         zone = ZoneCombined(
                 config,
                 state

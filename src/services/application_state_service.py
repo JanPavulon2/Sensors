@@ -3,7 +3,7 @@
 import asyncio
 from typing import Optional
 from models.animation_params.animation_param_id import AnimationParamID
-from models.enums import ParamID, LogCategory, ZoneEditTarget
+from models.enums import LogCategory, ZoneEditTarget
 from models.domain.application import ApplicationState
 from services.data_assembler import DataAssembler
 from utils.logger import get_logger
@@ -136,20 +136,20 @@ class ApplicationStateService:
         self._queue_save()
         log.info(f"Selected parameter id changed: {self.state.selected_animation_param_id.name}")
 
-    def set_selected_param_id(self, param: ParamID) -> None:
+    def set_selected_param_id(self, param: AnimationParamID) -> None:
         """
         Set currently active parameter (debounced save)
 
         Args:
             param: Parameter ID enum value
         """
-        if not isinstance(param, ParamID):
+        if not isinstance(param, AnimationParamID):
             log.error(f"Invalid selected_param_id type: {type(param)}")
             return
         
-        self.state.selected_param_id = param
+        self.state.selected_animation_param_id = param
         self._queue_save()
-        log.info(f"Selected parameter id changed: {self.state.selected_param_id.name}")
+        log.info(f"Selected parameter id changed: {self.state.selected_animation_param_id.name}")
 
     def set_selected_zone_index(self, index: int) -> None:
         """

@@ -279,34 +279,6 @@ class AnimationEngine:
             log.error(f"Failed to create animation instance: {e}")
             return None
     
-    # def is_running(self, zone_id: Optional[ZoneID] = None) -> bool:
-    #     """
-    #     Check if animation is currently running.
-
-    #     When called without arguments, checks if any animation is running for any zone.
-    #     When called with zone_id, checks if that specific zone has a running animation.
-
-    #     Args:
-    #         zone_id: Optional zone ID to check. If None, checks all zones.
-
-    #     Returns:
-    #         True if at least one animation is running, False otherwise
-    #     """
-    #     if zone_id is not None:
-    #         task = self.tasks.get(zone_id)
-    #         return task is not None and not task.done()
-
-    #     # Check if any animation is running for any zone
-    #     for task in self.tasks.values():
-    #         if not task.done():
-    #             return True
-    #     return False
-
-
-    # def get_current_animation(self) -> Optional['BaseAnimation']:
-    #     """Get name of currently running animation"""
-    #     return self.current_animation if self.is_running() else None
-
     # def freeze(self) -> None:
     #     """
     #     Freeze animation frame submission for frame-by-frame debugging.

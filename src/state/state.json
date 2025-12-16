@@ -2,84 +2,15 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "HUE",
-        "hue": 108
-      },
-      "brightness": 100,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 60
-        }
-      }
-    },
-    "left": {
-      "color": {
-        "mode": "RGB",
-        "rgb": [
-          0,
-          62,
-          0
-        ]
-      },
-      "brightness": 0,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 100
-        }
-      }
-    },
-    "top": {
-      "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "pink"
       },
-      "brightness": 100,
+      "brightness": 5,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 20
-        }
-      }
-    },
-    "right": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "yellow"
-      },
-      "brightness": 100,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 60,
-          "ANIM_PRIMARY_COLOR_HUE": 50
-        }
-      }
-    },
-    "bottom": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "sky_blue"
-      },
-      "brightness": 58,
-      "is_on": true,
-      "mode": "ANIMATION",
-      "animation": {
-        "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 20,
-          "ANIM_PRIMARY_COLOR_HUE": 230,
-          "ANIM_INTENSITY": 7
-        }
+        "parameters": {}
       }
     },
     "lamp": {
@@ -92,9 +23,7 @@
       "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
-        "parameters": {
-          "ANIM_SPEED": 40
-        }
+        "parameters": {}
       }
     },
     "back": {
@@ -116,80 +45,86 @@
     },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 99
+        "mode": "PRESET",
+        "preset_name": "cyan"
       },
-      "brightness": 5,
+      "brightness": 41,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
-          "ANIM_SPEED": 1,
-          "ANIM_PRIMARY_COLOR_HUE": 0,
-          "ANIM_INTENSITY": 58
+          "speed": 1,
+          "primary_color_hue": 0,
+          "intensity": 58
         }
       }
     },
     "preview": {
       "color": {
         "mode": "HUE",
-        "hue": 93
+        "hue": 113
       },
-      "brightness": 13,
+      "brightness": 100,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
-          "ANIM_SPEED": 20
+          "speed": 20
         }
       }
     },
     "pixel2": {
       "color": {
-        "mode": "HUE",
-        "hue": 99
+        "mode": "PRESET",
+        "preset_name": "green"
       },
-      "brightness": 0,
+      "brightness": 80,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {
-          "ANIM_SPEED": 20
+          "speed": 57,
+          "brightness": 73
         }
       }
     },
     "circle": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          255,
-          150,
-          150
-        ]
+        "mode": "HUE",
+        "hue": 39
       },
-      "brightness": 100,
+      "brightness": 60,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
       }
+    },
+    "gate": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "sky_blue"
+      },
+      "brightness": 100,
+      "is_on": true,
+      "mode": "STATIC"
     }
   },
   "current_animation": {
     "id": "BREATHE",
     "parameters": {
-      "ANIM_SPEED": 40,
-      "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_INTENSITY": 100
+      "speed": 40,
+      "primary_color_hue": 0,
+      "intensity": 100
     }
   },
   "application": {
     "edit_mode_on": true,
-    "selected_parameter_id": "ANIM_PRIMARY_COLOR_HUE",
+    "selected_parameter_id": "primary_color_hue",
     "selected_zone_index": 2,
     "frame_by_frame_mode": false,
     "save_on_change": false

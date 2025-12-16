@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 from typing import Optional
-from models.enums import ParamID, ZoneEditTarget
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import ZoneEditTarget
 
 
 @dataclass
@@ -29,8 +30,8 @@ class ApplicationState:
 
     # === Selection State ===
     selected_zone_index: int = 0  
-    selected_param_id: ParamID = ParamID.ANIM_PRIMARY_COLOR_HUE  
     selected_zone_edit_target: ZoneEditTarget = ZoneEditTarget.COLOR_HUE
+    selected_animation_param_id: AnimationParamID = AnimationParamID.HUE
     
     # === Debugging Features ===
     frame_by_frame_mode: bool = False  # Frame-by-frame animation debugging

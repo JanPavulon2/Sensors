@@ -2,7 +2,7 @@
 Serialization utilities - Central enum and model serialization for JSON API
 
 Provides bidirectional conversion between:
-- Enums ↔ Strings (ZoneID, AnimationID, ParamID, ColorMode, etc.)
+- Enums ↔ Strings (ZoneID, AnimationID, AnimationParamID, ColorMode, etc.)
 - Domain models ↔ Dicts (Zone, Animation, Color, etc.)
 
 Single source of truth for frontend JSON API compatibility.
@@ -11,8 +11,18 @@ Single source of truth for frontend JSON API compatibility.
 from typing import TypeVar, Type, Any, Dict, Optional
 from enum import Enum
 
-from models.enums import ZoneID, AnimationID, ParamID, ColorMode, ZoneRenderMode
+from models.enums import ZoneID, AnimationID, ColorMode, ZoneRenderMode
 from models.color import Color
+from models.animation_params import (
+    AnimationParamID,
+    AnimationParam,
+    SpeedParam,
+    BrightnessParam,
+    HueParam,
+    PrimaryColorHueParam,
+    LengthParam,
+    IntRangeParam,
+)
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.GENERAL)
@@ -63,18 +73,35 @@ class Serializer:
             raise ValueError(f"Invalid {enum_type.__name__}: {value}")
 
     # ========================================================================
-    # PARAMETER DICT CONVERSION
+    # ANIMATION PARAMETER DICT CONVERSION
     # ========================================================================
 
     @staticmethod
-    def params_enum_to_str(params: Dict[ParamID, Any]) -> Dict[str, Any]:
-        """Convert ParamID enum keys to strings for JSON/API"""
-        return {k.name: v for k, v in params.items()}
+    def animation_params_enum_to_str(animation_params: Dict[AnimationParamID, Any]) -> Dict[str, Any]:
+        """
+        Convert AnimationParamID enum keys to strings for JSON/API.
+
+        Transforms: {AnimationParamID.SPEED: 50} → {"speed": 50}
+        """
+        return {param_id.value: value for param_id, value in animation_params.items()}
 
     @staticmethod
-    def params_str_to_enum(params: Dict[str, Any]) -> Dict[ParamID, Any]:
-        """Convert string param names to ParamID enums from JSON/API"""
-        return {ParamID[k]: v for k, v in params.items()}
+    def animation_params_str_to_enum(animation_params: Dict[str, Any]) -> Dict[AnimationParamID, Any]:
+        """
+        Convert string param names to AnimationParamID enums from JSON/API.
+
+        Transforms: {"speed": 50} → {AnimationParamID.SPEED: 50}
+        Skips unknown parameters with a warning.
+        """
+        result = {}
+        for param_str, value in animation_params.items():
+            try:
+                # Convert string value to AnimationParamID enum (using enum value, not name)
+                param_id = AnimationParamID(param_str)
+                result[param_id] = value
+            except ValueError:
+                log.warn(f"Unknown animation parameter: {param_str}, skipping")
+        return result
 
     # ========================================================================
     # ZONE SERIALIZATION

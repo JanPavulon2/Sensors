@@ -54,7 +54,7 @@ class AnimationModeController:
         ]
         
         self.selected_animation_index = 0
-        self.selected_param_index = 0
+        self.set_selected_animation_param_id = 0
 
     # ------------------------------------------------------------------
     # Initialization

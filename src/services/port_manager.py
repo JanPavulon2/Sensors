@@ -164,7 +164,12 @@ class PortManager:
         # Stage 3: Final fallback with fuser
         if await self._attempt_fuser_final(port, host):
             return
-
+        
+        log.warn(
+            "Port still in use after shutdown (likely TIME_WAIT). "
+            "This is safe on Linux."
+        )
+        
         # Failed - port still in use
         raise RuntimeError(
             f"Port {port} is in use and could not be freed after all cleanup attempts. "

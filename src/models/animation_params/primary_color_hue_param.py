@@ -4,15 +4,15 @@ from models.animation_params.animation_param_id import AnimationParamID
 from .int_range_param import IntRangeParam
 
 
-class BrightnessParam(IntRangeParam):
-    key = AnimationParamID.BRIGHTNESS
+class PrimaryColorHueParam(IntRangeParam):
+    key = AnimationParamID.PRIMARY_COLOR_HUE
 
     def __init__(self, value: int | None = None):
         super().__init__(
-            label="Brightness",
+            label="Primary Color Hue",
             min_value=0,
-            max_value=100,
-            default=100,
-            step=1,
+            max_value=359,
+            default=0,
+            step=5,
             value=value,
         )

@@ -5,16 +5,16 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, AsyncIterator, Optional, TYPE_CHECKING
-from models.animation_params.animation_param import AnimationParam
+from typing import Dict, AsyncIterator, Optional, Any, TYPE_CHECKING
 from models.animation_params.animation_param_id import AnimationParamID
+from models.animation_params.animation_param import AnimationParam
 from models.color import Color
 from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
 
 if TYPE_CHECKING:
     from models.frame import BaseFrame
-    
+
 class BaseAnimation:
     """
     Base class for all LED animations
@@ -31,18 +31,18 @@ class BaseAnimation:
         SingleZoneFrame    (zone-level color)
         PixelFrame       (pixel-level override)
     """
-    PARAMS: Dict[AnimationParamID, AnimationParam] = {}
-    
+    PARAMS: Dict[AnimationParamID, AnimationParam] = {}  # Parameter definitions (class-level)
+
     def __init__(
-        self, 
-        zone: ZoneCombined, 
-        params: Dict[AnimationParamID, object]
+        self,
+        zone: ZoneCombined,
+        params: Dict[AnimationParamID, Any]
     ):
         # Every animation instance works on only ONE zone
         self.zone = zone
         self.zone_id: ZoneID = zone.config.id
-        
-        self.params: Dict[AnimationParamID, object] = params.copy()
+
+        self.params: Dict[AnimationParamID, Any] = params.copy()  # Parameter values (instance-level)
         
         self.running = False
         
@@ -57,17 +57,57 @@ class BaseAnimation:
         self.running = False
         
         
-    # ------------------------------------------------------------
+    # ============================================================
     # Parameter helpers
-    # ------------------------------------------------------------
+    # ============================================================
+    # Parameters store raw values (int/float/str/bool).
+    # Parameter definitions (PARAMS) provide defaults and constraints.
+    # ============================================================
 
-    def get_param(self, param_id: AnimationParamID, default=None):
-        return self.params.get(param_id, default)
+    def get_param(self, param_id: AnimationParamID, default: Any = None) -> Any:
+        """
+        Get parameter value from instance storage.
 
-    def set_param(self, param_id: AnimationParamID, value):
+        Falls back to:
+        1. param_id in self.params → return value
+        2. param_id in PARAMS → return param_def.default
+        3. otherwise → return provided default
+        """
+        if param_id in self.params:
+            return self.params[param_id]
+
+        param_def = self.PARAMS.get(param_id)
+        if param_def is not None:
+            return param_def.default
+
+        return default
+
+    def set_param(self, param_id: AnimationParamID, value: Any) -> None:
+        """Set parameter value directly (must be supported by PARAMS)"""
         if param_id in self.PARAMS:
             self.params[param_id] = value
-            
+
+    def adjust_param(self, param_id: AnimationParamID, delta: int) -> Optional[Any]:
+        """
+        Adjust parameter by delta using the parameter's adjustment logic.
+
+        Returns:
+            new value or None if param not supported
+        """
+        param_def = self.PARAMS.get(param_id)
+        if not param_def:
+            return None
+
+        current_value = self.get_param(param_id, param_def.default)
+
+        # Create temp instance to use its adjust logic
+        temp_param = param_def.__class__(value=current_value)
+        temp_param.adjust(delta)
+        new_value = temp_param.value
+
+        self.params[param_id] = new_value
+        return new_value
+    
     # ------------------------------------------------------------
     # Zone context helpers (NOT animation params)
     # ------------------------------------------------------------

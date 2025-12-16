@@ -1,7 +1,7 @@
 """
 Shutdown handlers for application components.
 
-Each handler is responsible for shutting down one aspect of the application.
+Each handler is responsible for   one aspect of the application.
 They are called in priority order by ShutdownCoordinator.
 """
 
@@ -46,19 +46,6 @@ class AnimationShutdownHandler(IShutdownHandler):
 
     async def shutdown(self) -> None:
         log.info("Stopping animations...")
-
-        # 1) Stop AnimationEngine tasks
-        try:
-            animation_service = self.lighting_controller.animation_mode_controller.animation_service
-            
-            if animation_service:
-                animation_service.stop_all()
-                log.debug("AnimationService stopped")
-        
-        except Exception as e:
-            log.error(f"Error stopping AnimationService: {e}")
-                            
-        
         
         # --- 2) Stop new AnimationEngine
         try:

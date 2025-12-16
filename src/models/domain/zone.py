@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from models.color import Color
-from models.enums import ParamID, ZoneID, ZoneRenderMode
+from models.enums import ZoneID, ZoneRenderMode
 from models.domain.animation import AnimationState
 from typing import Dict, Any, Optional
 from utils.enum_helper import EnumHelper 

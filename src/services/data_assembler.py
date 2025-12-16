@@ -4,9 +4,9 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from models.enums import ParamID, AnimationID, ZoneID, ZoneRenderMode
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import (
-    ParameterConfig, ParameterState,
     AnimationConfig, AnimationState,
     ZoneConfig, ZoneState, ZoneCombined,
     ApplicationState
@@ -28,7 +28,6 @@ class DataAssembler:
         self.config_manager = config_manager
         self.state_path = state_path
         self.color_manager = config_manager.color_manager
-        self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
 
         # Debouncing: prevent IO thrashing on rapid state changes (all saves go through here)
@@ -132,7 +131,6 @@ class DataAssembler:
             state_json = self.load_state()
             zones = []
 
-            param_configs = self.parameter_manager.get_all_parameters()
             # IMPORTANT: Use get_all_zones() to preserve pixel indices for disabled zones
             zone_configs = self.config_manager.get_all_zones()  # Returns List[ZoneConfig] with indices calculated
 
@@ -175,7 +173,7 @@ class DataAssembler:
 
                                 # Load animation parameters
                                 params_dict = anim_data.get("parameters", {})
-                                animation_parameters = Serializer.params_str_to_enum(params_dict) if params_dict else {}
+                                animation_parameters = Serializer.animation_params_str_to_enum(params_dict) if params_dict else {}
 
                                 # Create AnimationState object
                                 animation_state = AnimationState(
@@ -236,7 +234,7 @@ class DataAssembler:
                 if zone.state.animation:
                     zone_data["animation"] = {
                         "id": zone.state.animation.id.name,
-                        "parameters": Serializer.params_enum_to_str(zone.state.animation.parameter_values)
+                        "parameters": Serializer.animation_params_enum_to_str(zone.state.animation.parameter_values)
                     }
 
                 state_json["zones"][zone_key] = zone_data
@@ -267,15 +265,15 @@ class DataAssembler:
 
             # Parse enums with fallback to dataclass defaults
             try:
-                param_str = app_data.get("selected_parameter_id")
-                selected_param_id = Serializer.str_to_enum(param_str, ParamID) if param_str else ApplicationState.selected_param_id
+                param_str = app_data.get("selected_animation_parameter_id")
+                selected_animation_param_id = Serializer.str_to_enum(param_str, AnimationParamID) if param_str else ApplicationState.selected_animation_param_id
             except ValueError:
-                selected_param_id = ApplicationState.selected_param_id  # Dataclass default
+                selected_animation_param_id = ApplicationState.selected_animation_param_id  # Dataclass default
 
             state = ApplicationState(
                 edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
                 selected_zone_index=int(app_data.get("selected_zone_index", ApplicationState.selected_zone_index)),
-                selected_param_id=selected_param_id,
+                selected_animation_param_id=selected_animation_param_id,
                 frame_by_frame_mode=app_data.get("frame_by_frame_mode", ApplicationState.frame_by_frame_mode),
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
             )
@@ -299,7 +297,7 @@ class DataAssembler:
 
             state_json["application"] = {
                 "edit_mode_on": app_state.edit_mode,
-                "selected_parameter_id": Serializer.enum_to_str(app_state.selected_param_id),
+                "selected_parameter_id": Serializer.enum_to_str(app_state.selected_animation_param_id),
                 "selected_zone_index": app_state.selected_zone_index,
                 "selected_zone_edit_target": app_state.selected_zone_edit_target,
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,

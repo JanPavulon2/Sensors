@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from managers import ConfigManager
 from services import DataAssembler, AnimationService, ZoneService
-from models.enums import AnimationID, ZoneID, ParamID
+from models.enums import AnimationID, ZoneID
 
 def main():
     print("=== Testing Domain Models ===\n")

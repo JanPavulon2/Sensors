@@ -19,11 +19,6 @@ from utils.logger import LogCategory, get_category_logger
 
 log = get_category_logger(LogCategory.ANIMATION)
 
-from dataclasses import dataclass
-from typing import Any
-
-
-
 class BreatheAnimation(BaseAnimation):
     """
     Smooth breathing (sinusoidal brightness modulation).

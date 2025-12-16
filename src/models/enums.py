@@ -72,6 +72,7 @@ class ZoneID(Enum):
     RIGHT = auto()
     BOTTOM = auto()
     LAMP = auto()
+    GATE = auto()
     PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
     PIXEL2 = auto()        # 30-pixel custom LED strip on GPIO 19
     PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
@@ -110,21 +111,6 @@ class ParameterType(Enum):
     RANGE_CUSTOM = auto()
     BOOLEAN = auto()
 
-class ParamID(Enum):
-    """
-    Parameter identifiers (unique across system)
-    """
-    
-    ANIM_SPEED = auto()                 # Animation speed (1-100%)
-    ANIM_PRIMARY_COLOR_HUE = auto()     # Primary animation color hue (0-360°)
-    ANIM_SECONDARY_COLOR_HUE = auto()   # Secondary animation color hue (0-360°)
-    ANIM_TERTIARY_COLOR_HUE = auto()    # Tertiary animation color hue (0-360°)
-    ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
-    ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
-    ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
-    
-    ANIM_BRIGHTNESS = auto()
-    
 class ZoneEditTarget(Enum):
     COLOR_HUE = auto()
     COLOR_PRESET = auto()

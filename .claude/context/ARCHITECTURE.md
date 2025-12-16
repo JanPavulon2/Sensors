@@ -606,7 +606,6 @@ src/
 │   ├── hardware_manager.py
 │   ├── animation_manager.py
 │   ├── color_manager.py
-│   └── parameter_manager.py
 │
 ├── models/                      # Data models
 │   ├── color.py                # Color class (HUE/PRESET/RGB)
@@ -851,7 +850,6 @@ class DataAssembler:
         self.config_manager = config_manager
         self.state_path = state_path
         self.color_manager = config_manager.color_manager
-        self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
 ```
 

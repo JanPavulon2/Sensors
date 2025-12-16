@@ -49,6 +49,7 @@ hardware_mappings:
       - FLOOR
       - CIRCLE
       - LAMP
+      - GATE
 
   - hardware_id: AUX_5V
     zones:

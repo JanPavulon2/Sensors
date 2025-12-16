@@ -1,7 +1,8 @@
 """Animation service - Provides animation definitions and parameter building"""
 
 from typing import List, Dict, Optional, TYPE_CHECKING, Any
-from models.enums import AnimationID, ParamID
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID
 from models.domain import AnimationConfig
 from services.data_assembler import DataAssembler
 from utils.logger import get_logger, LogCategory
@@ -33,9 +34,9 @@ class AnimationService:
     def build_params_for_zone(
         self,
         anim_id: AnimationID,
-        zone_animation_params: Dict[ParamID, Any],
+        zone_animation_params: Dict[AnimationParamID, Any],
         zone: 'ZoneCombined'
-    ) -> Dict[ParamID, Any]:
+    ) -> Dict[AnimationParamID, Any]:
         """
         Build parameter dict for animation engine.
 
@@ -51,7 +52,7 @@ class AnimationService:
             Dict[ParamID, value] ready for engine
         """
         anim_config = self.get_animation(anim_id)
-        params: Dict[ParamID, Any] = {}
+        params: Dict[AnimationParamID, Any] = {}
 
         # Use zone's stored params
         for param_id in anim_config.parameters:
@@ -59,12 +60,7 @@ class AnimationService:
                 params[param_id] = zone_animation_params[param_id]
 
         # Add zone color if animation supports it (all animations use hue)
-        if ParamID.ANIM_PRIMARY_COLOR_HUE in anim_config.parameters:
-            params[ParamID.ANIM_PRIMARY_COLOR_HUE] = zone.state.color.to_hue()
+        if AnimationParamID.COLOR in anim_config.parameters:
+            params[AnimationParamID.COLOR] = zone.state.color.to_hue()
 
         return params
-
-    
-    def stop_all(self):
-        """Compatibility no-op (V3 animations run via AnimationEngine)."""
-        log.debug("AnimationService.stop_all(): no-op (V3 engine handles tasks)")
