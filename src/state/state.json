@@ -2,12 +2,8 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          148,
-          70,
-          6
-        ]
+        "mode": "HUE",
+        "hue": 108
       },
       "brightness": 100,
       "is_on": true,
@@ -120,8 +116,8 @@
     },
     "pixel": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "lime"
+        "mode": "HUE",
+        "hue": 99
       },
       "brightness": 5,
       "is_on": true,
@@ -137,12 +133,8 @@
     },
     "preview": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          0,
-          240,
-          255
-        ]
+        "mode": "HUE",
+        "hue": 93
       },
       "brightness": 13,
       "is_on": true,
@@ -156,10 +148,10 @@
     },
     "pixel2": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "amber"
+        "mode": "HUE",
+        "hue": 99
       },
-      "brightness": 100,
+      "brightness": 0,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -171,8 +163,12 @@
     },
     "circle": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "warm_white"
+        "mode": "RGB",
+        "rgb": [
+          255,
+          150,
+          150
+        ]
       },
       "brightness": 100,
       "is_on": true,

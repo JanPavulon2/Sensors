@@ -5,7 +5,9 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence, TYPE_CHECKING
+from typing import Dict, AsyncIterator, Optional, TYPE_CHECKING
+from models.animation_params.animation_param import AnimationParam
+from models.animation_params.animation_param_id import AnimationParamID
 from models.color import Color
 from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
@@ -29,26 +31,59 @@ class BaseAnimation:
         SingleZoneFrame    (zone-level color)
         PixelFrame       (pixel-level override)
     """
-
+    PARAMS: Dict[AnimationParamID, AnimationParam] = {}
+    
     def __init__(
         self, 
         zone: ZoneCombined, 
-        speed: int = 50, 
-        **params
+        params: Dict[AnimationParamID, object]
     ):
         # Every animation instance works on only ONE zone
         self.zone = zone
         self.zone_id: ZoneID = zone.config.id
-        self.speed = max(1, min(100, speed))
+        
+        self.params: Dict[AnimationParamID, object] = params.copy()
+        
         self.running = False
         
-        # These parameters come directly from ZoneState.animation_state
-        self.params = params
-        
-        # Convenience cache for color/brightness
-        self.base_color: Color = zone.state.color
-        self.base_brightness: int = zone.brightness 
+    # ------------------------------------------------------------
+    # Runtime
+    # ------------------------------------------------------------
 
+    async def step(self):
+        raise NotImplementedError
+
+    def stop(self):
+        self.running = False
+        
+        
+    # ------------------------------------------------------------
+    # Parameter helpers
+    # ------------------------------------------------------------
+
+    def get_param(self, param_id: AnimationParamID, default=None):
+        return self.params.get(param_id, default)
+
+    def set_param(self, param_id: AnimationParamID, value):
+        if param_id in self.PARAMS:
+            self.params[param_id] = value
+            
+    # ------------------------------------------------------------
+    # Zone context helpers (NOT animation params)
+    # ------------------------------------------------------------
+
+    @property
+    def base_color(self):
+        return self.zone.state.color
+
+    @property
+    def base_brightness(self):
+        return self.zone.brightness
+
+    @property
+    def pixel_count(self) -> int:
+        return self.zone.config.pixel_count
+    
     # ------------------------------------------------------------
     # Main generator loop used by AnimationEngine
     # ------------------------------------------------------------
@@ -63,35 +98,4 @@ class BaseAnimation:
             frame = await self.step()
             if frame is not None:
                 yield frame
-          
-    # ------------------------------------------------------------
-    # To be implemented by subclasses
-    # ------------------------------------------------------------
-    async def step(self):
-        raise NotImplementedError
-      
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
-    def stop(self):
-        self.running = False
-
-    def update_param(self, param: str, value):
-        """Live parameter update"""
-        self.params[param] = value
-      
-    def set_base_color(self, color: Color):
-        """Cache zone color for animations that need current colors"""
-        self.base_color = color
-
-    def set_base_brightness(self, brightness: int):
-        """Cache zone brightness for animations that need current brightness"""
-        self.base_brightness = brightness
-
-    def get_base_color(self) -> Optional[Color]:
-        """Get cached Color object for zone"""
-        return self.base_color
-
-    def get_base_brightness(self) -> Optional[int]:
-        """Get cached brightness for zone"""
-        return self.base_brightness
+     

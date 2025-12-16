@@ -69,10 +69,31 @@ class SelectedZoneIndicator:
             EventType.ZONE_STATE_CHANGED,
             self._on_zone_state_changed
         )
-        
+
     # ------------------------------------------------------------------
     # Context update API (called by LightingController)
     # ------------------------------------------------------------------
+
+    def on_selected_zone_changed(self, zone_id):
+        if self._selected_zone_id == zone_id:
+            return
+        self._selected_zone_id = zone_id
+        log.debug(f"Indicator: selected zone → {zone_id.name}")
+        self._schedule_restart()
+
+    def on_zone_render_mode_changed(self, mode):
+        if self._render_mode == mode:
+            return
+        self._render_mode = mode
+        log.debug(f"Indicator: render mode → {mode.name}")
+        self._schedule_restart()
+
+    def on_edit_mode_changed(self, enabled):
+        if self._edit_mode == enabled:
+            return
+        self._edit_mode = enabled
+        log.debug(f"Indicator: edit mode → {enabled}")
+        self._schedule_restart()
 
     def _on_zone_state_changed(self, e: ZoneStateChangedEvent) -> None:
         """Handle zone state change events from EventBus"""
@@ -97,24 +118,24 @@ class SelectedZoneIndicator:
             log.debug(f"Zone {e.zone_id.name} state changed, restarting indicator")
             self._restart_if_active()
         
-    def on_selected_zone_changed(self, zone_id: ZoneID) -> None:
-        self._selected_zone_id = zone_id
-        log.debug(f"On selected zone → {zone_id.name}")
-        self._restart_if_active()
+    # def on_selected_zone_changed(self, zone_id: ZoneID) -> None:
+    #     self._selected_zone_id = zone_id
+    #     log.debug(f"On selected zone → {zone_id.name}")
+    #     self._restart_if_active()
 
-    def on_zone_render_mode_changed(self, mode: ZoneRenderMode) -> None:
-        self._render_mode = mode
-        log.debug(f"On render mode changed → {mode.name}")
-        self._restart_if_active()
+    # def on_zone_render_mode_changed(self, mode: ZoneRenderMode) -> None:
+    #     self._render_mode = mode
+    #     log.debug(f"On render mode changed → {mode.name}")
+    #     self._restart_if_active()
 
-    def on_edit_mode_changed(self, enabled: bool) -> None:
-        self._edit_mode = enabled
-        log.info(f"On edit mode → {enabled}")
+    # def on_edit_mode_changed(self, enabled: bool) -> None:
+    #     self._edit_mode = enabled
+    #     log.info(f"On edit mode → {enabled}")
 
-        if enabled:
-            self._start()
-        else:
-            self._stop()
+    #     if enabled:
+    #         self._start()
+    #     else:
+    #         self._stop()
    
     # ------------------------------------------------------------------
     # Task lifecycle
@@ -129,7 +150,7 @@ class SelectedZoneIndicator:
     async def _restart_soon(self):
         await asyncio.sleep(0)  # pozwól event loopowi zebrać zmiany
         self._restart_scheduled = False
-        await self._restart_if_active()
+        self._restart_if_active()
         
     def _start(self) -> None:
         if self._running:
@@ -181,26 +202,29 @@ class SelectedZoneIndicator:
             and self._render_mode is not None
         )
     
-
     # ------------------------------------------------------------------
     # Main render loop
     # ------------------------------------------------------------------
 
     async def _loop(self) -> None:
-        while self._running:
-            if not self._can_run():
-                await asyncio.sleep(0.05)
-                continue
+        try:
+            while self._running:
+                if not self._can_run():
+                    await asyncio.sleep(0.05)
+                    continue
 
-            if not self._zone_is_on:
-                await self._render_off_zone()
-            elif self._render_mode == ZoneRenderMode.STATIC:
-                await self._render_static_pulse()
-            elif self._render_mode == ZoneRenderMode.ANIMATION:
-                await self._render_animation_blink()
-            else:
-                await asyncio.sleep(0.1)
-
+                if not self._zone_is_on:
+                    await self._render_off_zone()
+                elif self._render_mode == ZoneRenderMode.STATIC:
+                    await self._render_static_pulse()
+                elif self._render_mode == ZoneRenderMode.ANIMATION:
+                    await self._render_animation_blink()
+                else:
+                    await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            pass
+        
+        
     # -----------------------------------
     # Render implementations
     # -----------------------------------

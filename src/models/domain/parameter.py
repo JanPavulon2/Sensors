@@ -8,44 +8,13 @@ from utils.logger import get_logger
 log = get_logger().for_category(LogCategory.CONFIG)
 
 
-@dataclass(frozen=True)
-class AnimationParam:
-    id: ParamID
-    display_name: str
-
-    def cycle(self, current):
-        raise NotImplementedError
-
-    def adjust(self, current, delta):
-        raise NotImplementedError
-    
-class IntRangeParam(AnimationParam):
-    def __init__(self, id, min_v, max_v, step):
-        self.min = min_v
-        self.max = max_v
-        self.step = step
-
-    def adjust(self, current, delta):
-        return max(self.min, min(self.max, current + delta * self.step))
-    
-class HueParam(AnimationParam):
-    def adjust(self, current, delta):
-        return (current + delta * 10) % 360
-    
-class EnumParam(AnimationParam):
-    def __init__(self, id, values):
-        self.values = values
-
-    def cycle(self, current):
-        idx = self.values.index(current)
-        return self.values[(idx + 1) % len(self.values)]
-
 @dataclass
 class ParameterState:
     """Mutable parameter state from JSON"""
     id: ParamID
     value: Any
-
+    
+@dataclass
 class ParameterConfig:
     """Immutable parameter configuration from YAML"""
     id: ParamID

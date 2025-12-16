@@ -20,6 +20,7 @@ FastAPI automatically:
 - Validates request/response schemas against OpenAPI
 - Generates client SDK documentation
 """
+import asyncio
 import sys
     
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
@@ -27,6 +28,7 @@ if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -42,6 +44,16 @@ from models.enums import LogCategory
 
 log = get_logger().for_category(LogCategory.API)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("FastAPI lifespan startup")
+    try:
+        yield
+    except asyncio.CancelledError:
+        # Normal shutdown cancellation – swallow it
+        log.debug("!!!FastAPI lifespan cancelled!!!")
+    finally:
+        log.info("!!!FastAPI lifespan shutdown complete!!!")
 
 def create_app(
     title: str = "Diuna LED System",
@@ -74,7 +86,8 @@ def create_app(
         version=version,
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
-        openapi_url="/openapi.json" if docs_enabled else None
+        openapi_url="/openapi.json" if docs_enabled else None, 
+        lifespan=lifespan
     )
 
     log.info(f"Creating FastAPI app: {title} v{version}")
@@ -222,24 +235,6 @@ def create_app(
                 log.debug(f"Could not close WebSocket after error: {close_error}")
 
     log.info("WebSocket endpoint registered at /ws/tasks")
-
-    # =========================================================================
-    # Startup/Shutdown Hooks
-    # =========================================================================
-
-    @app.on_event("startup")
-    async def startup_event():
-        """Called when FastAPI server starts"""
-        log.info("FastAPI app starting up")
-        # Note: LogBroadcaster is initialized in main_asyncio.py's run_api_server()
-        # This startup hook is kept for documentation and future enhancements
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """Called when FastAPI server shuts down"""
-        log.info("FastAPI app shutting down")
-        # Note: LogBroadcaster cleanup is handled by main_asyncio.py
-        # This shutdown hook is kept for documentation and future enhancements
 
     log.info(f"FastAPI app created successfully: {title}")
 

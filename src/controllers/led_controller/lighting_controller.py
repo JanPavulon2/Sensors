@@ -266,7 +266,7 @@ class LightingController:
         if selected_zone.state.mode == ZoneRenderMode.STATIC:
             self.static_mode_controller.cycle_edit_target()
         elif selected_zone.state.mode == ZoneRenderMode.ANIMATION:
-            self.animation_mode_controller.cycle_parameter()
+            self.animation_mode_controller.cycle_param()
 
     def _cycle_zone_selection(self, delta: int):
         """

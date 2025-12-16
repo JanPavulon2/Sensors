@@ -96,14 +96,16 @@ class AnimationEngine:
                 log.error(f"Animation {anim_id} not registered")
                 return
 
-            safe_params = params.copy()
-
+            safe_params = {
+                param_id.name.lower().replace("anim_", ""): value
+                for param_id, value in params.items()
+            }
+            
             speed = safe_params.pop("speed", 50)
 
             anim = AnimClass(
                 zone=zone,
-                speed=speed,
-                **safe_params
+                params=safe_params
             )
 
             # Store meta
@@ -271,7 +273,7 @@ class AnimationEngine:
 
         # Create instance
         try:
-            anim = AnimClass(zone=zone, speed=speed, **safe_params)
+            anim = AnimClass(zone=zone, params=safe_params)
             return anim
         except Exception as e:
             log.error(f"Failed to create animation instance: {e}")

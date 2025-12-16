@@ -122,7 +122,9 @@ class ParamID(Enum):
     ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
     ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
     ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
-
+    
+    ANIM_BRIGHTNESS = auto()
+    
 class ZoneEditTarget(Enum):
     COLOR_HUE = auto()
     COLOR_PRESET = auto()

@@ -11,12 +11,12 @@ from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 from services import ServiceContainer
 from animations.engine import AnimationEngine
+from animations.breathe import BreatheAnimation
 
 if TYPE_CHECKING:
     from models.domain.zone import ZoneCombined
 
 log = get_logger().for_category(LogCategory.ANIM_CONTROLLER)
-
 
 class AnimationModeController:
     """
@@ -46,13 +46,15 @@ class AnimationModeController:
         self.animation_engine = animation_engine
 
         # Use saved param if it's an animation param, otherwise default to ANIM_SPEED
-        saved_param = self.app_state_service.get_state().selected_param_id
-        self.selected_param_id = saved_param if saved_param in self.ANIM_PARAMS else ParamID.ANIM_SPEED
+        state = self.app_state_service.get_state()
+        #self.selected_param_id = state.selected_param_id if state.selected_param_id in self.params else ParamID.ANIM_SPEED
 
         self.available_animations = [
             a.id for a in self.animation_service.get_all()
         ]
+        
         self.selected_animation_index = 0
+        self.selected_param_index = 0
 
     # ------------------------------------------------------------------
     # Initialization
@@ -107,26 +109,52 @@ class AnimationModeController:
     # Parameter editing
     # ------------------------------------------------------------------
    
-    def cycle_parameter(self) -> None:
+    def cycle_param(self) -> None:
         """
-        Cycle through editable STATIC parameters.
+        Cycle through editable animation parameters.
         """
-        params = [
-            ParamID.ANIM_SPEED,
-            ParamID.ANIM_PRIMARY_COLOR_HUE,
-            ParamID.ANIM_SECONDARY_COLOR_HUE,
-            ParamID.ANIM_TERTIARY_COLOR_HUE,
-            ParamID.ANIM_INTENSITY,
-        ]
-
-        if self.selected_param_id not in params:
-            self.selected_param_id = params[0]
+        zone = self.zone_service.get_selected_zone()
+        if not zone:
+            return
+        
+        anim_id = self.animation_engine.get_current_animation_id(zone.id)
+        if not anim_id:
+            return
+        
+        AnimClass = self.animation_engine.ANIMATIONS.get(anim_id)
+        if not AnimClass:
+            return
+        
+    
+        params = list(AnimClass.PARAMS.keys())
+        if not params:
+            return
+        
+        state = self.app_state_service.get_state()
+        current = state.selected_animation_param_id
+        
+        if current not in params:
+            next_param = params[0]
         else:
-            idx = params.index(self.selected_param_id)
-            self.selected_param_id = params[(idx + 1) % len(params)]
+            idx = params.index(current)
+            next_param = params[(idx + 1) % len(params)]
+            
+        self.app_state_service.set_selected_animation_param_id(next_param)
+        log.info("Animation param cycled", param=next_param.name)
+        
+        # self.selected_param_index = (self.selected_param_index + 1) % len(self.params)
+        # param = self.params[self.selected_param_index]
+        
+        # self.app_state_service.set_selected_param_id(param.id)
+        
+        # if self.selected_param_id not in params:
+        #     self.selected_param_id = params[0]
+        # else:
+        #     idx = params.index(self.selected_param_id)
+        #     self.selected_param_id = params[(idx + 1) % len(params)]
 
-        self.app_state_service.set_selected_param_id(self.selected_param_id)
-        log.info(f"Animation param selected", param=self.selected_param_id.name)
+        # self.app_state_service.set_selected_param_id(self.selected_param_id)
+        # log.info(f"Animation param selected", param=self.selected_param_id.name)
         
     def adjust_param(self, delta: int):
         """
@@ -136,47 +164,88 @@ class AnimationModeController:
         to running animation engine.
         """
         
-        selected_zone = self.zone_service.get_selected_zone()
-        if not selected_zone or selected_zone.state.mode != ZoneRenderMode.ANIMATION:
+        zone = self.zone_service.get_selected_zone()
+        if not zone or zone.state.mode != ZoneRenderMode.ANIMATION or not zone.state.animation:
             return
         
-        zone_animation = selected_zone.state.animation
-        if not zone_animation:
-            log.warn("adjust_param: zone has no animation")
+        param_id = self.app_state_service.get_state().selected_animation_param_id
+        if not param_id:
             return
         
-        selected_param_id = self.selected_param_id
-        values = zone_animation.parameter_values
-        
-        if selected_param_id == ParamID.ANIM_SPEED:
-            values[selected_param_id] = max(1, min(100, values.get(selected_param_id, 50) + delta))
-            
-            current_val = values.get(ParamID.ANIM_SPEED, 50)
-            new_val = max(1, min(100, current_val + delta))
-            
-        elif selected_param_id == ParamID.ANIM_INTENSITY:
-            values[selected_param_id] = max(0, min(100, values.get(selected_param_id, 100) + delta))
-            
-            current_val = values.get(ParamID.ANIM_INTENSITY, 100)
-            new_val = max(0, min(100, current_val + delta))
-            
-        elif selected_param_id == ParamID.ANIM_PRIMARY_COLOR_HUE:
-            values[selected_param_id] = (values.get(selected_param_id, 0) + delta * 10) % 360
-            
-            current_val = values.get(ParamID.ANIM_PRIMARY_COLOR_HUE, 0)
-            new_val = (current_val + delta * 10) % 360
-        else:
-            log.warn(f"Unsupported animation parameter: {self.selected_param_id.name}")
+        anim_id = self.animation_engine.get_current_animation_id(zone.id)
+        if not anim_id:
             return
+        
+        AnimClass = self.animation_engine.ANIMATIONS.get(anim_id)
+        if not AnimClass:
+            return
+        
+        param_def = AnimClass.PARAMS.get(param_id)
+        if not param_def:
+            return
+        
+        current_value = self.animation_engine.active_params[zone.id].get(
+            param_id, param_def.default
+        )
+        
+        new_value = param_def.adjust(delta)
+        
+        self.animation_engine.update_param(
+            zone.id,
+            param_id.name,
+            new_value,
+        )
         
         log.info(
             "Animation param adjusted",
-            zone=selected_zone.config.display_name,
-            param=selected_param_id.name,
-            value=values[selected_param_id],
+            zone=zone.config.display_name,
+            param=param_def.label,
+            value=new_value
         )
+        # values = zone.state.animation.parameter_values
         
-        asyncio.create_task(self._apply_parameter_change(selected_zone))
+        # current = values.get(param.id, param.default())
+
+        # new_value = param.adjust(current, delta)
+        # values[param.id] = param.serialize(new_value)
+
+        # zone_animation = selected_zone.state.animation
+        # if not zone_animation:
+        #     log.warn("adjust_param: zone has no animation")
+        #     return
+        
+        # selected_param_id = self.selected_param_id
+        # values = zone_animation.parameter_values
+        
+        # if selected_param_id == ParamID.ANIM_SPEED:
+        #     values[selected_param_id] = max(1, min(100, values.get(selected_param_id, 50) + delta))
+            
+        #     current_val = values.get(ParamID.ANIM_SPEED, 50)
+        #     new_val = max(1, min(100, current_val + delta))
+            
+        # elif selected_param_id == ParamID.ANIM_INTENSITY:
+        #     values[selected_param_id] = max(0, min(100, values.get(selected_param_id, 100) + delta))
+            
+        #     current_val = values.get(ParamID.ANIM_INTENSITY, 100)
+        #     new_val = max(0, min(100, current_val + delta))
+            
+        # elif selected_param_id == ParamID.ANIM_PRIMARY_COLOR_HUE:
+        #     values[selected_param_id] = (values.get(selected_param_id, 0) + delta * 10) % 360
+            
+        #     current_val = values.get(ParamID.ANIM_PRIMARY_COLOR_HUE, 0)
+        #     new_val = (current_val + delta * 10) % 360
+        # else:
+        #     log.warn(f"Unsupported animation parameter: {self.selected_param_id.name}")
+        #     return
+        
+        # log.info(
+        #     "Animation param adjusted",
+        #     zone=zone.config.display_name,
+        #     param=param.name,
+        #     value=new_value
+        # )
+        
+        # asyncio.create_task(self._apply_parameter_change(zone))
         
     async def _apply_parameter_change(self, zone: 'ZoneCombined'):
         """Apply parameter change to running animation in engine."""
@@ -200,7 +269,6 @@ class AnimationModeController:
             zone,
         )
 
-        
         log.debug(
             "Starting animation",
             zone=zone.config.display_name,

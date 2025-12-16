@@ -16,6 +16,7 @@ from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellati
 from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
 from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
 from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
+from lifecycle.handlers.indicator_shutdown_handler import IndicatorShutdownHandler
 from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
 from lifecycle.handlers.task_cancellation_handler import TaskCancellationHandler
 from lifecycle.api_server_wrapper import APIServerWrapper
@@ -299,16 +300,10 @@ async def main():
     log.info("Initializing shutdown system...")
 
     coordinator = ShutdownCoordinator()
-
-    # 120
     coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
-    
-    # 110
     coordinator.register(AnimationShutdownHandler(lighting_controller))
-    
-    # 100
+    coordinator.register(IndicatorShutdownHandler(lighting_controller.selected_zone_indicator))
     coordinator.register(LEDShutdownHandler(hardware))
-    
     coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Keyboard and polling tasks
     coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))

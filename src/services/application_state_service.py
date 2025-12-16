@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Optional
+from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import ParamID, LogCategory, ZoneEditTarget
 from models.domain.application import ApplicationState
 from services.data_assembler import DataAssembler
@@ -127,6 +128,13 @@ class ApplicationStateService:
         log.info(f"Edit mode set to: {self.state.edit_mode}")
 
     # === Selection Management ===
+    def set_selected_animation_param_id(self, param: AnimationParamID) -> None:
+        """
+        Set currently selected animation parameter
+        """
+        self.state.selected_animation_param_id = param
+        self._queue_save()
+        log.info(f"Selected parameter id changed: {self.state.selected_animation_param_id.name}")
 
     def set_selected_param_id(self, param: ParamID) -> None:
         """
