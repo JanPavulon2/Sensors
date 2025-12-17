@@ -147,7 +147,7 @@ class Serializer:
         if color.mode == ColorMode.HUE:
             result["hue"] = color._hue
         elif color.mode == ColorMode.RGB:
-            result["rgb"] = list(color._rgb)
+            result["rgb"] = list(color.to_rgb())
         elif color.mode == ColorMode.PRESET:
             result["preset_name"] = color._preset_name
 

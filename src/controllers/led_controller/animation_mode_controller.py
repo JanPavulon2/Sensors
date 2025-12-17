@@ -22,8 +22,14 @@ class AnimationModeController:
     """
     Controls animation lifecycle and parameter tuning
     for the currently selected zone.
+
+    PARAMETER FLOW:
+    - cycle_param(): Get available params from anim.PARAMS (definitions)
+    - adjust_param(): Call anim.adjust_param(id, delta) → stores in zone.state
+    - Adjusted values persist in zone.state.animation.parameter_values
+    - Changes saved to state.json via zone_service
     """
-    
+
     def __init__(
         self,
         services: ServiceContainer,

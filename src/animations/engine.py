@@ -9,6 +9,8 @@ import asyncio
 from typing import Dict, Optional, Callable, Type, overload
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
+from animations.color_fade import ColorFadeAnimation
+from animations.snake import SnakeAnimation
 from engine.frame_manager import FrameManager
 from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneID, FramePriority, FrameSource
@@ -22,10 +24,10 @@ log = get_logger().for_category(LogCategory.ANIMATION)
 def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
     """Build animation registry dynamically from AnimationID enum"""
     class_map = {
-        # AnimationID.COLOR_CYCLE: ColorCycleAnimation,
         AnimationID.BREATHE: BreatheAnimation,
-        # AnimationID.COLOR_FADE: ColorFadeAnimation,
-        # AnimationID.SNAKE: SnakeAnimation,
+        AnimationID.COLOR_FADE: ColorFadeAnimation,
+        AnimationID.SNAKE: SnakeAnimation,
+        # AnimationID.COLOR_CYCLE: ColorCycleAnimation,
         # AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
         # AnimationID.MATRIX: MatrixAnimation,  # TEMPORARY: Disabled
     }

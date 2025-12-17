@@ -37,30 +37,13 @@ class AnimationService:
         zone_animation_params: Dict[AnimationParamID, Any],
         zone: 'ZoneCombined'
     ) -> Dict[AnimationParamID, Any]:
-        """
-        Build parameter dict for animation engine.
+        """Return zone's stored animation parameters as-is"""
+        # Runtime behavior driven by animation classes, not config
+        params = zone_animation_params.copy()
 
-        Takes zone's stored animation parameters and supplements with defaults
-        (like zone color for animations that need it).
-
-        Args:
-            anim_id: Which animation
-            zone_animation_params: Parameters from zone.state.animation.parameter_values
-            zone: ZoneCombined for accessing color/brightness
-
-        Returns:
-            Dict[ParamID, value] ready for engine
-        """
-        anim_config = self.get_animation(anim_id)
-        params: Dict[AnimationParamID, Any] = {}
-
-        # Use zone's stored params
-        for param_id in anim_config.parameters:
-            if param_id in zone_animation_params:
-                params[param_id] = zone_animation_params[param_id]
-
-        # Add zone color if animation supports it (all animations use hue)
-        if AnimationParamID.COLOR in anim_config.parameters:
+        # Add zone color if the animation might use it
+        # (animations decide via their PARAMS definitions)
+        if AnimationParamID.COLOR not in params:
             params[AnimationParamID.COLOR] = zone.state.color.to_hue()
 
         return params

@@ -7,12 +7,11 @@ from .int_range_param import IntRangeParam
 class BrightnessParam(IntRangeParam):
     key = AnimationParamID.BRIGHTNESS
 
-    def __init__(self, value: int | None = None):
+    def __init__(self):
         super().__init__(
             label="Brightness",
             min_value=0,
             max_value=100,
             default=100,
             step=1,
-            value=value,
         )

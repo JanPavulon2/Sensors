@@ -6,12 +6,11 @@ from .int_range_param import IntRangeParam
 class SpeedParam(IntRangeParam):
     key = AnimationParamID.SPEED
 
-    def __init__(self, value: int | None = None):
+    def __init__(self):
         super().__init__(
             label="Speed",
             min_value=1,
             max_value=100,
             default=50,
             step=1,
-            value=value,
         )

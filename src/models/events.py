@@ -10,7 +10,7 @@ from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Generic, TypeVar
 import time
 from models.color import Color
-from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode
+from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode, AnimationID, AnimationParamID
 
 
 class EventType(Enum):
@@ -19,16 +19,20 @@ class EventType(Enum):
     ENCODER_ROTATE = auto()
     ENCODER_CLICK = auto()
     BUTTON_PRESS = auto()
-    
+
     # Keyboard eventss
-    KEYBOARD_KEYPRESS = auto() 
-    
+    KEYBOARD_KEYPRESS = auto()
+
     # Future: Web API, MQTT, system events
     WEB_COMMAND = auto()
     MQTT_COMMAND = auto()
     SYSTEM_EVENT = auto()
-    
+
+    # Zone and animation events
     ZONE_STATE_CHANGED = auto()
+    ANIMATION_STARTED = auto()
+    ANIMATION_STOPPED = auto()
+    ANIMATION_PARAMETER_CHANGED = auto()
 
 TSource = TypeVar("TSource", bound=Enum)
 
@@ -168,3 +172,74 @@ class ZoneStateChangedEvent(Event[EventSource]):
         self.brightness = brightness
         self.is_on = is_on
         self.render_mode = render_mode
+
+
+@dataclass
+class AnimationStartedEvent(Event[EventSource]):
+    """Animation started event - fired when an animation begins on a zone"""
+    zone_id: ZoneID
+    animation_id: AnimationID
+    parameters: Optional[Dict[AnimationParamID, Any]] = None
+
+    def __init__(
+        self,
+        zone_id: ZoneID,
+        animation_id: AnimationID,
+        parameters: Optional[Dict[AnimationParamID, Any]] = None,
+    ):
+        # Convert enum keys to strings for serialization in data dict
+        serialized_params = {}
+        if parameters:
+            serialized_params = {k.name if isinstance(k, AnimationParamID) else k: v for k, v in parameters.items()}
+
+        super().__init__(
+            type=EventType.ANIMATION_STARTED,
+            source=EventSource.ANIMATION_ENGINE,
+            data={
+                "zone_id": zone_id.name,
+                "animation_id": animation_id.name,
+                "parameters": serialized_params,
+            },
+            timestamp=time.time(),
+        )
+        self.zone_id = zone_id
+        self.animation_id = animation_id
+        self.parameters = parameters or {}
+
+
+@dataclass
+class AnimationStoppedEvent(Event[EventSource]):
+    """Animation stopped event - fired when an animation ends on a zone"""
+    zone_id: ZoneID
+
+    def __init__(self, zone_id: ZoneID):
+        super().__init__(
+            type=EventType.ANIMATION_STOPPED,
+            source=EventSource.ANIMATION_ENGINE,
+            data={"zone_id": zone_id.name},
+            timestamp=time.time(),
+        )
+        self.zone_id = zone_id
+
+
+@dataclass
+class AnimationParameterChangedEvent(Event[EventSource]):
+    """Animation parameter changed event - fired when an animation parameter is updated"""
+    zone_id: ZoneID
+    param_id: AnimationParamID
+    value: Any
+
+    def __init__(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any):
+        super().__init__(
+            type=EventType.ANIMATION_PARAMETER_CHANGED,
+            source=EventSource.ANIMATION_ENGINE,
+            data={
+                "zone_id": zone_id.name,
+                "param_id": param_id.name,
+                "value": value,
+            },
+            timestamp=time.time(),
+        )
+        self.zone_id = zone_id
+        self.param_id = param_id
+        self.value = value

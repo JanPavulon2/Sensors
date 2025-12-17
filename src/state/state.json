@@ -16,11 +16,11 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "violet"
+        "preset_name": "green"
       },
-      "brightness": 48,
+      "brightness": 0,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
@@ -48,7 +48,7 @@
         "mode": "PRESET",
         "preset_name": "cyan"
       },
-      "brightness": 41,
+      "brightness": 11,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -84,10 +84,10 @@
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "BREATHE",
+        "id": "SNAKE",
         "parameters": {
-          "speed": 57,
-          "brightness": 73
+          "speed": 68,
+          "brightness": 41
         }
       }
     },

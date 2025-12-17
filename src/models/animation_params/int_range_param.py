@@ -3,10 +3,8 @@ from .animation_param import AnimationParam
 
 
 class IntRangeParam(AnimationParam):
-    """
-    Integer parameter with min / max / step.
-    """
-    
+    """Integer parameter with min/max/step - stateless definition."""
+
     def __init__(
         self,
         *,
@@ -15,7 +13,6 @@ class IntRangeParam(AnimationParam):
         max_value: int,
         default: int,
         step: int = 1,
-        value: int | None = None,
     ):
         self.label = label
         self.min = min_value
@@ -23,11 +20,11 @@ class IntRangeParam(AnimationParam):
         self.default = default
         self.step = step
 
-        super().__init__(value=value)
-        
-    def adjust(self, delta: int) -> None:
-        new_value = self.value + delta * self.step
-        self.value = self.clamp(new_value)
+    def adjust(self, current: int, delta: int) -> int:
+        """Adjust current by delta*step, return clamped result"""
+        new_value = current + delta * self.step
+        return self.clamp(new_value)
 
     def clamp(self, value: int) -> int:
+        """Clamp to [min, max]"""
         return max(self.min, min(self.max, int(value)))

@@ -7,12 +7,11 @@ from .int_range_param import IntRangeParam
 class PrimaryColorHueParam(IntRangeParam):
     key = AnimationParamID.PRIMARY_COLOR_HUE
 
-    def __init__(self, value: int | None = None):
+    def __init__(self):
         super().__init__(
             label="Primary Color Hue",
             min_value=0,
             max_value=359,
             default=0,
             step=5,
-            value=value,
         )

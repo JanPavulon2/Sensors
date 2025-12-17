@@ -30,6 +30,13 @@ class BaseAnimation:
     Subclasses MUST implement async def step(self) which returns either:
         SingleZoneFrame    (zone-level color)
         PixelFrame       (pixel-level override)
+
+    ARCHITECTURE INVARIANTS:
+    - PARAMS: class-level dict of parameter definitions (metadata only)
+    - params: instance-level dict of parameter values (runtime state)
+    - Use get_param() to read values with fallback to defaults
+    - Use set_param() or adjust_param() to modify values
+    - Parameter definitions are stateless - they provide adjust/clamp logic
     """
     PARAMS: Dict[AnimationParamID, AnimationParam] = {}  # Parameter definitions (class-level)
 
@@ -88,22 +95,13 @@ class BaseAnimation:
             self.params[param_id] = value
 
     def adjust_param(self, param_id: AnimationParamID, delta: int) -> Optional[Any]:
-        """
-        Adjust parameter by delta using the parameter's adjustment logic.
-
-        Returns:
-            new value or None if param not supported
-        """
+        """Adjust parameter by delta, return adjusted value or None"""
         param_def = self.PARAMS.get(param_id)
         if not param_def:
             return None
 
         current_value = self.get_param(param_id, param_def.default)
-
-        # Create temp instance to use its adjust logic
-        temp_param = param_def.__class__(value=current_value)
-        temp_param.adjust(delta)
-        new_value = temp_param.value
+        new_value = param_def.adjust(current_value, delta)
 
         self.params[param_id] = new_value
         return new_value
