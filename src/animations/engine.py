@@ -6,16 +6,15 @@ Uses TransitionService for smooth transitions between animation states.
 """
 
 import asyncio
-from typing import Dict, Optional, Callable, Type, overload
+from typing import Dict, Optional, Type
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
+from animations.color_snake import ColorSnakeAnimation
 from animations.snake import SnakeAnimation
 from engine.frame_manager import FrameManager
 from models.animation_params.animation_param_id import AnimationParamID
-from models.enums import AnimationID, ZoneID, FramePriority, FrameSource
-# from animations.registry import ANIMATION_REGISTRY
-from models.frame import SingleZoneFrame
+from models.enums import AnimationID, ZoneID
 from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
 
@@ -27,8 +26,9 @@ def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
         AnimationID.BREATHE: BreatheAnimation,
         AnimationID.COLOR_FADE: ColorFadeAnimation,
         AnimationID.SNAKE: SnakeAnimation,
+        AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
+        
         # AnimationID.COLOR_CYCLE: ColorCycleAnimation,
-        # AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
         # AnimationID.MATRIX: MatrixAnimation,  # TEMPORARY: Disabled
     }
 

@@ -20,7 +20,7 @@ from models.animation_params.primary_color_hue_param import PrimaryColorHueParam
 
 class ColorSnakeAnimation(BaseAnimation):
     """
-    Color Snake animation – rainbow snake with hue gradient.
+    Color Snake animation - rainbow snake with hue gradient.
 
     A multi-pixel snake travels through the zone pixels.
     Each segment has a shifted hue, forming a rainbow tail.

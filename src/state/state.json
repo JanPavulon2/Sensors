@@ -49,8 +49,8 @@
     },
     "pixel": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "cyan"
+        "mode": "HUE",
+        "hue": 250
       },
       "brightness": 21,
       "is_on": true,
@@ -88,23 +88,19 @@
       },
       "brightness": 100,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "SNAKE",
+        "id": "COLOR_SNAKE",
         "parameters": {
           "speed": 68,
-          "brightness": 41
+          "length": 4
         }
       }
     },
     "circle": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          255,
-          0,
-          69
-        ]
+        "mode": "HUE",
+        "hue": 173
       },
       "brightness": 7,
       "is_on": true,
@@ -133,10 +129,7 @@
     }
   },
   "application": {
-    "edit_mode_on": true,
-    "selected_animation_param_id": "primary_color_hue",
+    "edit_mode_on": false,
+    "selected_animation_param_id": "HUE",
     "selected_zone_index": 2,
-    "frame_by_frame_mode": false,
-    "save_on_change": false
-  }
-}
+    "selected_zone_edit_target": 

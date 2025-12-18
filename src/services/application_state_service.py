@@ -55,12 +55,12 @@ class ApplicationStateService:
 
         Waits for debounce delay, then saves to disk.
         Called by _queue_save() after cancelling previous pending save.
+
+        NOTE: Application state is ALWAYS saved, regardless of save_on_change setting.
+        The save_on_change setting only applies to zone state changes.
+        Application state changes are critical and must persist across restarts.
         """
         await asyncio.sleep(self._save_delay)
-
-        if not self.state.save_on_change:
-            log.debug("Auto-save disabled, skipping state save")
-            return
 
         try:
             self.assembler.save_application_state(self.state)

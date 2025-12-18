@@ -149,8 +149,8 @@ class PreviewPanelController:
         from animations.breathe import BreatheAnimation
         from animations.color_fade import ColorFadeAnimation
         from animations.color_snake import ColorSnakeAnimation
-        from animations.matrix import MatrixAnimation
-        from animations.color_cycle import ColorCycleAnimation
+        from animations.old.matrix import MatrixAnimation
+        from animations.old.color_cycle import ColorCycleAnimation
 
         # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
         empty_zones = []
