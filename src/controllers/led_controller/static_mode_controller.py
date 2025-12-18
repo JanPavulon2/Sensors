@@ -10,8 +10,10 @@ import asyncio
 from models.enums import FramePriority, FrameSource, ZoneEditTarget, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.frame import MultiZoneFrame, SingleZoneFrame
+from models.events import ZoneStateChangedEvent, EventType
 from services import ServiceContainer
 from services.zone_service import ZoneService
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.STATIC_CONTROLLER)
@@ -43,6 +45,7 @@ class StaticModeController:
         self.app_state_service = services.app_state_service
         self.frame_manager = services.frame_manager
         self.color_manager = services.color_manager
+        self.event_bus: EventBus = services.event_bus
 
     # ------------------------------------------------------------------
     # Initialization
@@ -83,6 +86,12 @@ class StaticModeController:
             ttl=10.0,
         )
         await self.frame_manager.push_frame(frame)
+
+        # Subscribe to zone state changes (e.g., from API) to re-submit frames
+        self.event_bus.subscribe(
+            EventType.ZONE_STATE_CHANGED,
+            self._on_zone_state_changed,
+        )
 
         log.info(f"Rendered {len(zones_colors)} STATIC zones")
 
@@ -160,3 +169,31 @@ class StaticModeController:
             ttl=10.0,  # Match initialize() TTL to keep static zones persistent
         )
         asyncio.create_task(self.frame_manager.push_frame(frame))
+
+    # ------------------------------------------------------------------
+    # Event Handling
+    # ------------------------------------------------------------------
+
+    async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
+        """
+        Handle zone state changes from API or hardware.
+
+        When a zone's state is updated (brightness, color, is_on),
+        re-submit its frame to FrameManager so hardware reflects the change.
+        """
+        zone = self.zone_service.get_zone(event.zone_id)
+        if not zone:
+            log.warn(f"Zone state changed but zone not found: {event.zone_id}")
+            return
+
+        # Only re-render if zone is in STATIC mode
+        if zone.state.mode != ZoneRenderMode.STATIC:
+            return
+
+        log.debug(
+            f"Zone state changed, re-submitting frame",
+            zone=zone.config.display_name,
+            brightness=zone.brightness,
+        )
+
+        self.submit_zone(zone)

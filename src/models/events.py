@@ -6,11 +6,12 @@ All hardware inputs (encoders, buttons) are published as events.
 """
 
 from dataclasses import dataclass
+import time
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Generic, TypeVar
-import time
+from models.animation_params.animation_param_id import AnimationParamID
 from models.color import Color
-from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode, AnimationID, AnimationParamID
+from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode, AnimationID
 
 
 class EventType(Enum):

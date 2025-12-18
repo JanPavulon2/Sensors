@@ -143,7 +143,37 @@ class ZoneService:
                 is_on=is_on,
             )
         ))
-        
+
+    def set_render_mode(self, zone_id: ZoneID, mode: ZoneRenderMode, animation=None) -> None:
+        """
+        Set zone render mode (STATIC, ANIMATION, or OFF).
+
+        Args:
+            zone_id: Zone ID to change
+            mode: New render mode (ZoneRenderMode enum)
+            animation: AnimationState for ANIMATION mode, None otherwise
+        """
+        zone = self.get_zone(zone_id)
+        zone.state.mode = mode
+        if animation is not None:
+            zone.state.animation = animation
+
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone render mode changed",
+            zone=zone.config.display_name,
+            mode=mode.name,
+            animation=animation.id.name if animation else None,
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                render_mode=mode,
+            )
+        ))
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------

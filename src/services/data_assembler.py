@@ -297,7 +297,7 @@ class DataAssembler:
 
             state_json["application"] = {
                 "edit_mode_on": app_state.edit_mode,
-                "selected_parameter_id": Serializer.enum_to_str(app_state.selected_animation_param_id),
+                "selected_animation_param_id": Serializer.enum_to_str(app_state.selected_animation_param_id),
                 "selected_zone_index": app_state.selected_zone_index,
                 "selected_zone_edit_target": app_state.selected_zone_edit_target,
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,

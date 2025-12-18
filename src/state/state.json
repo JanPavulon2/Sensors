@@ -2,10 +2,14 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "pink"
+        "mode": "RGB",
+        "rgb": [
+          26,
+          24,
+          158
+        ]
       },
-      "brightness": 5,
+      "brightness": 95,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -16,9 +20,9 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "green"
+        "preset_name": "red"
       },
-      "brightness": 0,
+      "brightness": 100,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -48,15 +52,13 @@
         "mode": "PRESET",
         "preset_name": "cyan"
       },
-      "brightness": 11,
+      "brightness": 21,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
-        "id": "BREATHE",
+        "id": "COLOR_FADE",
         "parameters": {
-          "speed": 1,
-          "primary_color_hue": 0,
-          "intensity": 58
+          "speed": 40
         }
       }
     },
@@ -77,12 +79,16 @@
     },
     "pixel2": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "green"
+        "mode": "RGB",
+        "rgb": [
+          255,
+          0,
+          199
+        ]
       },
-      "brightness": 80,
+      "brightness": 100,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "SNAKE",
         "parameters": {
@@ -93,12 +99,16 @@
     },
     "circle": {
       "color": {
-        "mode": "HUE",
-        "hue": 39
+        "mode": "RGB",
+        "rgb": [
+          255,
+          0,
+          69
+        ]
       },
-      "brightness": 60,
+      "brightness": 7,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
@@ -124,7 +134,7 @@
   },
   "application": {
     "edit_mode_on": true,
-    "selected_parameter_id": "primary_color_hue",
+    "selected_animation_param_id": "primary_color_hue",
     "selected_zone_index": 2,
     "frame_by_frame_mode": false,
     "save_on_change": false

@@ -12,5 +12,5 @@ class SpeedParam(IntRangeParam):
             min_value=1,
             max_value=100,
             default=50,
-            step=1,
+            step=10,
         )

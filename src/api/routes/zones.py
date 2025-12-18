@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, status
 
 from api.schemas.zone import (
     ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
-    ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest
+    ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest, ZoneIsOnUpdateRequest
 )
 from api.services.zone_service import ZoneAPIService
 from api.dependencies import get_service_container
@@ -210,37 +210,42 @@ async def update_zone_brightness(
 
 
 @router.put(
-    "/{zone_id}/enabled",
+    "/{zone_id}/is-on",
     response_model=ZoneResponse,
     status_code=status.HTTP_200_OK,
-    summary="Enable/disable zone",
-    description="Turn zone on or off"
+    summary="Toggle zone power",
+    description="Power zone on or off"
 )
-async def toggle_zone_enabled(
+async def toggle_zone_is_on(
     zone_id: str,
-    enabled_request: dict  # {"enabled": true/false}
+    is_on_request: ZoneIsOnUpdateRequest,
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
-    Enable or disable a zone.
+    Power a zone on or off.
 
     **Parameters:**
-    - `zone_id`: Zone ID
+    - `zone_id`: Zone ID (e.g., "FLOOR", "LAMP")
 
     **Request Body:**
     ```json
     {
-      "enabled": true
+      "is_on": true
     }
     ```
 
     **Effect:**
-    - `enabled: true` - Zone displays color/animation normally
-    - `enabled: false` - Zone is powered off (renders black)
+    - `is_on: true` - Zone displays color/animation normally
+    - `is_on: false` - Zone is powered off (renders black)
 
-    **Returns:** Updated zone state
+    **Returns:** Updated zone with new power state
+
+    **Side Effects:**
+    - Changes persisted immediately
+    - Broadcasts update to all clients (WebSocket)
+    - Triggers hardware update if zone is on
     """
-    # TODO: Implement once domain service supports this
-    raise NotImplementedError("Zone enable/disable coming in Phase 8.2")
+    return zone_service.update_zone_is_on(zone_id, is_on_request.is_on)
 
 
 @router.put(
@@ -252,13 +257,14 @@ async def toggle_zone_enabled(
 )
 async def update_zone_render_mode(
     zone_id: str,
-    mode_request: ZoneRenderModeUpdateRequest
+    mode_request: ZoneRenderModeUpdateRequest,
+    zone_service: ZoneAPIService = Depends(get_zone_service)
 ) -> ZoneResponse:
     """
     Change what a zone is displaying.
 
     **Parameters:**
-    - `zone_id`: Zone ID
+    - `zone_id`: Zone ID (e.g., "FLOOR", "LAMP")
 
     **Request Body:**
     ```json
@@ -286,9 +292,18 @@ async def update_zone_render_mode(
     // Turn off
     {"render_mode": "OFF"}
     ```
+
+    **Side Effects:**
+    - Changes persisted immediately
+    - Broadcasts update to all clients (WebSocket)
+    - Stops any running animation if switching away from ANIMATION mode
+    - Starts animation if switching to ANIMATION mode with valid animation_id
     """
-    # TODO: Implement once animation service is available
-    raise NotImplementedError("Zone render mode coming in Phase 8.3")
+    return zone_service.update_zone_render_mode(
+        zone_id,
+        mode_request.render_mode.value,
+        mode_request.animation_id
+    )
 
 
 # ============================================================================

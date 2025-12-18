@@ -100,20 +100,26 @@ def create_app(
     # http://localhost:3000 to http://localhost:8000 would be blocked.
 
     if cors_origins is None:
-        # Default: Allow frontend on localhost + typical dev URLs
-        # For WebSocket support, we need to allow both HTTP and the origins themselves
-        cors_origins = [
-            "http://localhost:3000",      # React dev server (default)
-            "http://localhost:5173",      # Vite dev server (alternative)
-            "http://localhost",           # localhost without port
-            "http://localhost:8000",      # API server itself (for WebSocket connections)
-            "http://127.0.0.1",           # 127.0.0.1 without port
-            "http://127.0.0.1:3000",      # 127.0.0.1 variant
-            "http://127.0.0.1:5173",      # 127.0.0.1 variant
-            "http://127.0.0.1:8000",      # 127.0.0.1 API server
-            # Add production domain here later: "https://app.diuna.io"
-        ]
+        # For development: Allow all origins on dev ports (5173, 5175, 3000)
+        # In production, restrict to specific domains
+        # IMPORTANT: This development config allows any origin accessing the API
+        cors_origins = ["*"]
+        log.warn("CORS configured to allow all origins (development mode). Restrict this in production!")
 
+    # Default: Allow frontend on localhost + typical dev URLs
+    # For WebSocket support, we need to allow both HTTP and the origins themselves
+    # cors_origins = [
+    #     "http://localhost:3000",      # React dev server (default)
+    #     "http://localhost:5173",      # Vite dev server (alternative)
+    #     "http://localhost",           # localhost without port
+    #     "http://localhost:8000",      # API server itself (for WebSocket connections)
+    #     "http://127.0.0.1",           # 127.0.0.1 without port
+    #     "http://127.0.0.1:3000",      # 127.0.0.1 variant
+    #     "http://127.0.0.1:5173",      # 127.0.0.1 variant
+    #     "http://127.0.0.1:8000",      # 127.0.0.1 API server
+    #     # Add production domain here later: "https://app.diuna.io"
+    # ]
+    
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,  # Use the specific origins list (not *)

@@ -21,7 +21,7 @@ from managers.color_manager import ColorManager
 
 from api.schemas.zone import (
     ZoneResponse, ZoneStateResponse, ColorResponse, ZoneListResponse,
-    ColorRequest, ZoneRenderModeEnum
+    ColorRequest, ZoneRenderModeEnum, ZoneIsOnUpdateRequest, ZoneRenderModeUpdateRequest
 )
 from api.middleware.error_handler import ZoneNotFoundError, InvalidColorModeError
 
@@ -108,7 +108,7 @@ class ZoneAPIService:
 
         Args:
             zone_id: Zone ID string
-            brightness: Brightness 0-255 (can be float)
+            brightness: Brightness 0-255 (API input range)
 
         Returns:
             Updated ZoneResponse
@@ -118,7 +118,80 @@ class ZoneAPIService:
         except KeyError:
             raise ZoneNotFoundError(zone_id)
 
-        self.zone_service.set_brightness(zone_enum, brightness)
+        # Convert from API range (0-255) to domain range (0-100)
+        # brightness_percent = (brightness / 255) * 100
+        brightness_percent = round((brightness / 255) * 100)
+
+        self.zone_service.set_brightness(zone_enum, brightness_percent)
+
+        zone = self.zone_service.get_zone(zone_enum)
+        return self._zone_to_response(zone)
+
+    def update_zone_is_on(self, zone_id: str, is_on: bool) -> ZoneResponse:
+        """Enable or disable a zone
+
+        Args:
+            zone_id: Zone ID string
+            is_on: True to power on, False to power off
+
+        Returns:
+            Updated ZoneResponse
+
+        Raises:
+            ZoneNotFoundError: If zone doesn't exist
+        """
+        try:
+            zone_enum = ZoneID[zone_id.upper()]
+        except KeyError:
+            raise ZoneNotFoundError(zone_id)
+
+        self.zone_service.set_is_on(zone_enum, is_on)
+
+        zone = self.zone_service.get_zone(zone_enum)
+        return self._zone_to_response(zone)
+
+    def update_zone_render_mode(self, zone_id: str, render_mode: str, animation_id: str = None) -> ZoneResponse:
+        """Change zone render mode
+
+        Args:
+            zone_id: Zone ID string
+            render_mode: New render mode ("STATIC", "ANIMATION", or "OFF")
+            animation_id: Animation ID for ANIMATION mode
+
+        Returns:
+            Updated ZoneResponse
+
+        Raises:
+            ZoneNotFoundError: If zone doesn't exist
+            ValueError: If render mode invalid
+        """
+        from models.enums import ZoneRenderMode, AnimationID
+        from models.domain.animation import AnimationState
+
+        try:
+            zone_enum = ZoneID[zone_id.upper()]
+        except KeyError:
+            raise ZoneNotFoundError(zone_id)
+
+        # Parse and validate render mode
+        try:
+            mode = ZoneRenderMode[render_mode.upper()]
+        except KeyError:
+            raise ValueError(f"Invalid render mode '{render_mode}'. Must be STATIC, ANIMATION, or OFF")
+
+        # Handle animation assignment for ANIMATION mode
+        animation = None
+        if mode == ZoneRenderMode.ANIMATION:
+            if not animation_id:
+                raise ValueError("animation_id required when switching to ANIMATION mode")
+
+            try:
+                anim_enum = AnimationID[animation_id.upper()]
+                animation = AnimationState(id=anim_enum, parameter_values={})
+            except KeyError:
+                raise ValueError(f"Invalid animation ID '{animation_id}'")
+
+        self.zone_service.set_render_mode(zone_enum, mode, animation)
 
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
@@ -208,14 +281,17 @@ class ZoneAPIService:
 
     def _zone_to_response(self, zone: ZoneCombined) -> ZoneResponse:
         """Convert domain ZoneCombined to API response"""
+        # Convert brightness from domain range (0-100) to API range (0-255)
+        brightness_api = round((zone.brightness / 100) * 255)
+
         return ZoneResponse(
             id=zone.config.id.name,
             name=zone.config.display_name,
             pixel_count=zone.config.pixel_count,
             state=ZoneStateResponse(
                 color=self._color_to_response(zone.state.color),
-                brightness=zone.brightness,
-                enabled=zone.config.enabled,
+                brightness=brightness_api,
+                is_on=zone.state.is_on,
                 render_mode=zone.state.mode.name,
                 animation_id=zone.state.animation.id.name if zone.state.animation else None
             ),

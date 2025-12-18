@@ -44,7 +44,8 @@ class EventSource(Enum):
     """Event source identifiers for application events"""
     ZONE_SERVICE = auto()  # Events from zone state changes
     APPLICATION = auto()   # Generic application events
-
+    ANIMATION_ENGINE = auto()
+    
 class BuzzerID(Enum):
     """Buzzer identifiers"""
     ACTIVE = auto()   # 

@@ -69,11 +69,11 @@ class ZoneState:
 
     @staticmethod
     def _validate_brightness(value: Any) -> None:
-        """Validate brightness is in range 0-100"""
-        if not isinstance(value, int):
-            raise TypeError(f"brightness must be int, got {type(value).__name__}")
+        """Validate brightness is in range 0-100 (percentage)"""
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"brightness must be int or float, got {type(value).__name__}")
         if not (0 <= value <= 100):
-            raise ValueError(f"brightness must be 0-100, got {value}")
+            raise ValueError(f"brightness must be 0-100 (percentage), got {value}")
 
     @staticmethod
     def _validate_is_on(value: Any) -> None:

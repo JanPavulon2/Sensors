@@ -342,10 +342,9 @@ class LightingController:
 
         if selected_zone_render_mode == ZoneRenderMode.ANIMATION:
             await self.animation_engine.stop_for_zone(zone_id)
-        
-        # Update state
-        selected_zone.state.mode = target_mode
-        self.zone_service.save_state()
+
+        # Update state through service (handles persistence and event publishing)
+        self.zone_service.set_render_mode(zone_id, target_mode, selected_zone.state.animation)
 
         self.selected_zone_indicator.on_zone_render_mode_changed(target_mode)
         

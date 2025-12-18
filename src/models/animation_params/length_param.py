@@ -13,5 +13,5 @@ class LengthParam(IntRangeParam):
             min_value=1,
             max_value=300,
             default=100,
-            step=1,
+            step=10,
         )

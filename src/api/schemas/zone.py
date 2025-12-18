@@ -108,7 +108,7 @@ class ZoneStateResponse(BaseModel):
         le=255,
         description="Zone brightness level 0-255"
     )
-    enabled: bool = Field(description="Zone is enabled (not disabled)")
+    is_on: bool = Field(description="Zone powered on/off state")
     render_mode: ZoneRenderModeEnum = Field(
         description="What zone is displaying: STATIC (color), ANIMATION (animated), or OFF (powered off)"
     )
@@ -146,7 +146,7 @@ class ZoneResponse(BaseModel):
                         "saturation": None
                     },
                     "brightness": 200,
-                    "enabled": True,
+                    "is_on": True,
                     "render_mode": "STATIC",
                     "animation_id": None
                 },
@@ -193,14 +193,14 @@ class ZoneBrightnessUpdateRequest(BaseModel):
         }
 
 
-class ZoneEnabledUpdateRequest(BaseModel):
+class ZoneIsOnUpdateRequest(BaseModel):
     """Request to enable/disable zone"""
-    enabled: bool = Field(description="Zone enabled state")
+    is_on: bool = Field(description="Zone powered on/off state")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "enabled": True
+                "is_on": True
             }
         }
 

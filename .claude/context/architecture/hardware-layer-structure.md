@@ -177,7 +177,7 @@ class StripFactory:
             gpio_config = gpio_configs.get(gpio_pin)
 
             if not gpio_config:
-                log.warning(f"No GPIO config for pin {gpio_pin}, skipping")
+                log.warn(f"No GPIO config for pin {gpio_pin}, skipping")
                 continue
 
             # Calculate pixel count
