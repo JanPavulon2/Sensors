@@ -23,6 +23,9 @@ from api.schemas.zone import (
     ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
     ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest, ZoneIsOnUpdateRequest
 )
+from api.schemas.animation import (
+    AnimationStartRequest, AnimationStopRequest, AnimationParameterUpdateRequest
+)
 from api.services.zone_service import ZoneAPIService
 from api.dependencies import get_service_container
 
@@ -337,3 +340,146 @@ async def reset_zone(
     **Use Case:** Quick reset button in UI
     """
     return zone_service.reset_zone(zone_id)
+
+
+# ============================================================================
+# ANIMATION CONTROL ENDPOINTS
+# ============================================================================
+
+@router.post(
+    "/{zone_id}/animation/start",
+    response_model=ZoneResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Start animation on zone",
+    description="Start a specific animation on a zone with optional parameters"
+)
+async def start_zone_animation(
+    zone_id: str,
+    animation_request: AnimationStartRequest,
+    zone_service: ZoneAPIService = Depends(get_zone_service)
+) -> ZoneResponse:
+    """
+    Start an animation on a specific zone.
+
+    Switches zone to ANIMATION mode and starts the specified animation.
+    Optionally includes animation parameters.
+
+    **Parameters:**
+    - `zone_id`: Zone ID (e.g., "FLOOR", "LAMP")
+
+    **Request Body:**
+    ```json
+    {
+      "animation_id": "BREATHE",
+      "parameters": {"ANIM_INTENSITY": 75}
+    }
+    ```
+
+    **Supported Animations:**
+    - BREATHE: Smooth breathing effect
+    - SNAKE: Sequential zone chase
+    - COLOR_CYCLE: Color cycling through presets
+    - And more (see GET /system/animations)
+
+    **Returns:** Updated zone with animation now running
+
+    **Side Effects:**
+    - Switches zone to ANIMATION mode
+    - Stops any previous animation
+    - Broadcasts update to WebSocket clients
+    - Changes persisted to state.json
+
+    **Errors:**
+    - 404: Zone not found or animation not found
+    - 400: Invalid animation parameters
+    """
+    return zone_service.start_zone_animation(
+        zone_id,
+        animation_request.animation_id,
+        animation_request.parameters
+    )
+
+
+@router.post(
+    "/{zone_id}/animation/stop",
+    response_model=ZoneResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Stop animation on zone",
+    description="Stop animation and switch zone to static color mode"
+)
+async def stop_zone_animation(
+    zone_id: str,
+    zone_service: ZoneAPIService = Depends(get_zone_service)
+) -> ZoneResponse:
+    """
+    Stop animation on a zone and switch to static color.
+
+    Switches zone from ANIMATION mode to STATIC mode, returning to
+    displaying the current color instead of animating.
+
+    **Parameters:**
+    - `zone_id`: Zone ID
+
+    **Returns:** Updated zone with animation stopped
+
+    **Side Effects:**
+    - Switches zone from ANIMATION to STATIC mode
+    - Broadcasts update to WebSocket clients
+    - Changes persisted to state.json
+
+    **Note:** Zone retains its color for static display after animation stops
+    """
+    return zone_service.stop_zone_animation(zone_id)
+
+
+@router.put(
+    "/{zone_id}/animation/parameters",
+    response_model=ZoneResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update animation parameters",
+    description="Update animation parameters while animation is running"
+)
+async def update_animation_parameters(
+    zone_id: str,
+    param_request: AnimationParameterUpdateRequest,
+    zone_service: ZoneAPIService = Depends(get_zone_service)
+) -> ZoneResponse:
+    """
+    Update parameters for a running animation.
+
+    Only works if zone is currently in ANIMATION mode. Parameters are
+    applied immediately to the running animation without stopping it.
+
+    **Parameters:**
+    - `zone_id`: Zone ID
+
+    **Request Body:**
+    ```json
+    {
+      "parameters": {
+        "ANIM_INTENSITY": 50,
+        "ANIM_LENGTH": 5
+      }
+    }
+    ```
+
+    **Example Parameters:**
+    - ANIM_INTENSITY: Animation intensity (0-100)
+    - ANIM_LENGTH: Animation length/size (varies by animation)
+    - ANIM_HUE_OFFSET: Hue offset for color animations (0-360)
+
+    **Returns:** Updated zone with new animation parameters
+
+    **Side Effects:**
+    - Updates animation parameters in real-time
+    - Broadcasts update to WebSocket clients
+    - Changes persisted to state.json
+
+    **Errors:**
+    - 404: Zone not found
+    - 400: Zone not in ANIMATION mode or invalid parameters
+    """
+    return zone_service.update_zone_animation_parameters(
+        zone_id,
+        param_request.parameters
+    )

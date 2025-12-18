@@ -229,3 +229,46 @@ async def list_animations(
         animations=animation_responses,
         count=len(animation_responses)
     )
+
+
+@router.get(
+    "/animations/{animation_id}",
+    response_model=AnimationResponse,
+    summary="Get animation details",
+    description="Get detailed information about a specific animation"
+)
+async def get_animation(
+    animation_id: str,
+    services = Depends(get_service_container)
+) -> AnimationResponse:
+    """
+    Get details for a specific animation.
+
+    **Parameters:**
+    - `animation_id`: Animation ID (e.g., "BREATHE", "SNAKE", "COLOR_CYCLE")
+
+    **Returns:** Animation definition including:
+    - id: Animation ID
+    - display_name: Human-readable name
+    - description: What the animation does
+    - parameters: List of supported parameter names
+
+    **Errors:**
+    - 404: Animation not found
+    """
+    animation_service = services.animation_service
+
+    try:
+        anim = animation_service.get_animation(animation_id)
+        return AnimationResponse(
+            id=anim.id.name,
+            display_name=anim.display_name,
+            description=anim.description,
+            parameters=[p.name for p in anim.parameters]
+        )
+    except KeyError:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=404,
+            detail=f"Animation '{animation_id}' not found"
+        )

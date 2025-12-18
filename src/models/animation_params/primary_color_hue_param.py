@@ -12,6 +12,6 @@ class PrimaryColorHueParam(IntRangeParam):
             label="Primary Color Hue",
             min_value=0,
             max_value=359,
-            default=0,
+            default=30,
             step=10,
         )

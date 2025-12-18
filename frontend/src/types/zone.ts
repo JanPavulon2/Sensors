@@ -35,7 +35,7 @@ export interface Color {
 export interface ZoneState {
   color: Color;
   brightness: number; // 0-255
-  enabled: boolean;
+  is_on: boolean;
   render_mode: ZoneRenderMode;
   animation_id?: string | null;
 }
@@ -44,8 +44,8 @@ export interface Zone {
   id: string;
   name: string;
   pixel_count: number;
-  enabled: boolean;
   state: ZoneState;
+  gpio: number;
   layout?: {
     x: number;
     y: number;
@@ -56,7 +56,7 @@ export interface Zone {
 
 export interface ZoneUpdateRequest {
   name?: string;
-  enabled?: boolean;
+  is_on?: boolean;
   color?: Color;
   brightness?: number;
 }

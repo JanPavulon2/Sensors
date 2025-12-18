@@ -7,11 +7,17 @@ from .int_range_param import IntRangeParam
 class LengthParam(IntRangeParam):
     key = AnimationParamID.LENGTH
 
-    def __init__(self):
+    def __init__(self, 
+        *,
+        min_value: int,
+        max_value: int,
+        default: int,
+        step: int = 1
+    ):
         super().__init__(
             label="Length",
-            min_value=1,
-            max_value=300,
-            default=100,
-            step=10,
+            min_value=min_value,
+            max_value=max_value,
+            default=default,
+            step=step,
         )

@@ -85,7 +85,8 @@ class ColorSnakeAnimation(BaseAnimation):
         for i in range(length):
             pos = (self._position - i) % self._pixel_count
             hue = (base_hue + i * self._HUE_STEP_PER_SEGMENT) % 360
-            pixels[pos] = Color.from_hue(hue, brightness=self.base_brightness)
+            # pixels[pos] = Color.from_hue(hue, brightness=self.base_brightness)
+            pixels[pos] = Color.from_hue(hue)
 
         return pixels
 

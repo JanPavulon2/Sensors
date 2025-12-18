@@ -112,9 +112,9 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
         <div className="pt-2 border-t border-border-subtle">
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <div
-              className={`w-2 h-2 rounded-full ${zone.state.enabled ? 'bg-success' : 'bg-warning'}`}
+              className={`w-2 h-2 rounded-full ${zone.state.is_on ? 'bg-success' : 'bg-warning'}`}
             />
-            {zone.state.enabled ? 'Enabled' : 'Disabled'}
+            {zone.state.is_on ? 'On' : 'Off'}
           </div>
         </div>
 
