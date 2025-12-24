@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TaskMonitor } from "@/components/debug/TaskMonitor";
+import { TaskMonitor } from "@/features/tasks/components";
 import { StateViewer } from "@/components/debug";
 import { Logger } from "@/features/logger/components";
 import { Activity, FileText, Database } from "lucide-react";

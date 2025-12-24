@@ -10,8 +10,8 @@
  */
 
 import { useState, useMemo } from "react";
-import { useTaskStore } from "@/stores/taskStore";
-import { useTaskWebSocket } from "@/hooks/useTaskWebSocket";
+import { useTaskStore } from "@/features/tasks/stores/taskStore";
+import { useTaskWebSocket } from "@/features/tasks/hooks/useTaskWebSocket";
 import { TaskCard } from "./TaskCard";
 import { TaskStatsDisplay } from "./TaskStats";
 import { Card } from "@/components/ui/card";

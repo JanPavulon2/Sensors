@@ -36,7 +36,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useTaskStore } from "@/stores/taskStore";
+import { useTaskStore } from "@/features/tasks/stores/taskStore";
 import { config } from "@/config/constants";
 import type { TaskWebSocketMessage } from "@/types/task";
 
