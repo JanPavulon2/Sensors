@@ -5,7 +5,7 @@
 
 import { useZoneStore } from '@/stores/zoneStore';
 import { useSystemStore } from '@/stores/systemStore';
-import { TreeNode } from './TreeNode';
+import { TreeNode } from '@/shared/components/TreeNode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface StateViewerProps {
