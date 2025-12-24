@@ -1,6 +1,6 @@
 /**
  * Logger Components
- * Real-time logging system
+ * Real-time log viewer and management components
  */
 
 export { Logger } from './Logger';
