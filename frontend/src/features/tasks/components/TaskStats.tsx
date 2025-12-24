@@ -7,7 +7,7 @@
  * - Category breakdown
  */
 
-import type { Task, TaskStats } from "@/types/task";
+import type { Task, TaskStats } from "@/shared/types/domain/task";
 import { Card } from "@/shared/ui/card";
 import { Activity, AlertCircle, CheckCircle, Clock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";

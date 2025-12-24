@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { useZonesQuery, useCheckBackendConnection } from '@/hooks';
+import { useZonesQuery } from '@/features/zones/api';
+import { useCheckBackendConnection } from '@/shared/hooks';
 import { ZonesList } from '@/components/zones';
 
 export function Dashboard(): JSX.Element {
@@ -19,7 +20,7 @@ export function Dashboard(): JSX.Element {
 
   const zones = zonesData?.zones || [];
   const zoneCount = zones.length;
-  const totalPixels = zones.reduce((sum, zone) => sum + zone.pixel_count, 0);
+  const totalPixels = zones.reduce((sum: number, zone) => sum + zone.pixel_count, 0);
 
   return (
     <div className="space-y-8">

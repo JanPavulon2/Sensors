@@ -9,7 +9,7 @@
  */
 
 import { useState } from "react";
-import type { Task, TaskStatus } from "@/types/task";
+import type { Task, TaskStatus } from "@/shared/types/domain/task";
 import { Card } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import {
