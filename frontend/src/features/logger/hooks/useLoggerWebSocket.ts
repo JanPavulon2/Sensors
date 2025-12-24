@@ -26,7 +26,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useLoggerStore } from '@/stores/loggerStore';
+import { useLoggerStore } from '@/features/logger/stores/loggerStore';
 import { config } from '@/config/constants';
 import type { LogEntry } from '@/types/logger';
 

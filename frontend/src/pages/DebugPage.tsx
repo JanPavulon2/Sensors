@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskMonitor } from "@/components/debug/TaskMonitor";
 import { StateViewer } from "@/components/debug";
-import { Logger } from "@/components/logger";
+import { Logger } from "@/features/logger/components";
 import { Activity, FileText, Database } from "lucide-react";
 
 type DebugTab = "tasks" | "logs" | "state";

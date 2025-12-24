@@ -4,9 +4,9 @@
  */
 
 import { useMemo } from 'react';
-import { useLoggerStore } from '@/stores/loggerStore';
-import { useLogFilterStore } from '@/stores/logFilterStore';
-import { useLogCategories } from '@/hooks/useLogCategories';
+import { useLoggerStore } from '@/features/logger/stores/loggerStore';
+import { useLogFilterStore } from '@/features/logger/stores/logFilterStore';
+import { useLogCategories } from '@/features/logger/hooks/useLogCategories';
 import type { LogLevel } from '@/types/logger';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

@@ -27,7 +27,7 @@ export function StateViewer({ compact = false }: StateViewerProps): JSX.Element 
       details: zoneState.zones.map((zone) => ({
         id: zone.id,
         name: zone.name,
-        enabled: zone.state.enabled,
+        enabled: zone.state.is_on,
         brightness: zone.state.brightness,
         color: zone.state.color.mode,
       })),

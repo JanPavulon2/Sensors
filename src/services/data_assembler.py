@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 from models.animation_params.animation_param_id import AnimationParamID
-from models.enums import AnimationID, ZoneID, ZoneRenderMode
+from models.enums import AnimationID, ZoneEditTarget, ZoneID, ZoneRenderMode
 from models.domain import (
     AnimationConfig, AnimationState,
     ZoneConfig, ZoneState, ZoneCombined,
@@ -270,9 +270,17 @@ class DataAssembler:
             except ValueError:
                 selected_animation_param_id = ApplicationState.selected_animation_param_id  # Dataclass default
 
+            # Parse enums with fallback to dataclass defaults
+            try:
+                param_str = app_data.get("selected_zone_edit_target")
+                selected_zone_edit_target = Serializer.str_to_enum(param_str, ZoneEditTarget) if param_str else ApplicationState.selected_zone_edit_target
+            except ValueError:
+                selected_zone_edit_target = ApplicationState.selected_zone_edit_target 
+
             state = ApplicationState(
                 edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
                 selected_zone_index=int(app_data.get("selected_zone_index", ApplicationState.selected_zone_index)),
+                selected_zone_edit_target=selected_zone_edit_target,
                 selected_animation_param_id=selected_animation_param_id,
                 frame_by_frame_mode=app_data.get("frame_by_frame_mode", ApplicationState.frame_by_frame_mode),
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
@@ -299,7 +307,7 @@ class DataAssembler:
                 "edit_mode_on": app_state.edit_mode,
                 "selected_animation_param_id": Serializer.enum_to_str(app_state.selected_animation_param_id),
                 "selected_zone_index": app_state.selected_zone_index,
-                "selected_zone_edit_target": app_state.selected_zone_edit_target,
+                "selected_zone_edit_target": Serializer.enum_to_str(app_state.selected_zone_edit_target),
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,
                 "save_on_change": app_state.save_on_change,
             }

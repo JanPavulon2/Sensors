@@ -3,7 +3,7 @@
  * Main real-time logger display with WebSocket integration
  */
 
-import { useLoggerWebSocket } from '@/hooks/useLoggerWebSocket';
+import { useLoggerWebSocket } from '@/features/logger/hooks/useLoggerWebSocket';
 import { LogViewer } from './LogViewer';
 import { LogFilterPanel } from './LogFilterPanel';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

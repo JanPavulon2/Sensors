@@ -34,7 +34,7 @@ import {
 import { HexColorPicker } from 'react-colorful';
 import { StateViewer } from '@/components/debug';
 import { Led, LedStrip } from '@/components/leds';
-import { Logger } from '@/components/logger';
+import { Logger } from '@/features/logger/components';
 
 export function ComponentsPage(): JSX.Element {
   const [sliderValue, setSliderValue] = useState([50]);

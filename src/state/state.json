@@ -131,5 +131,9 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 2,
-    "selected_zone_edit_target": 
+    "selected_zone_index": 4,
+    "selected_zone_edit_target": "COLOR_HUE",
+    "frame_by_frame_mode": false,
+    "save_on_change": true
+  }
+}
