@@ -10,14 +10,14 @@
 
 import { useState } from "react";
 import type { Task, TaskStatus } from "@/types/task";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/shared/ui/card";
+import { Button } from "@/shared/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/shared/ui/dialog";
 import {
   CheckCircle,
   XCircle,

@@ -8,8 +8,8 @@ import { useLoggerStore } from '@/features/logger/stores/loggerStore';
 import { useLogFilterStore } from '@/features/logger/stores/logFilterStore';
 import { useLogCategories } from '@/features/logger/hooks/useLogCategories';
 import type { LogLevel } from '@/types/logger';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 

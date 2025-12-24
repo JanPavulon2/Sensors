@@ -6,7 +6,7 @@
 import { useLoggerWebSocket } from '@/features/logger/hooks/useLoggerWebSocket';
 import { LogViewer } from './LogViewer';
 import { LogFilterPanel } from './LogFilterPanel';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/ui/card';
 import { Zap, AlertCircle } from 'lucide-react';
 
 interface LoggerProps {

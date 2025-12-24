@@ -14,9 +14,9 @@ import { useTaskStore } from "@/features/tasks/stores/taskStore";
 import { useTaskWebSocket } from "@/features/tasks/hooks/useTaskWebSocket";
 import { TaskCard } from "./TaskCard";
 import { TaskStatsDisplay } from "./TaskStats";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/shared/ui/card";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
   Activity,
   RefreshCw,

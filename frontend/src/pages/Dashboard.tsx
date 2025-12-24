@@ -8,8 +8,8 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
 import { useZonesQuery, useCheckBackendConnection } from '@/hooks';
 import { ZonesList } from '@/components/zones';
 

@@ -8,7 +8,7 @@
  */
 
 import type { Task, TaskStats } from "@/types/task";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/shared/ui/card";
 import { Activity, AlertCircle, CheckCircle, Clock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 

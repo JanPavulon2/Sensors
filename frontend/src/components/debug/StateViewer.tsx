@@ -6,7 +6,7 @@
 import { useZoneStore } from '@/stores/zoneStore';
 import { useSystemStore } from '@/stores/systemStore';
 import { TreeNode } from '@/shared/components/TreeNode';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 
 interface StateViewerProps {
   compact?: boolean;

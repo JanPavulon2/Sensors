@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { TaskMonitor } from "@/features/tasks/components";
 import { StateViewer } from "@/components/debug";
 import { Logger } from "@/features/logger/components";
