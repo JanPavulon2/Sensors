@@ -6,7 +6,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useLoggerStore } from '@/features/logger/stores/loggerStore';
 import { useLogFilterStore } from '@/features/logger/stores/logFilterStore';
-import { shouldShowLog, LOG_LEVEL_COLORS } from '@/types/logger';
+import { shouldShowLog, LOG_LEVEL_COLORS } from '@/shared/types/domain/logger';
 import { Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 

@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { LogLevel } from '@/types/logger';
+import type { LogLevel } from '@/shared/types/domain/logger';
 
 interface LogFilterStoreState {
   filters: Map<string, LogLevel>;

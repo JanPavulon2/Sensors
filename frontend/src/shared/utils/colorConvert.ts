@@ -3,7 +3,7 @@
  * Convert between different color formats
  */
 
-import type { Color } from '@/types/zone';
+import type { Color } from '@/shared/types/domain/zone';
 
 /**
  * Convert Color object to RGB tuple if possible

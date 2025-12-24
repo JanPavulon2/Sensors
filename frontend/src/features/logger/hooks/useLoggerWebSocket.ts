@@ -28,7 +28,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useLoggerStore } from '@/features/logger/stores/loggerStore';
 import { config } from '@/config/constants';
-import type { LogEntry } from '@/types/logger';
+import type { LogEntry } from '@/shared/types/domain/logger';
 
 interface UseLoggerWebSocketOptions {
   enabled?: boolean;

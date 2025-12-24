@@ -38,7 +38,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTaskStore } from "@/features/tasks/stores/taskStore";
 import { config } from "@/config/constants";
-import type { TaskWebSocketMessage } from "@/types/task";
+import type { TaskWebSocketMessage } from "@/shared/types/domain/task";
 
 interface UseTaskWebSocketOptions {
   enabled?: boolean;

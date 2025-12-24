@@ -9,7 +9,7 @@
  */
 
 import { create } from "zustand";
-import type { Task, TaskStatus, TaskStats, TaskCategory } from "@/types/task";
+import type { Task, TaskStatus, TaskStats, TaskCategory } from "@/shared/types/domain/task";
 
 interface TaskStoreState {
   // Core state

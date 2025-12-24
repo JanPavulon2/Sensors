@@ -16,7 +16,6 @@ export type ColorMode = typeof ColorMode[keyof typeof ColorMode];
 export const ZoneRenderMode = {
   STATIC: 'STATIC',
   ANIMATION: 'ANIMATION',
-  OFF: 'OFF',
 } as const;
 export type ZoneRenderMode = typeof ZoneRenderMode[keyof typeof ZoneRenderMode];
 

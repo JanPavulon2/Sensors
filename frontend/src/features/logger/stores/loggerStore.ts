@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { LogEntry } from '@/types/logger';
+import type { LogEntry } from '@/shared/types/domain/logger';
 
 const MAX_LOGS = 1000; // Circular buffer size
 

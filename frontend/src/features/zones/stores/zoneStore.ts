@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { Zone, ZoneState } from '@/types/zone';
+import type { Zone, ZoneState } from '@/shared/types/domain/zone';
 
 interface ZoneStore {
   zones: Zone[];
