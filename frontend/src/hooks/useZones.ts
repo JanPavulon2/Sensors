@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/services/api';
+import { api } from '@/shared/api/client';
 import type { Zone } from '@/types/zone';
 
 interface ZonesResponse {

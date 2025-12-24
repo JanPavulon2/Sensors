@@ -4,7 +4,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/services/api';
+import { api } from '@/shared/api/client';
 
 export interface Animation {
   id: string;

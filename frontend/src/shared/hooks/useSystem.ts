@@ -4,8 +4,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/services/api';
-import type { SystemStatus } from '@/types/api';
+import { api } from '@/shared/api/client';
+import type { SystemStatus } from '@/shared/types/api/responses';
 
 interface HealthResponse {
   status: string;
