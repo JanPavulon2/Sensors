@@ -3,8 +3,8 @@
  * Displays application state in real-time as a collapsible tree
  */
 
-import { useZoneStore } from '@/stores/zoneStore';
-import { useSystemStore } from '@/stores/systemStore';
+import { useZoneStore } from '@/features/zones/stores/zoneStore';
+import { useSystemStore } from '@/shared/stores/systemStore';
 import { TreeNode } from '@/shared/components/TreeNode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 

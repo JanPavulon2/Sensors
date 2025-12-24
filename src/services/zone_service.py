@@ -61,9 +61,6 @@ class ZoneService:
         """Get zones filtered by render mode"""
         return [zone for zone in self.zones if zone.state.mode == mode]
 
-    def get_total_pixel_count(self) -> int:
-        """Get total pixel count from all enabled zones"""
-        return sum(zone.config.pixel_count for zone in self.get_all())
 
     # ------------------------------------------------------------------
     # Zone state mutation
@@ -81,14 +78,12 @@ class ZoneService:
             color=color
         )
         
-        
         asyncio.create_task(self.event_bus.publish(
             ZoneStateChangedEvent(
                 zone_id=zone_id,
                 color=color,
             )
         ))
-
 
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
         zone = self.get_zone(zone_id)
@@ -177,6 +172,7 @@ class ZoneService:
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
+    
     def _save_zone(self, zone_id: ZoneID) -> None:
         """
         Save only the specified zone to state.json.
@@ -189,14 +185,10 @@ class ZoneService:
         """
         self._last_modified_zone_id = zone_id
         zone = self.get_zone(zone_id)
+        
         # Pass only the modified zone to reduce I/O (assembler handles debouncing)
         self.assembler.save_zone_state([zone])
 
     def save_state(self) -> None:
-        """Persist current state (alias for save)"""
-        self.save()
-       
-    def save(self) -> None:
         """Persist current state"""
         self.assembler.save_zone_state(self.zones)
-
