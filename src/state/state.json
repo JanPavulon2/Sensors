@@ -9,7 +9,7 @@
           158
         ]
       },
-      "brightness": 95,
+      "brightness": 89,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -19,10 +19,14 @@
     },
     "lamp": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "RGB",
+        "rgb": [
+          28,
+          255,
+          0
+        ]
       },
-      "brightness": 100,
+      "brightness": 1,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -49,10 +53,14 @@
     },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 250
+        "mode": "RGB",
+        "rgb": [
+          255,
+          184,
+          0
+        ]
       },
-      "brightness": 21,
+      "brightness": 76,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -86,7 +94,7 @@
           199
         ]
       },
-      "brightness": 100,
+      "brightness": 64,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -102,7 +110,7 @@
         "mode": "HUE",
         "hue": 173
       },
-      "brightness": 8,
+      "brightness": 26,
       "is_on": true,
       "mode": "STATIC",
       "animation": {

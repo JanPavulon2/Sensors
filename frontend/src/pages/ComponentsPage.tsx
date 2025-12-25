@@ -32,8 +32,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { HexColorPicker } from 'react-colorful';
-import { StateViewer } from '@/components/debug';
-import { Led, LedStrip } from '@/components/leds';
+import { StateViewer } from '@/shared/components/dev';
+import { Led, LedStrip } from '@/shared/components/leds';
 import { Logger } from '@/features/logger/components';
 
 export function ComponentsPage(): JSX.Element {

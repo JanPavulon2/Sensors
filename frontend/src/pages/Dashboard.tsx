@@ -12,7 +12,7 @@ import {
 import { Button } from '@/shared/ui/button';
 import { useZonesQuery } from '@/features/zones/api';
 import { useCheckBackendConnection } from '@/shared/hooks';
-import { ZonesList } from '@/components/zones';
+import { ZonesList } from '@/features/zones/components';
 
 export function Dashboard(): JSX.Element {
   const { data: zonesData, isLoading: zonesLoading, error: zonesError } = useZonesQuery();

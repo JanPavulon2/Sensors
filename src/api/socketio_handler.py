@@ -19,7 +19,8 @@ Usage:
 
 from typing import Optional, Any, Dict
 from socketio import AsyncServer, ASGIApp
-from models.enums import ZoneID, AnimationID, AnimationParamID, ZoneRenderMode
+from models.enums import ZoneID, AnimationID, ZoneRenderMode
+from models.animation_params.animation_param_id import AnimationParamID
 from models.domain import ZoneCombined
 from models.color import Color
 from models.events import (

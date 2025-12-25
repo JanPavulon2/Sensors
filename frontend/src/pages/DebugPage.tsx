@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { TaskMonitor } from "@/features/tasks/components";
-import { StateViewer } from "@/components/debug";
+import { StateViewer } from "@/shared/components/dev";
 import { Logger } from "@/features/logger/components";
 import { Activity, FileText, Database } from "lucide-react";
 
