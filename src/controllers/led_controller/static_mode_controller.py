@@ -69,10 +69,7 @@ class StaticModeController:
         zones_colors={}
 
         for zone in static_zones:
-            if not zone.state.is_on:
-                zones_colors[zone.id] = zone.state.color.black()
-            else:
-                zones_colors[zone.id] = zone.state.color.with_brightness(zone.brightness)
+            zones_colors[zone.id] = zone.state.color.with_brightness(zone.brightness)
 
         # Ensure valid edit target
         state = self.app_state_service.get_state()

@@ -14,6 +14,7 @@ interface HueWheelPickerProps {
   hue: number;
   onChange: (hue: number) => void;
   compact?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -24,6 +25,7 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
   hue,
   onChange,
   compact = false,
+  disabled = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -135,22 +137,24 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
   // Handle clicks on wheel
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (disabled) return;
       const newHue = calculateHueFromEvent(e);
       if (newHue !== null) {
         onChange(newHue);
       }
     },
-    [calculateHueFromEvent, onChange]
+    [calculateHueFromEvent, onChange, disabled]
   );
 
   // Handle mouse down for dragging
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (disabled) return;
     setIsDragging(true);
     handleCanvasClick(e);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
+    if (!isDragging || disabled) return;
     const newHue = calculateHueFromEvent(e);
     if (newHue !== null) {
       updateHueThrottled(newHue);
@@ -170,7 +174,7 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
     }
   };
 
-  const size = compact ? 200 : 280;
+  const size = compact ? 140 : 280;
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -178,13 +182,15 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
         ref={canvasRef}
         width={size}
         height={size}
-        className="rounded-lg border border-border-default"
+        className={`rounded-lg border border-border-default transition-opacity ${
+          disabled ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
         onClick={handleCanvasClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        style={{ cursor: 'crosshair' }}
+        style={{ cursor: disabled ? 'not-allowed' : 'crosshair' }}
       />
       <p className="text-xs text-text-tertiary">← Click or drag to select hue →</p>
     </div>

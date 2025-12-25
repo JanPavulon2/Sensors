@@ -1,10 +1,8 @@
 /**
  * Zone Color Section
- * Collapsible section for color and brightness control
+ * Color and brightness control (always expanded)
  */
 
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import type { Zone } from '@/shared/types/domain/zone';
 import { Slider } from '@/shared/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
@@ -13,24 +11,13 @@ import { useUpdateZoneColorMutation, useUpdateZoneBrightnessMutation } from '@/f
 
 interface ZoneColorSectionProps {
   zone: Zone;
-  expanded?: boolean;
-  onToggle?: (expanded: boolean) => void;
 }
 
 export function ZoneColorSection({
   zone,
-  expanded = true,
-  onToggle,
 }: ZoneColorSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(expanded);
   const colorMutation = useUpdateZoneColorMutation(zone.id);
   const brightnessMutation = useUpdateZoneBrightnessMutation(zone.id);
-
-  const handleToggle = () => {
-    const newState = !isExpanded;
-    setIsExpanded(newState);
-    onToggle?.(newState);
-  };
 
   const handleBrightnessChange = (value: number[]) => {
     brightnessMutation.mutate({
@@ -38,26 +25,18 @@ export function ZoneColorSection({
     });
   };
 
+  // Determine default tab based on color mode
+  const defaultColorTab = zone.state.color.mode === 'PRESET' ? 'preset' : 'hue';
+
   return (
     <div className="border-t border-border-default">
       {/* Section Header */}
-      <button
-        onClick={handleToggle}
-        className="w-full flex items-center justify-between p-4 hover:bg-bg-elevated transition-colors"
-      >
-        <h3 className="text-base font-semibold text-text-primary">Appearance</h3>
-        <ChevronDown
-          className={`w-4 h-4 text-text-secondary transition-transform ${
-            isExpanded ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
+      <h3 className="text-base font-semibold text-text-primary px-4 pt-4">Appearance</h3>
 
       {/* Section Content */}
-      {isExpanded && (
-        <div className="px-4 pb-4 space-y-4 bg-bg-app">
+      <div className="px-4 pb-4 space-y-6 bg-bg-app">
           {/* Brightness Slider */}
-          <div className="space-y-2">
+          <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-text-primary">Brightness</label>
               <span className="text-sm font-mono text-accent-primary">
@@ -75,7 +54,7 @@ export function ZoneColorSection({
           </div>
 
           {/* Color Picker Tabs */}
-          <Tabs defaultValue="hue" className="w-full">
+          <Tabs defaultValue={defaultColorTab} className="w-full">
             <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="hue">🎨 Hue</TabsTrigger>
               <TabsTrigger value="preset">⭐ Preset</TabsTrigger>
@@ -103,7 +82,7 @@ export function ZoneColorSection({
                   colorMutation.mutate({
                     color: {
                       mode: 'PRESET',
-                      preset: presetName,
+                      preset_name: presetName,
                     },
                   });
                 }}
@@ -111,8 +90,7 @@ export function ZoneColorSection({
               />
             </TabsContent>
           </Tabs>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

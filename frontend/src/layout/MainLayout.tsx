@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LayoutGrid, Lightbulb, Bug, Settings, type LucideIcon } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useAuth, useCheckBackendConnection } from '@/shared/hooks';
 
 interface MainLayoutProps {
   children: React.ReactNode;
+}
+
+interface NavItem {
+  label: string;
+  path: string;
+  icon: LucideIcon;
 }
 
 export function MainLayout({ children }: MainLayoutProps): JSX.Element {
@@ -22,11 +28,11 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
     }
   }, [isAuthenticated, useDefaultTestToken]);
 
-  const navItems = [
-    { label: 'Dashboard', path: '/' },
-    { label: 'Components', path: '/components' },
-    { label: 'Debug', path: '/debug' },
-    { label: 'Settings', path: '/settings' },
+  const navItems: NavItem[] = [
+    { label: 'Dashboard', path: '/', icon: LayoutGrid },
+    { label: 'Components', path: '/components', icon: Lightbulb },
+    { label: 'Debug', path: '/debug', icon: Bug },
+    { label: 'Settings', path: '/settings', icon: Settings },
   ];
 
   const isActive = (path: string): boolean => location.pathname === path;
@@ -59,20 +65,29 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
 
         {/* Navigation */}
         <nav className="p-4 space-y-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center justify-center px-4 py-2 rounded-md transition-colors text-sm font-medium ${
-                isActive(item.path)
-                  ? 'bg-accent-primary text-bg-app'
-                  : 'text-text-secondary hover:bg-bg-elevated'
-              }`}
-            >
-              {sidebarOpen && <span>{item.label}</span>}
-              {!sidebarOpen && <span className="w-4">{item.label.charAt(0)}</span>}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center justify-center gap-3 px-4 py-2 rounded-md transition-colors text-sm font-medium ${
+                  isActive(item.path)
+                    ? 'bg-accent-primary text-bg-app'
+                    : 'text-text-secondary hover:bg-bg-elevated'
+                }`}
+              >
+                {sidebarOpen ? (
+                  <>
+                    <IconComponent className="w-4 h-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </>
+                ) : (
+                  <IconComponent className="w-4 h-4" />
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Footer Info */}

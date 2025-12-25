@@ -10,6 +10,7 @@
  */
 
 import React from 'react';
+import { usePreviewSettingsStore } from '@/features/zones/stores/previewSettingsStore';
 
 export type RGB = [number, number, number];
 export type ZoneShape = 'strip' | 'circle' | 'matrix';
@@ -29,6 +30,7 @@ interface FullLEDPreviewProps {
   animationMode?: string;
   containerHeight?: number; // px, defaults to responsive
   className?: string;
+  useSettings?: boolean; // Use stored preview settings if true
 }
 
 /**
@@ -40,10 +42,12 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
   pixelCount,
   shape = { shape: 'strip', orientation: 'horizontal' },
   brightness = 100,
-  animationMode,
   containerHeight,
   className = '',
+  useSettings = false,
 }) => {
+  const previewSettings = usePreviewSettingsStore((state) => state.settings);
+
   // Ensure we have the right number of pixels
   const displayPixels = pixels.slice(0, pixelCount);
   while (displayPixels.length < pixelCount) {
@@ -61,11 +65,19 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
           orientation={shape.orientation || 'horizontal'}
           brightness={brightness}
           height={containerHeight}
+          useSettings={useSettings}
+          previewSettings={previewSettings}
         />
       )}
 
       {shapeType === 'circle' && (
-        <CirclePreview pixels={displayPixels} brightness={brightness} diameter={containerHeight} />
+        <CirclePreview
+          pixels={displayPixels}
+          brightness={brightness}
+          diameter={containerHeight}
+          useSettings={useSettings}
+          previewSettings={previewSettings}
+        />
       )}
 
       {shapeType === 'matrix' && (
@@ -75,6 +87,8 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
           rows={shape.rows || 8}
           columns={shape.columns || 8}
           brightness={brightness}
+          useSettings={useSettings}
+          previewSettings={previewSettings}
         />
       )}
     </div>
@@ -89,30 +103,61 @@ const StripPreview: React.FC<{
   orientation: 'horizontal' | 'vertical';
   brightness: number;
   height?: number;
-}> = ({ pixels, orientation, brightness, height }) => {
+  useSettings?: boolean;
+  previewSettings?: any;
+}> = ({ pixels, orientation, brightness, height, useSettings = false, previewSettings }) => {
   const isHorizontal = orientation === 'horizontal';
-  const ledSize = Math.max(6, Math.min(20, Math.floor((isHorizontal ? 400 : 200) / pixels.length)));
+  const defaultLedSize = Math.max(6, Math.min(20, Math.floor((isHorizontal ? 400 : 200) / pixels.length)));
+  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
+  const gap = useSettings && previewSettings ? previewSettings.spacing : 2;
+  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
+  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
+  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+
+  const getShapeClass = (shape: string) => {
+    switch (shape) {
+      case 'circle':
+        return 'rounded-full';
+      case 'pill':
+        return 'rounded-full';
+      default:
+        return 'rounded-sm';
+    }
+  };
 
   return (
     <div
-      className={`flex gap-0.5 items-start justify-center ${isHorizontal ? 'flex-row' : 'flex-col'}`}
-      style={{ ...(height ? { height: `${height}px` } : {}) }}
+      className={`flex items-start justify-center ${isHorizontal ? 'flex-row' : 'flex-col'}`}
+      style={{ gap: `${gap}px`, ...(height ? { height: `${height}px` } : {}) }}
     >
       {pixels.map((rgb, index) => {
         const [r, g, b] = rgb;
         const hasColor = r > 0 || g > 0 || b > 0;
 
+        // Multi-layer glow effect
+        const outerGlowRadius = ledSize * 1.5;
+        const midGlowRadius = ledSize * 0.75;
+        const innerGlowRadius = ledSize * 0.3;
+
+        const boxShadowLayers = hasColor
+          ? showGlow
+            ? [
+                `0 0 ${outerGlowRadius}px rgba(${r}, ${g}, ${b}, ${0.8 * glowIntensity})`,
+                `0 0 ${midGlowRadius}px rgba(${r}, ${g}, ${b}, ${glowIntensity})`,
+                `inset 0 0 ${innerGlowRadius}px rgba(255, 255, 255, 0.4)`,
+              ].join(', ')
+            : `inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
+          : 'inset 0 0 2px rgba(0, 0, 0, 0.5)';
+
         return (
           <div
             key={index}
-            className="rounded-sm transition-all duration-150 flex-shrink-0"
+            className={`${getShapeClass(shape)} transition-all duration-150 flex-shrink-0`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
-              boxShadow: hasColor
-                ? `0 0 ${Math.max(4, ledSize / 1.5)}px rgba(${r}, ${g}, ${b}, 0.7), inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
-                : 'inset 0 0 2px rgba(0, 0, 0, 0.5)',
+              boxShadow: boxShadowLayers,
               opacity: brightness / 255,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}
@@ -126,13 +171,30 @@ const StripPreview: React.FC<{
 /**
  * Circle Preview - Radial arrangement of LEDs
  */
-const CirclePreview: React.FC<{ pixels: RGB[]; brightness: number; diameter?: number }> = ({
-  pixels,
-  brightness,
-  diameter = 200,
-}) => {
+const CirclePreview: React.FC<{
+  pixels: RGB[];
+  brightness: number;
+  diameter?: number;
+  useSettings?: boolean;
+  previewSettings?: any;
+}> = ({ pixels, brightness, diameter = 200, useSettings = false, previewSettings }) => {
   const radius = diameter / 2;
-  const ledSize = Math.max(8, Math.min(16, diameter / pixels.length));
+  const defaultLedSize = Math.max(8, Math.min(16, diameter / pixels.length));
+  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
+  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
+  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
+  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+
+  const getShapeClass = (shape: string) => {
+    switch (shape) {
+      case 'circle':
+        return 'rounded-full';
+      case 'pill':
+        return 'rounded-full';
+      default:
+        return 'rounded-sm';
+    }
+  };
 
   return (
     <div
@@ -149,19 +211,32 @@ const CirclePreview: React.FC<{ pixels: RGB[]; brightness: number; diameter?: nu
         const [r, g, b] = rgb;
         const hasColor = r > 0 || g > 0 || b > 0;
 
+        // Multi-layer glow effect
+        const outerGlowRadius = ledSize * 1.5;
+        const midGlowRadius = ledSize * 0.75;
+        const innerGlowRadius = ledSize * 0.3;
+
+        const boxShadowLayers = hasColor
+          ? showGlow
+            ? [
+                `0 0 ${outerGlowRadius}px rgba(${r}, ${g}, ${b}, ${0.8 * glowIntensity})`,
+                `0 0 ${midGlowRadius}px rgba(${r}, ${g}, ${b}, ${glowIntensity})`,
+                `inset 0 0 ${innerGlowRadius}px rgba(255, 255, 255, 0.4)`,
+              ].join(', ')
+            : `inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
+          : 'inset 0 0 2px rgba(0, 0, 0, 0.5)';
+
         return (
           <div
             key={index}
-            className="absolute rounded-sm transition-all duration-150"
+            className={`absolute ${getShapeClass(shape)} transition-all duration-150`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,
               left: `${radius + x - ledSize / 2}px`,
               top: `${radius + y - ledSize / 2}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
-              boxShadow: hasColor
-                ? `0 0 ${Math.max(4, ledSize / 1.5)}px rgba(${r}, ${g}, ${b}, 0.7), inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
-                : 'inset 0 0 2px rgba(0, 0, 0, 0.5)',
+              boxShadow: boxShadowLayers,
               opacity: brightness / 255,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}
@@ -181,9 +256,26 @@ const MatrixPreview: React.FC<{
   rows: number;
   columns: number;
   brightness: number;
-}> = ({ pixels, pixelCount, rows, columns, brightness }) => {
-  const ledSize = Math.max(8, Math.min(16, Math.floor(350 / Math.max(rows, columns))));
-  const gap = Math.max(1, Math.floor(ledSize / 3));
+  useSettings?: boolean;
+  previewSettings?: any;
+}> = ({ pixels, pixelCount, rows, columns, brightness, useSettings = false, previewSettings }) => {
+  const defaultLedSize = Math.max(8, Math.min(16, Math.floor(350 / Math.max(rows, columns))));
+  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
+  const gap = useSettings && previewSettings ? previewSettings.spacing : Math.max(1, Math.floor(defaultLedSize / 3));
+  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
+  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
+  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+
+  const getShapeClass = (shape: string) => {
+    switch (shape) {
+      case 'circle':
+        return 'rounded-full';
+      case 'pill':
+        return 'rounded-full';
+      default:
+        return 'rounded-sm';
+    }
+  };
 
   return (
     <div
@@ -201,17 +293,30 @@ const MatrixPreview: React.FC<{
         const [r, g, b] = rgb;
         const hasColor = r > 0 || g > 0 || b > 0;
 
+        // Multi-layer glow effect
+        const outerGlowRadius = ledSize * 1.5;
+        const midGlowRadius = ledSize * 0.75;
+        const innerGlowRadius = ledSize * 0.3;
+
+        const boxShadowLayers = hasColor
+          ? showGlow
+            ? [
+                `0 0 ${outerGlowRadius}px rgba(${r}, ${g}, ${b}, ${0.8 * glowIntensity})`,
+                `0 0 ${midGlowRadius}px rgba(${r}, ${g}, ${b}, ${glowIntensity})`,
+                `inset 0 0 ${innerGlowRadius}px rgba(255, 255, 255, 0.4)`,
+              ].join(', ')
+            : `inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
+          : 'inset 0 0 2px rgba(0, 0, 0, 0.5)';
+
         return (
           <div
             key={index}
-            className="rounded-sm transition-all duration-150"
+            className={`${getShapeClass(shape)} transition-all duration-150`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
-              boxShadow: hasColor
-                ? `0 0 ${Math.max(4, ledSize / 1.5)}px rgba(${r}, ${g}, ${b}, 0.7), inset 0 0 ${ledSize / 2}px rgba(255, 255, 255, 0.2)`
-                : 'inset 0 0 2px rgba(0, 0, 0, 0.5)',
+              boxShadow: boxShadowLayers,
               opacity: brightness / 255,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}

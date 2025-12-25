@@ -17,7 +17,7 @@ interface ColorUpdateRequest {
     mode: 'RGB' | 'HUE' | 'PRESET';
     hue?: number;
     rgb?: [number, number, number];
-    preset?: string;
+    preset_name?: string;
   };
 }
 

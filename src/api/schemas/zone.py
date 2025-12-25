@@ -42,7 +42,7 @@ class ColorRequest(BaseModel):
     )
 
     # PRESET mode
-    preset: Optional[str] = Field(
+    preset_name: Optional[str] = Field(
         None,
         description="Preset name like 'RED', 'WARM_WHITE', 'COOL_WHITE' (PRESET mode)"
     )
@@ -95,7 +95,7 @@ class ColorResponse(BaseModel):
     mode: ColorModeEnum = Field(description="Current color mode")
     hue: Optional[int] = Field(None, description="Hue value if applicable")
     rgb: Optional[list[int]] = Field(None, description="RGB representation [r, g, b]")
-    preset: Optional[str] = Field(None, description="Preset name if in PRESET mode")
+    preset_name: Optional[str] = Field(None, description="Preset name if in PRESET mode")
     brightness: Optional[int] = Field(None, description="Brightness component")
     saturation: Optional[int] = Field(None, description="Saturation component")
 

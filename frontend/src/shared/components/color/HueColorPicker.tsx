@@ -32,7 +32,7 @@ export function HueColorPicker({
 
   return (
     <div className="space-y-4">
-      <HueWheelPicker hue={value} onChange={onChange} compact={false} />
+      <HueWheelPicker hue={value} onChange={onChange} compact={true} disabled={disabled} />
 
       {/* Color Preview */}
       <div className="flex items-center gap-3">

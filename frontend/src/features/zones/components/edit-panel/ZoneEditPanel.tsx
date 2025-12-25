@@ -4,8 +4,7 @@
  * Composed of: Header, Preview, ColorSection, AnimationSection, Footer
  */
 
-import { useState } from 'react';
-import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import type { Zone } from '@/shared/types/domain/zone';
 import { ZoneEditPanelHeader } from './ZoneEditPanelHeader';
 import { ZoneEditPanelPreview } from './ZoneEditPanelPreview';
@@ -30,34 +29,37 @@ export function ZoneEditPanel({
   onPrevZone,
   onNextZone,
 }: ZoneEditPanelProps) {
-  const [colorExpanded, setColorExpanded] = useState(true);
-  const [animationExpanded, setAnimationExpanded] = useState(false);
-
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden"
+        className={`max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden md:max-w-4xl lg:max-w-5xl transition-opacity ${
+          !zone.state.is_on ? 'opacity-50' : ''
+        }`}
         onEscapeKeyDown={() => onClose()}
       >
+        {/* Accessible title for screen readers */}
+        <DialogTitle className="sr-only">Edit {zone.name}</DialogTitle>
+
         {/* Sticky Header */}
         <ZoneEditPanelHeader zone={zone} onClose={onClose} />
 
         {/* Sticky Preview */}
-        <ZoneEditPanelPreview zone={zone} />
+        <ZoneEditPanelPreview zone={zone} useSettings />
 
-        {/* Scrollable Sections */}
-        <div className="flex-1 overflow-y-auto">
-          <ZoneColorSection
-            zone={zone}
-            expanded={colorExpanded}
-            onToggle={setColorExpanded}
-          />
+        {/* Scrollable Sections - Side-by-side layout on desktop */}
+        <div className={`flex-1 overflow-y-auto ${!zone.state.is_on ? 'pointer-events-none' : ''}`}>
+          {/* Main Content Grid - side by side layout */}
+          <div className="grid grid-cols-2 gap-0 w-full border-t border-border-default">
+            {/* Appearance Section - left column */}
+            <div className="w-full border-r border-border-default overflow-y-auto">
+              <ZoneColorSection zone={zone} />
+            </div>
 
-          <ZoneAnimationSection
-            zone={zone}
-            expanded={animationExpanded}
-            onToggle={setAnimationExpanded}
-          />
+            {/* Animation Section - right column */}
+            <div className="w-full">
+              <ZoneAnimationSection zone={zone} />
+            </div>
+          </div>
         </div>
 
         {/* Sticky Footer */}

@@ -329,7 +329,8 @@ class ZoneAPIService:
         Raises:
             InvalidColorModeError: If mode/values invalid
         """
-        mode = color_request.mode
+        # Extract mode as string - ColorModeEnum is a str enum so value is the string value
+        mode = str(color_request.mode) if color_request.mode else None
 
         if mode == "RGB":
             if not color_request.rgb:
@@ -343,9 +344,9 @@ class ZoneAPIService:
             return Color.from_hue(color_request.hue)
 
         elif mode == "PRESET":
-            if not color_request.preset:
+            if not color_request.preset_name:
                 raise InvalidColorModeError(mode, ["HUE", "RGB", "PRESET", "HSV"])
-            return Color.from_preset(color_request.preset, self.color_manager)
+            return Color.from_preset(color_request.preset_name, self.color_manager)
 
         elif mode == "HSV":
             # HSV conversion: store as HUE, brightness is separate
@@ -366,7 +367,7 @@ class ZoneAPIService:
             "rgb": [r, g, b],
             "hue": None,
             "brightness": None,
-            "preset": None,
+            "preset_name": None,
             "saturation": None
         }
 
@@ -374,7 +375,7 @@ class ZoneAPIService:
         if color.mode == ColorMode.HUE:
             response_dict["hue"] = color.to_hue()
         elif color.mode == ColorMode.PRESET:
-            response_dict["preset"] = color._preset_name
+            response_dict["preset_name"] = color._preset_name
 
         return ColorResponse(**response_dict)
 

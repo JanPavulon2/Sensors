@@ -436,8 +436,6 @@ class FrameManager:
     def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
         """
         Render frames to all registered strips atomically.
-
-        Ensures main strip and preview panel are synchronized.
         """
         # Render main strip
         if main_frame:

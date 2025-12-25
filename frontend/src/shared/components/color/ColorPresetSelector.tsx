@@ -2,14 +2,16 @@
  * Color Preset Selector - Quick-select color presets
  *
  * Features:
- * - Grid of 20 curated color presets
+ * - Grid of curated color presets
  * - Organized by color category
- * - Visual preview with glow effect
- * - Click to select
- * - Category labels
+ * - Small square color blocks (28x28px)
+ * - Hover effects with scale and glow
+ * - Visual selection indicator with border
+ * - Keyboard accessible
  */
 
 import React from 'react';
+import { Check } from 'lucide-react';
 import { getDefaultPresets } from '@/shared/utils/colorConversions';
 
 interface ColorPresetSelectorProps {
@@ -20,7 +22,8 @@ interface ColorPresetSelectorProps {
 
 /**
  * ColorPresetSelector Component
- * Grid layout of 20 preset colors organized by category
+ * Grid layout of preset colors organized by category
+ * Each color is a small square block (28x28px) matching future-design styling
  */
 export const ColorPresetSelector: React.FC<ColorPresetSelectorProps> = ({
   currentPreset,
@@ -40,7 +43,7 @@ export const ColorPresetSelector: React.FC<ColorPresetSelectorProps> = ({
   const categories = categoryOrder.filter((cat) => presets.some((p) => p.category === cat));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {categories.map((category) => {
         const categoryPresets = presets.filter((p) => p.category === category);
         return (
@@ -50,36 +53,46 @@ export const ColorPresetSelector: React.FC<ColorPresetSelectorProps> = ({
               {category}
             </h4>
 
-            {/* Preset Row */}
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(28px,1fr))] gap-1">
-              {categoryPresets.map((preset) => (
-                <button
-                  key={preset.name}
-                  className={`aspect-square w-full h-7 rounded-sm border transition-all duration-200 ${
-                    currentPreset === preset.name
-                      ? 'border-white/50 scale-110 opacity-100'
-                      : 'border-transparent opacity-70 hover:opacity-100 hover:scale-110'
-                  } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                  style={{
-                    backgroundColor: preset.hex,
-                    boxShadow:
-                      currentPreset === preset.name
-                        ? `0 0 0 3px rgba(0, 255, 0, 0.6), 0 0 12px ${preset.hex}`
-                        : `0 0 8px ${preset.hex}40`,
-                  }}
-                  onClick={() => !disabled && onSelect(preset.name)}
-                  onKeyDown={(e) => {
-                    if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      onSelect(preset.name);
-                    }
-                  }}
-                  title={`${preset.name} - RGB(${preset.rgb[0]}, ${preset.rgb[1]}, ${preset.rgb[2]})`}
-                  aria-label={`Select ${preset.name} color`}
-                  aria-pressed={currentPreset === preset.name}
-                  disabled={disabled}
-                />
-              ))}
+            {/* Preset Grid - larger blocks with more spacing */}
+            <div className="flex flex-wrap gap-3">
+              {categoryPresets.map((preset) => {
+                const isSelected = currentPreset ? currentPreset.toUpperCase() === preset.name.toUpperCase() : false;
+                return (
+                  <button
+                    key={preset.name}
+                    className={`relative rounded-md transition-all duration-200 border-2 flex items-center justify-center hover:scale-110 ${
+                      isSelected
+                        ? 'border-white/70 opacity-100 scale-110'
+                        : 'border-transparent opacity-75 hover:opacity-100'
+                    } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                    style={{
+                      backgroundColor: preset.hex,
+                      boxShadow: isSelected
+                        ? `0 0 0 2px rgba(255, 255, 255, 0.5), 0 0 12px ${preset.hex}, inset 0 0 8px rgba(255, 255, 255, 0.3)`
+                        : `0 0 6px ${preset.hex}60`,
+                      width: '40px',
+                      height: '40px',
+                      flexShrink: 0,
+                    }}
+                    onClick={() => !disabled && onSelect(preset.name)}
+                    onKeyDown={(e) => {
+                      if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onSelect(preset.name);
+                      }
+                    }}
+                    title={`${preset.name}`}
+                    aria-label={`Select ${preset.name} color`}
+                    aria-pressed={isSelected}
+                    disabled={disabled}
+                  >
+                    {/* Selection Indicator - Checkmark */}
+                    {isSelected && (
+                      <Check className="absolute w-5 h-5 text-white drop-shadow-lg" strokeWidth={3} />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         );

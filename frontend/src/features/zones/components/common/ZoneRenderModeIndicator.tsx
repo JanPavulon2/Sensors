@@ -4,9 +4,10 @@
  */
 
 import { Circle, Play } from 'lucide-react';
+import type { ZoneRenderMode } from '@/shared/types/domain/zone';
 
 interface ZoneRenderModeIndicatorProps {
-  renderMode: 'static' | 'animation';
+  renderMode: ZoneRenderMode | 'static' | 'animation';
   animationName?: string | null;
   compact?: boolean;
 }
@@ -16,7 +17,7 @@ export function ZoneRenderModeIndicator({
   animationName,
   compact = false,
 }: ZoneRenderModeIndicatorProps) {
-  const isStatic = renderMode === 'static';
+  const isStatic = renderMode === 'STATIC' || renderMode === 'static';
 
   if (compact) {
     return (
