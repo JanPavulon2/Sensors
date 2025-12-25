@@ -10,7 +10,7 @@
  */
 
 import { useState, useMemo } from "react";
-import { useTaskStore } from "@/features/tasks/stores/taskStore";
+import { useTaskStreamStore } from "@/features/tasks/stores/taskStreamStore";
 import { useTaskWebSocket } from "@/features/tasks/hooks/useTaskWebSocket";
 import { TaskCard } from "./TaskCard";
 import { TaskStatsDisplay } from "./TaskStats";
@@ -34,10 +34,10 @@ export function TaskMonitor() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Get store data
-  const tasks = useTaskStore((s) => s.tasks);
-  const stats = useTaskStore((s) => s.stats);
-  const clearCompleted = useTaskStore((s) => s.clearCompleted);
-  const clearFailed = useTaskStore((s) => s.clearFailed);
+  const tasks = useTaskStreamStore((s) => s.tasks);
+  const stats = useTaskStreamStore((s) => s.stats);
+  const clearCompleted = useTaskStreamStore((s) => s.clearCompleted);
+  const clearFailed = useTaskStreamStore((s) => s.clearFailed);
 
   // WebSocket hook
   const { isConnected, isConnecting, error, retryCount, sendCommand } =

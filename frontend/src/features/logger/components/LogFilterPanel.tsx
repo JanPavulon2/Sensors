@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import { useLoggerStore } from '@/features/logger/stores/loggerStore';
+import { useLoggerStreamStore } from '@/features/logger/stores/loggerStreamStore';
 import { useLogFilterStore } from '@/features/logger/stores/logFilterStore';
 import { useLogCategories } from '@/features/logger/hooks/useLogCategories';
 import type { LogLevel } from '@/shared/types/domain/logger';
@@ -21,7 +21,7 @@ interface LogFilterPanelProps {
 
 export function LogFilterPanel({ isCollapsible = true }: LogFilterPanelProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(!isCollapsible);
-  const logs = useLoggerStore((state) => state.logs);
+  const logs = useLoggerStreamStore((state) => state.logs);
   const filters = useLogFilterStore((state) => state.filters);
   const setFilter = useLogFilterStore((state) => state.setFilter);
   const hideCategory = useLogFilterStore((state) => state.hideCategory);

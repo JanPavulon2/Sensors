@@ -1,6 +1,7 @@
 /**
- * Logger Store
- * Manages log entries, history, and real-time updates
+ * Logger Stream Store
+ * Manages real-time log entries from WebSocket stream
+ * This store is specifically for streaming data (not REST API data)
  */
 
 import { create } from 'zustand';
@@ -8,7 +9,7 @@ import type { LogEntry } from '@/shared/types/domain/logger';
 
 const MAX_LOGS = 1000; // Circular buffer size
 
-interface LoggerStoreState {
+interface LoggerStreamStoreState {
   logs: LogEntry[];
   addLog: (log: LogEntry) => void;
   clearLogs: () => void;
@@ -16,7 +17,7 @@ interface LoggerStoreState {
   maxLogs: number;
 }
 
-export const useLoggerStore = create<LoggerStoreState>((set) => ({
+export const useLoggerStreamStore = create<LoggerStreamStoreState>((set) => ({
   logs: [],
   maxLogs: MAX_LOGS,
 

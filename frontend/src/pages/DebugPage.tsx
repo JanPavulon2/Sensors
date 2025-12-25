@@ -10,7 +10,6 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { TaskMonitor } from "@/features/tasks/components";
-import { StateViewer } from "@/shared/components/dev";
 import { Logger } from "@/features/logger/components";
 import { Activity, FileText, Database } from "lucide-react";
 
@@ -54,11 +53,6 @@ export function DebugPage(): JSX.Element {
         {/* Logger Tab */}
         <TabsContent value="logs" className="space-y-4">
           <Logger />
-        </TabsContent>
-
-        {/* State Viewer Tab */}
-        <TabsContent value="state" className="space-y-4">
-          <StateViewer />
         </TabsContent>
       </Tabs>
     </div>

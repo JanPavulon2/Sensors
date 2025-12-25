@@ -3,5 +3,5 @@
  * Zustand stores for logger state management
  */
 
-export { useLoggerStore } from './loggerStore';
+export { useLoggerStreamStore } from './loggerStreamStore';
 export { useLogFilterStore } from './logFilterStore';

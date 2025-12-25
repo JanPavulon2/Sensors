@@ -1,51 +1,45 @@
 /**
- * Custom React hook for managing WebSocket connection to task monitoring endpoint
+ * Socket.IO hook for managing real-time task updates
+ * Migrated from raw WebSocket to Socket.IO for unified communication
  *
  * Handles:
- * - Connection lifecycle (connect, disconnect, reconnect)
- * - Message parsing and validation
+ * - Socket.IO connection lifecycle (connect, disconnect, reconnect)
+ * - Task event listening (creation, updates, completion)
+ * - Task command emission (get_all, get_stats, etc.)
  * - Store updates via Zustand
  * - Automatic reconnection with exponential backoff
  * - Memory cleanup on unmount
  *
  * IMPORTANT IMPLEMENTATION NOTES:
- * This hook uses refs strategically to prevent infinite reconnection loops caused by stale closures.
+ * This hook uses refs and useCallback to prevent infinite reconnection loops caused by stale closures.
  *
  * THE PROBLEM:
- * - WebSocket event handlers (onopen, onclose, etc.) capture variables when created
- * - If `connect()` is recreated on every state change, old handlers still reference old closures
- * - This causes: state change → connect recreates → effect re-runs → new connection → state change → LOOP
+ * - Socket.IO event handlers capture variables when registered
+ * - If store methods are in dependencies, re-registering causes reconnection loops
+ * - This causes: state change → effect re-runs → new handlers → reconnect → LOOP
  *
  * THE SOLUTION:
- * 1. Use refs for reconnection logic values (retryCount, autoReconnect, etc.)
- *    - Refs maintain current values without triggering re-renders
- *    - Closures can read latest values from refs without being recreated
- *
- * 2. Keep connect() dependencies minimal and stable
- *    - Only depend on: enabled, url, handleMessage
- *    - Do NOT depend on state that changes during operation (retryCount, isConnected, etc.)
- *
- * 3. Use mountedRef to ensure single connection attempt per mount
- *    - Prevents multiple simultaneous connection attempts
- *    - useEffect depends only on 'enabled', not 'connect'
- *
- * 4. Access Zustand store directly via getState()
+ * 1. Use handleTaskEvent callback with useTaskStreamStore.getState() to get fresh store state
  *    - Avoids adding store methods to dependency arrays
- *    - Store methods from useTaskStore() might not be stable references
- *    - Using getState() ensures we always get fresh store instance
+ *    - Using getState() ensures we always get the current store instance
+ *
+ * 2. Keep effect dependencies minimal and stable
+ *    - Only depend on: enabled
+ *    - Do NOT depend on state that changes during operation (isConnected, etc.)
+ *
+ * 3. Use refs for Socket.IO instance to ensure single connection
+ *    - Prevents multiple simultaneous Socket.IO connections
+ *    - Refs maintain current values without triggering re-renders
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useTaskStore } from "@/features/tasks/stores/taskStore";
+import { io, Socket } from "socket.io-client";
+import { useTaskStreamStore } from "@/features/tasks/stores/taskStreamStore";
 import { config } from "@/config/constants";
-import type { TaskWebSocketMessage } from "@/shared/types/domain/task";
+import type { Task, TaskStats } from "@/shared/types/domain/task";
 
 interface UseTaskWebSocketOptions {
   enabled?: boolean;
-  url?: string;
-  autoReconnect?: boolean;
-  reconnectDelay?: number;
-  maxReconnectAttempts?: number;
 }
 
 interface UseTaskWebSocketReturn {
@@ -56,108 +50,104 @@ interface UseTaskWebSocketReturn {
   sendCommand: (command: Record<string, any>) => void;
 }
 
-// Build WebSocket URL for tasks from base WebSocket URL
-const getTasksWebSocketUrl = (): string => {
-  // Get base WebSocket URL from config (handles env vars + auto-detection)
-  const baseUrl = config.websocket.url; // e.g., "ws://localhost:8000"
-
-  // Append /ws/tasks path
-  return `${baseUrl}/ws/tasks`;
-};
-
-const DEFAULT_URL = getTasksWebSocketUrl();
-const DEFAULT_RECONNECT_DELAY = config.websocket.reconnectDelay;
-const DEFAULT_MAX_RECONNECT = config.websocket.reconnectAttempts;
-
 export function useTaskWebSocket(
   options: UseTaskWebSocketOptions = {}
 ): UseTaskWebSocketReturn {
-  const {
-    enabled = true,
-    url = DEFAULT_URL,
-    autoReconnect = true,
-    reconnectDelay = DEFAULT_RECONNECT_DELAY,
-    maxReconnectAttempts = DEFAULT_MAX_RECONNECT,
-  } = options;
+  const { enabled = true } = options;
 
-  const websocketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const mountedRef = useRef(false);
-
-  // Use refs for values that need to be accessed in closures but shouldn't trigger re-creation
-  const retryCountRef = useRef(0);
-  const autoReconnectRef = useRef(autoReconnect);
-  const reconnectDelayRef = useRef(reconnectDelay);
-  const maxReconnectAttemptsRef = useRef(maxReconnectAttempts);
-
+  const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Update refs when props change (but don't recreate connect function)
-  autoReconnectRef.current = autoReconnect;
-  reconnectDelayRef.current = reconnectDelay;
-  maxReconnectAttemptsRef.current = maxReconnectAttempts;
+  // Define handleTaskEvent callback that accesses fresh store state
+  // This prevents stale closures by always calling getState() instead of capturing methods
+  const handleTaskEvent = useCallback((eventType: string, data: unknown) => {
+    const store = useTaskStreamStore.getState();
 
-  // Define handleMessage first so it can be used in connect
-  // Access store directly inside the handler to avoid dependency issues
-  const handleMessage = useCallback((message: TaskWebSocketMessage) => {
-    const { type } = message;
-    const store = useTaskStore.getState();
-
-    switch (type) {
-      case "task:created":
-      case "task:updated":
-        if (message.task) {
-          store.addTask(message.task);
+    try {
+      switch (eventType) {
+        case "task:created":
+        case "task:updated": {
+          const task = data as Task;
+          if (task && typeof task === 'object' && 'id' in task) {
+            store.addTask(task);
+          } else {
+            console.warn("[TaskMonitor] Invalid task data:", data);
+          }
+          break;
         }
-        break;
 
-      case "task:completed":
-      case "task:failed":
-      case "task:cancelled":
-        if (message.task) {
-          store.updateTask(message.task.id, {
-            status: message.task.status,
-            finished_at: message.task.finished_at,
-            finished_timestamp: message.task.finished_timestamp,
-            duration: message.task.duration,
-            error: message.task.error,
-          });
+        case "task:completed":
+        case "task:failed":
+        case "task:cancelled": {
+          const task = data as Task;
+          if (task && typeof task === 'object' && 'id' in task) {
+            store.updateTask(task.id, {
+              status: task.status,
+              finished_at: task.finished_at,
+              finished_timestamp: task.finished_timestamp,
+              duration: task.duration,
+              error: task.error,
+            });
+          } else {
+            console.warn("[TaskMonitor] Invalid task data:", data);
+          }
+          break;
         }
-        break;
 
-      case "tasks:snapshot":
-      case "tasks:all":
-      case "tasks:active":
-        if (message.tasks) {
-          store.setTasks(message.tasks);
+        case "tasks:all":
+        case "tasks:active": {
+          // Handle both array format and wrapped format
+          let tasks = data as Task[];
+          if (!Array.isArray(tasks)) {
+            const wrapped = data as Record<string, unknown>;
+            if (Array.isArray(wrapped.tasks)) {
+              tasks = wrapped.tasks as Task[];
+            } else {
+              console.warn("[TaskMonitor] Invalid tasks data format:", data);
+              break;
+            }
+          }
+          store.setTasks(tasks);
+          break;
         }
-        break;
 
-      case "tasks:stats":
-        if (message.stats) {
-          store.setStats(message.stats);
+        case "tasks:stats": {
+          // Handle both direct stats and wrapped stats
+          let stats = data as TaskStats;
+          if (!stats || typeof stats !== 'object' || !('total' in stats)) {
+            const wrapped = data as Record<string, unknown>;
+            if (wrapped.stats && typeof wrapped.stats === 'object' && 'total' in wrapped.stats) {
+              stats = wrapped.stats as TaskStats;
+            } else {
+              console.warn("[TaskMonitor] Invalid stats data format:", data);
+              break;
+            }
+          }
+          store.setStats(stats);
+          break;
         }
-        break;
 
-      case "tasks:tree":
-        // Tree data received, could be used for hierarchical view
-        if (message.tree) {
-          console.log("[TaskMonitor] Task tree received:", message.tree);
+        case "tasks:tree":
+          // Tree data received, could be used for hierarchical view
           // TODO: Store tree data if needed for tree view
-        }
-        break;
+          break;
 
-      default:
-        console.warn("[TaskMonitor] Unknown message type:", type);
+        default:
+          console.warn("[TaskMonitor] Unknown task event type:", eventType);
+      }
+    } catch (error) {
+      console.error("[TaskMonitor] Error handling event:", eventType, error);
     }
   }, []); // No dependencies - we get fresh store state each time
 
-  const connect = useCallback(() => {
-    // Guard: Don't connect if disabled, already connected, or already connecting
-    if (!enabled || websocketRef.current !== null) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    // Prevent duplicate connections
+    if (socketRef.current?.connected) {
       return;
     }
 
@@ -165,125 +155,147 @@ export function useTaskWebSocket(
     setError(null);
 
     try {
-      const ws = new WebSocket(url);
+      // Connect to Socket.IO server (same host/port as HTTP frontend)
+      // Note: Try polling first as fallback if WebSocket has issues
+      const socket = io(config.websocket.url, {
+        reconnection: true,
+        reconnectionDelay: 3000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: Infinity,
+        transports: ["polling", "websocket"], // HTTP polling first, WebSocket fallback
+      });
 
-      ws.onopen = () => {
-        console.log("[TaskMonitor] WebSocket connected");
+      // Connection established
+      socket.on("connect", () => {
+        console.log("✓ Task Socket.IO connected");
         setIsConnected(true);
         setIsConnecting(false);
         setError(null);
         setRetryCount(0);
-        retryCountRef.current = 0;
-        useTaskStore.getState().setConnected(true);
+        useTaskStreamStore.getState().setConnected(true);
 
-        // Request initial data immediately
-        ws.send(JSON.stringify({ command: "get_stats" }));
-        ws.send(JSON.stringify({ command: "get_all" }));
-      };
+        // Request initial data
+        socket.emit("task_get_stats");
+        socket.emit("task_get_all");
+      });
 
-      ws.onmessage = (event) => {
-        try {
-          const message: TaskWebSocketMessage = JSON.parse(event.data);
-          handleMessage(message);
-        } catch (err) {
-          console.error("[TaskMonitor] Failed to parse message:", err);
-        }
-      };
+      // Listen to task push events (real-time updates)
+      socket.on("task:created", (task: unknown) => {
+        handleTaskEvent("task:created", task);
+      });
 
-      ws.onerror = (event) => {
-        // Note: onerror doesn't provide detailed info, onclose will be called after
-        console.error("[TaskMonitor] WebSocket error event:", event);
-        setError("WebSocket connection error");
-      };
+      socket.on("task:updated", (task: unknown) => {
+        handleTaskEvent("task:updated", task);
+      });
 
-      ws.onclose = () => {
-        console.log("[TaskMonitor] WebSocket disconnected");
+      socket.on("task:completed", (task: unknown) => {
+        handleTaskEvent("task:completed", task);
+      });
+
+      socket.on("task:failed", (task: unknown) => {
+        handleTaskEvent("task:failed", task);
+      });
+
+      socket.on("task:cancelled", (task: unknown) => {
+        handleTaskEvent("task:cancelled", task);
+      });
+
+      // Listen to task command response events
+      socket.on("tasks:all", (tasks: unknown) => {
+        handleTaskEvent("tasks:all", tasks);
+      });
+
+      socket.on("tasks:active", (tasks: unknown) => {
+        handleTaskEvent("tasks:active", tasks);
+      });
+
+      socket.on("tasks:stats", (stats: unknown) => {
+        handleTaskEvent("tasks:stats", stats);
+      });
+
+      socket.on("tasks:tree", (tree: unknown) => {
+        handleTaskEvent("tasks:tree", tree);
+      });
+
+      // Connection lost
+      socket.on("disconnect", (reason) => {
+        console.log(`Task Socket.IO disconnected: ${reason}`);
         setIsConnected(false);
         setIsConnecting(false);
-        useTaskStore.getState().setConnected(false);
-        websocketRef.current = null;
+        useTaskStreamStore.getState().setConnected(false);
+      });
 
-        // Auto-reconnect logic using refs to avoid stale closures
-        const currentRetryCount = retryCountRef.current;
-        const shouldReconnect = autoReconnectRef.current && currentRetryCount < maxReconnectAttemptsRef.current;
+      // Connection error
+      socket.on("connect_error", (connectError: unknown) => {
+        const errorMsg = connectError instanceof Error ? connectError.message : String(connectError);
+        console.error("Task Socket.IO connection error:", errorMsg);
+        setError(errorMsg);
+        setIsConnecting(false);
+        setRetryCount((count) => count + 1);
+      });
 
-        if (shouldReconnect) {
-          const delay = reconnectDelayRef.current * Math.pow(2, currentRetryCount);
-          console.log(
-            `[TaskMonitor] Reconnecting in ${delay}ms (attempt ${currentRetryCount + 1}/${maxReconnectAttemptsRef.current})`
-          );
-
-          // Increment retry count
-          retryCountRef.current = currentRetryCount + 1;
-          setRetryCount(currentRetryCount + 1);
-
-          // Schedule reconnection
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, delay);
-        } else if (currentRetryCount >= maxReconnectAttemptsRef.current) {
-          setError(
-            "Max reconnection attempts reached. Please refresh the page."
-          );
-        }
-      };
-
-      websocketRef.current = ws;
+      socketRef.current = socket;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("[TaskMonitor] Connection error:", errorMsg);
+      console.error("Failed to create Task Socket.IO connection:", errorMsg);
       setError(errorMsg);
       setIsConnecting(false);
     }
-  }, [
-    enabled,
-    url,
-    handleMessage,
-  ]); // Only include stable values - NOT state that changes during reconnection
+
+    return () => {
+      // Cleanup on unmount - unregister all listeners and disconnect
+      if (socketRef.current) {
+        socketRef.current.off("connect");
+        socketRef.current.off("task:created");
+        socketRef.current.off("task:updated");
+        socketRef.current.off("task:completed");
+        socketRef.current.off("task:failed");
+        socketRef.current.off("task:cancelled");
+        socketRef.current.off("tasks:all");
+        socketRef.current.off("tasks:active");
+        socketRef.current.off("tasks:stats");
+        socketRef.current.off("tasks:tree");
+        socketRef.current.off("disconnect");
+        socketRef.current.off("connect_error");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setIsConnected(false);
+      }
+    };
+  }, [enabled, handleTaskEvent]); // Only stable dependencies
 
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
-      if (!websocketRef.current || !isConnected) {
-        console.warn("[TaskMonitor] WebSocket not connected");
+      if (!socketRef.current?.connected) {
+        console.warn("[TaskMonitor] Task Socket.IO not connected");
         return;
       }
 
       try {
-        websocketRef.current.send(JSON.stringify(command));
+        // Map legacy WebSocket command format to Socket.IO events
+        const { command: cmd } = command;
+        switch (cmd) {
+          case "get_all":
+            socketRef.current.emit("task_get_all");
+            break;
+          case "get_active":
+            socketRef.current.emit("task_get_active");
+            break;
+          case "get_stats":
+            socketRef.current.emit("task_get_stats");
+            break;
+          case "get_tree":
+            socketRef.current.emit("task_get_tree");
+            break;
+          default:
+            console.warn("[TaskMonitor] Unknown command:", cmd);
+        }
       } catch (err) {
         console.error("[TaskMonitor] Failed to send command:", err);
       }
     },
-    [isConnected]
+    []
   );
-
-  // Connect on mount (if enabled)
-  // NOTE: We do NOT include 'connect' in the dependency array because:
-  // - 'connect' is recreated whenever retryCount/state changes
-  // - Including it would cause the effect to re-run constantly
-  // - This creates an infinite loop of connection attempts
-  // - Instead, we use mountedRef to ensure connect() is called only once per mount
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    // Only attempt to connect once per component mount
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      connect();
-    }
-
-    // Cleanup on unmount
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (websocketRef.current) {
-        websocketRef.current.close();
-      }
-    };
-  }, [enabled]); // Only depend on 'enabled' to prevent infinite re-runs when 'connect' is recreated
 
   return {
     isConnected,

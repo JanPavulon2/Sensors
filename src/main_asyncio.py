@@ -294,6 +294,15 @@ async def main():
     # Register event handlers (subscribe to EventBus, register client handlers)
     await socketio_handler.setup_event_handlers(sio, services)
 
+    # Register Socket.IO server with LogBroadcaster for log streaming
+    _broadcaster.set_socketio_server(sio)
+    log.info("Socket.IO registered with LogBroadcaster for log streaming")
+
+    # Register Socket.IO server with task handler for task event broadcasting
+    from api.websocket_tasks import set_socketio_server as set_task_socketio_server
+    set_task_socketio_server(sio)
+    log.info("Socket.IO registered with task handler for task broadcasting")
+
     # Wrap FastAPI app with Socket.IO ASGI middleware
     # This allows the same server to handle both HTTP (FastAPI) and WebSocket (Socket.IO)
     app = wrap_app_with_socketio(app, sio)

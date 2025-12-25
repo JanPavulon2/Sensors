@@ -1,5 +1,7 @@
 /**
- * Zustand store for managing task state and history
+ * Task Stream Store
+ * Manages real-time task updates from WebSocket stream
+ * This store is specifically for streaming data (not REST API data)
  *
  * Provides:
  * - Real-time task updates via WebSocket
@@ -11,7 +13,7 @@
 import { create } from "zustand";
 import type { Task, TaskStatus, TaskStats, TaskCategory } from "@/shared/types/domain/task";
 
-interface TaskStoreState {
+interface TaskStreamStoreState {
   // Core state
   tasks: Map<number, Task>;
   stats: TaskStats | null;
@@ -39,7 +41,7 @@ interface TaskStoreState {
 
 const MAX_TASKS = 500; // Circular buffer limit
 
-export const useTaskStore = create<TaskStoreState>((set, get) => ({
+export const useTaskStreamStore = create<TaskStreamStoreState>((set, get) => ({
   // Initial state
   tasks: new Map(),
   stats: null,

@@ -1,7 +1,7 @@
 """
-WebSocket handlers for real-time task monitoring.
+WebSocket and Socket.IO handlers for real-time task monitoring.
 
-This module provides WebSocket endpoints for streaming task lifecycle events
+This module provides WebSocket and Socket.IO endpoints for streaming task lifecycle events
 and status updates to connected clients in real-time.
 """
 
@@ -9,8 +9,11 @@ from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
 import json
 import logging
-from typing import Set
+from typing import Set, Optional, TYPE_CHECKING
 from utils.logger import get_category_logger, LogCategory
+
+if TYPE_CHECKING:
+    from socketio import AsyncServer
 
 # Get Python logger for internal errors only
 logger = get_category_logger(LogCategory.WEBSOCKET)
@@ -19,10 +22,25 @@ logger = get_category_logger(LogCategory.WEBSOCKET)
 _active_task_websockets: Set[WebSocket] = set()
 _websocket_lock = asyncio.Lock()
 
+# Socket.IO server instance (optional, for event broadcasting)
+_socketio_server: Optional["AsyncServer"] = None
+
+
+def set_socketio_server(socketio_server: "AsyncServer") -> None:
+    """
+    Set the Socket.IO server for broadcasting task events.
+
+    Args:
+        socketio_server: The Socket.IO AsyncServer instance
+    """
+    global _socketio_server
+    _socketio_server = socketio_server
+    logger.debug("Socket.IO server registered with task handler")
+
 
 async def broadcast_task_update(event_type: str, task_data: dict) -> None:
     """
-    Broadcast a task update to all connected WebSocket clients.
+    Broadcast a task update to all connected clients (WebSocket and/or Socket.IO).
 
     Args:
         event_type: Type of event (task:created, task:updated, task:completed, etc.)
@@ -33,6 +51,7 @@ async def broadcast_task_update(event_type: str, task_data: dict) -> None:
         "task": task_data,
     }
 
+    # Broadcast via WebSocket (legacy, can be removed later)
     disconnected = set()
 
     async with _websocket_lock:
@@ -46,6 +65,14 @@ async def broadcast_task_update(event_type: str, task_data: dict) -> None:
         # Clean up disconnected clients
         for ws in disconnected:
             _active_task_websockets.discard(ws)
+
+    # Broadcast via Socket.IO (primary method)
+    if _socketio_server:
+        try:
+            # Convert message to Socket.IO format: event name + data payload
+            await _socketio_server.emit(event_type, message.get("task", {}))
+        except Exception as e:
+            logger.error(f"Error broadcasting task update via Socket.IO: {e}")
 
 
 async def websocket_tasks_endpoint(websocket: WebSocket):

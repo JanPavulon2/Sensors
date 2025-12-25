@@ -181,7 +181,56 @@ class SocketIOHandler:
                 log.error(f"Error updating animation parameter: {e}")
                 await sio.emit('error', {'message': str(e)}, room=sid)
 
-        log.info("Client event handlers registered")
+        # Task monitoring commands
+        @sio.event
+        async def task_get_all(sid: str) -> None:
+            """Client command: Get all tasks"""
+            try:
+                from lifecycle.task_registry import TaskRegistry
+                registry = TaskRegistry.instance()
+                tasks = registry.get_all_as_dicts()
+                await sio.emit('tasks:all', {'tasks': tasks}, room=sid)
+            except Exception as e:
+                log.error(f"Error getting all tasks: {e}", exc_info=True)
+                await sio.emit('error', {'message': str(e)}, room=sid)
+
+        @sio.event
+        async def task_get_active(sid: str) -> None:
+            """Client command: Get active tasks"""
+            try:
+                from lifecycle.task_registry import TaskRegistry
+                registry = TaskRegistry.instance()
+                tasks = registry.get_active_as_dicts()
+                await sio.emit('tasks:active', {'tasks': tasks}, room=sid)
+            except Exception as e:
+                log.error(f"Error getting active tasks: {e}")
+                await sio.emit('error', {'message': str(e)}, room=sid)
+
+        @sio.event
+        async def task_get_stats(sid: str) -> None:
+            """Client command: Get task statistics"""
+            try:
+                from lifecycle.task_registry import TaskRegistry
+                registry = TaskRegistry.instance()
+                stats = registry.get_stats()
+                await sio.emit('tasks:stats', {'stats': stats}, room=sid)
+            except Exception as e:
+                log.error(f"Error getting task stats: {e}", exc_info=True)
+                await sio.emit('error', {'message': str(e)}, room=sid)
+
+        @sio.event
+        async def task_get_tree(sid: str) -> None:
+            """Client command: Get task tree"""
+            try:
+                from lifecycle.task_registry import TaskRegistry
+                registry = TaskRegistry.instance()
+                tree = registry.get_task_tree()
+                await sio.emit('tasks:tree', {'tree': tree}, room=sid)
+            except Exception as e:
+                log.error(f"Error getting task tree: {e}")
+                await sio.emit('error', {'message': str(e)}, room=sid)
+
+        log.info("Client event handlers registered (zones, animations, tasks)")
 
     async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
         """EventBus handler: Broadcast zone state change to all clients"""

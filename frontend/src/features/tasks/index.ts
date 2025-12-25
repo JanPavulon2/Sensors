@@ -10,4 +10,4 @@ export { TaskMonitor, TaskCard, TaskStatsDisplay } from './components';
 export { useTaskWebSocket } from './hooks';
 
 // Stores
-export { useTaskStore } from './stores';
+export { useTaskStreamStore } from './stores';

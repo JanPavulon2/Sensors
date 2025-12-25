@@ -79,7 +79,7 @@ export function TaskStatsDisplay({ stats }: TaskStatsDisplayProps) {
       </div>
 
       {/* Category Breakdown */}
-      {Object.keys(stats.categories).length > 0 && (
+      {stats.categories && Object.keys(stats.categories).length > 0 && (
         <Card className="p-3 bg-gray-900/50">
           <p className="text-xs text-gray-400 mb-2 font-semibold">Tasks by Category</p>
           <div className="space-y-2">

@@ -10,4 +10,4 @@ export { Logger, LogViewer, LogFilterPanel } from './components';
 export { useLoggerWebSocket, useLogCategories } from './hooks';
 
 // Stores
-export { useLoggerStore, useLogFilterStore } from './stores';
+export { useLoggerStreamStore, useLogFilterStore } from './stores';

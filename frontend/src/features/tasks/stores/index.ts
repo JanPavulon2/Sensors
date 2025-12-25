@@ -3,4 +3,4 @@
  * Zustand stores for task state management
  */
 
-export { useTaskStore } from './taskStore';
+export { useTaskStreamStore } from './taskStreamStore';
