@@ -9,7 +9,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps): JSX.Element {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
   const { isAuthenticated, useDefaultTestToken } = useAuth();

@@ -3,6 +3,7 @@
  * Main dashboard with system metrics, zone overview, and controls
  */
 
+import { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -12,15 +13,39 @@ import {
 import { Button } from '@/shared/ui/button';
 import { useZonesQuery } from '@/features/zones/api';
 import { useCheckBackendConnection } from '@/shared/hooks';
-import { ZonesList } from '@/features/zones/components';
+import { ZonesGrid, ZoneEditPanel } from '@/features/zones/components';
 
 export function Dashboard(): JSX.Element {
   const { data: zonesData, isLoading: zonesLoading, error: zonesError } = useZonesQuery();
   const { isConnected, isLoading: connectionLoading } = useCheckBackendConnection();
 
+  // Zone detail panel state
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+
   const zones = zonesData?.zones || [];
   const zoneCount = zones.length;
   const totalPixels = zones.reduce((sum: number, zone) => sum + zone.pixel_count, 0);
+
+  // Find selected zone and its index
+  const selectedZone = zones.find(z => z.id === selectedZoneId);
+  const selectedZoneIndex = selectedZone ? zones.indexOf(selectedZone) : 0;
+
+  // Navigation handlers for detail panel
+  const handlePrevZone = () => {
+    if (selectedZoneIndex > 0) {
+      setSelectedZoneId(zones[selectedZoneIndex - 1].id);
+    }
+  };
+
+  const handleNextZone = () => {
+    if (selectedZoneIndex < zones.length - 1) {
+      setSelectedZoneId(zones[selectedZoneIndex + 1].id);
+    }
+  };
+
+  const handleClosePanel = () => {
+    setSelectedZoneId(null);
+  };
 
   return (
     <div className="space-y-8">
@@ -149,8 +174,20 @@ export function Dashboard(): JSX.Element {
               {zoneCount} zone{zoneCount !== 1 ? 's' : ''} configured
             </p>
           </div>
-          <ZonesList />
+          <ZonesGrid onSelectZone={setSelectedZoneId} />
         </div>
+      )}
+
+      {/* Zone Edit Panel */}
+      {selectedZone && (
+        <ZoneEditPanel
+          zone={selectedZone}
+          currentIndex={selectedZoneIndex}
+          totalZones={zoneCount}
+          onClose={handleClosePanel}
+          onPrevZone={handlePrevZone}
+          onNextZone={handleNextZone}
+        />
       )}
 
       {/* Empty State */}

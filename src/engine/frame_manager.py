@@ -13,18 +13,6 @@ Priority System:
 
 Only the highest-priority frame is rendered. When high-priority sources stop,
 rendering automatically falls back to lower priorities.
-
-FrameManager 
----------------
-Wielokanałowy renderer LED wspierający:
-- wiele GPIO
-- wiele fizycznych stripów
-- strefy rozłożone na kilku GPIO
-- preview + główne paski
-- odwracanie stref (reversed)
-- animacje i tryb statyczny
-
-Warstwa: RENDER / INFRASTRUCTURE
 """
 
 

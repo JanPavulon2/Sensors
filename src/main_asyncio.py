@@ -46,6 +46,7 @@ from utils.logger import get_logger, configure_logger
 from services.log_broadcaster import get_broadcaster
 from api.main import create_app
 from api.dependencies import set_service_container
+from api.socketio_handler import create_socketio_server, socketio_handler, wrap_app_with_socketio
 
 from models.enums import LogCategory, LogLevel, FramePriority
 from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
@@ -282,6 +283,21 @@ async def main():
 
     log.info("Starting API server...")
     app = create_app()
+
+    # ============================================================
+    # SOCKET.IO INTEGRATION
+    # ============================================================
+    # Create Socket.IO server and register event handlers
+    log.info("Setting up Socket.IO server...")
+    sio = create_socketio_server(cors_origins=["*"])  # Allow all origins for WebSocket
+
+    # Register event handlers (subscribe to EventBus, register client handlers)
+    await socketio_handler.setup_event_handlers(sio, services)
+
+    # Wrap FastAPI app with Socket.IO ASGI middleware
+    # This allows the same server to handle both HTTP (FastAPI) and WebSocket (Socket.IO)
+    app = wrap_app_with_socketio(app, sio)
+    log.info("Socket.IO integrated with FastAPI")
 
     # Use APIServerWrapper for clean shutdown with force_exit fix
     api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)

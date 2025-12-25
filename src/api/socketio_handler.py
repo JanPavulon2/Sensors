@@ -259,6 +259,9 @@ def create_socketio_server(cors_origins: Optional[list[str]] = None) -> AsyncSer
     """
     if cors_origins is None:
         cors_origins = [
+            "http://192.168.137.139:3000",
+            "http://192.168.137.139:8000",
+            "http://192.168.137.139:5173",
             "http://localhost:3000",
             "http://localhost:5173",
             "http://127.0.0.1:3000",

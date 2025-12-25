@@ -25,6 +25,10 @@ interface BrightnessUpdateRequest {
   brightness: number;
 }
 
+interface ZonePowerToggleRequest {
+  is_on: boolean;
+}
+
 /**
  * Fetch all zones from the API
  */
@@ -49,7 +53,7 @@ export const useZoneQuery = (zoneId: string | null) => {
     queryFn: async () => {
       if (!zoneId) throw new Error('Zone ID required');
       const response = await api.get(`/v1/zones/${zoneId}`);
-      return response.data.zone;
+      return response.data;
     },
     enabled: !!zoneId,
     staleTime: 2000,
@@ -62,50 +66,13 @@ export const useZoneQuery = (zoneId: string | null) => {
 export const useUpdateZoneColorMutation = (zoneId: string) => {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    Zone,
-    Error,
-    ColorUpdateRequest,
-    { previousZones?: ZonesResponse }
-  >({
+  return useMutation<Zone, Error, ColorUpdateRequest>({
     mutationFn: async (data) => {
       const response = await api.put(`/v1/zones/${zoneId}/color`, data);
-      return response.data.zone;
-    },
-    onMutate: async (newColor) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['zones'] });
-
-      // Snapshot previous data
-      const previousZones = queryClient.getQueryData<ZonesResponse>(['zones']);
-
-      // Optimistically update cache
-      if (previousZones) {
-        queryClient.setQueryData<ZonesResponse>(['zones'], {
-          ...previousZones,
-          zones: previousZones.zones.map((zone) =>
-            zone.id === zoneId
-              ? {
-                  ...zone,
-                  state: {
-                    ...zone.state,
-                    color: newColor.color,
-                  },
-                }
-              : zone
-          ),
-        });
-      }
-
-      return { previousZones };
-    },
-    onError: (_err, _newColor, context) => {
-      // Rollback on error
-      if (context?.previousZones) {
-        queryClient.setQueryData(['zones'], context.previousZones);
-      }
+      return response.data;
     },
     onSuccess: () => {
+      // Invalidate and refetch zones to get complete color data with rgb conversion
       queryClient.invalidateQueries({ queryKey: ['zones'] });
     },
   });
@@ -125,7 +92,7 @@ export const useUpdateZoneBrightnessMutation = (zoneId: string) => {
   >({
     mutationFn: async (data) => {
       const response = await api.put(`/v1/zones/${zoneId}/brightness`, data);
-      return response.data.zone;
+      return response.data;
     },
     onMutate: async (newBrightness) => {
       await queryClient.cancelQueries({ queryKey: ['zones'] });
@@ -163,6 +130,57 @@ export const useUpdateZoneBrightnessMutation = (zoneId: string) => {
 };
 
 /**
+ * Toggle zone power on/off
+ */
+export const useToggleZonePowerMutation = (zoneId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Zone,
+    Error,
+    ZonePowerToggleRequest,
+    { previousZones?: ZonesResponse }
+  >({
+    mutationFn: async (data) => {
+      const response = await api.put(`/v1/zones/${zoneId}/is-on`, data);
+      return response.data;
+    },
+    onMutate: async (newPower) => {
+      await queryClient.cancelQueries({ queryKey: ['zones'] });
+
+      const previousZones = queryClient.getQueryData<ZonesResponse>(['zones']);
+
+      if (previousZones) {
+        queryClient.setQueryData<ZonesResponse>(['zones'], {
+          ...previousZones,
+          zones: previousZones.zones.map((zone) =>
+            zone.id === zoneId
+              ? {
+                  ...zone,
+                  state: {
+                    ...zone.state,
+                    is_on: newPower.is_on,
+                  },
+                }
+              : zone
+          ),
+        });
+      }
+
+      return { previousZones };
+    },
+    onError: (_err, _newPower, context) => {
+      if (context?.previousZones) {
+        queryClient.setQueryData(['zones'], context.previousZones);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['zones'] });
+    },
+  });
+};
+
+/**
  * Reset zone to defaults
  */
 export const useResetZoneMutation = (zoneId: string) => {
@@ -176,7 +194,7 @@ export const useResetZoneMutation = (zoneId: string) => {
   >({
     mutationFn: async () => {
       const response = await api.post(`/v1/zones/${zoneId}/reset`);
-      return response.data.zone;
+      return response.data;
     },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['zones'] });
@@ -186,6 +204,57 @@ export const useResetZoneMutation = (zoneId: string) => {
       if (context?.previousZones) {
         queryClient.setQueryData(['zones'], context.previousZones);
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['zones'] });
+    },
+  });
+};
+
+/**
+ * Update zone animation - start animation or switch to static mode
+ */
+export const useUpdateZoneAnimationMutation = (zoneId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<Zone, Error, { animation_id: string | null }>({
+    mutationFn: async (data) => {
+      if (data.animation_id === null) {
+        // Switch to STATIC mode (keep animation_id stored for later resumption)
+        const response = await api.put(`/v1/zones/${zoneId}/render-mode`, {
+          render_mode: 'STATIC',
+        });
+        return response.data;
+      } else {
+        // Start the selected animation (will switch to ANIMATION mode automatically)
+        const response = await api.post(`/v1/zones/${zoneId}/animation/start`, {
+          animation_id: data.animation_id,
+        });
+        return response.data;
+      }
+    },
+    onSuccess: () => {
+      // Invalidate and refetch zones to get complete updated data
+      queryClient.invalidateQueries({ queryKey: ['zones'] });
+    },
+  });
+};
+
+/**
+ * Update zone animation parameters
+ */
+export const useUpdateZoneAnimationParametersMutation = (zoneId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Zone,
+    Error,
+    { animation_parameters: Record<string, any> },
+    { previousZones?: ZonesResponse }
+  >({
+    mutationFn: async (data) => {
+      const response = await api.put(`/v1/zones/${zoneId}/animation-parameters`, data);
+      return response.data.zone;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['zones'] });

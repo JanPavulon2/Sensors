@@ -161,9 +161,15 @@ class StaticModeController:
 
     def submit_zone(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
+        # Respect is_on state: show black when powered off
+        if not zone.state.is_on:
+            color = zone.state.color.black()
+        else:
+            color = zone.state.color.with_brightness(zone.brightness)
+
         frame = SingleZoneFrame(
             zone_id=zone.config.id,
-            color=zone.state.color.with_brightness(zone.brightness),
+            color=color,
             priority=FramePriority.MANUAL,
             source=FrameSource.STATIC,
             ttl=10.0,  # Match initialize() TTL to keep static zones persistent

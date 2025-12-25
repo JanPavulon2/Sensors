@@ -2,7 +2,7 @@
 from __future__ import annotations
 import asyncio
 import uvicorn
-from fastapi import FastAPI
+from starlette.types import ASGIApp
 from typing import Optional
 from utils.logger import get_logger, LogCategory
 
@@ -24,7 +24,7 @@ class APIServerWrapper:
 
     def __init__(
         self,
-        app: FastAPI,
+        app: ASGIApp,
         host: str = "0.0.0.0",
         port: int = 8000,
     ):

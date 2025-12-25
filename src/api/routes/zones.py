@@ -256,7 +256,7 @@ async def toggle_zone_is_on(
     response_model=ZoneResponse,
     status_code=status.HTTP_200_OK,
     summary="Change zone render mode",
-    description="Switch zone between static color, animation, or off"
+    description="Switch zone between static color or animation"
 )
 async def update_zone_render_mode(
     zone_id: str,
@@ -280,7 +280,6 @@ async def update_zone_render_mode(
     **Render Modes:**
     - `STATIC`: Display static color (no animation)
     - `ANIMATION`: Run animation (requires animation_id)
-    - `OFF`: Zone powered off (black)
 
     **Returns:** Updated zone with new render mode
 
@@ -291,9 +290,6 @@ async def update_zone_render_mode(
 
     // Start animation
     {"render_mode": "ANIMATION", "animation_id": "BREATHE"}
-
-    // Turn off
-    {"render_mode": "OFF"}
     ```
 
     **Side Effects:**

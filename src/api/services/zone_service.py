@@ -214,6 +214,105 @@ class ZoneAPIService:
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
 
+    def start_zone_animation(self, zone_id: str, animation_id: str, parameters: Optional[dict] = None) -> ZoneResponse:
+        """Start animation on a zone
+
+        Args:
+            zone_id: Zone ID string
+            animation_id: Animation ID to start
+            parameters: Optional animation parameters
+
+        Returns:
+            Updated ZoneResponse with animation running
+
+        Raises:
+            ZoneNotFoundError: If zone doesn't exist
+            ValueError: If animation ID invalid
+        """
+        from models.enums import AnimationID, ZoneRenderMode
+        from models.domain.animation import AnimationState
+
+        try:
+            zone_enum = ZoneID[zone_id.upper()]
+        except KeyError:
+            raise ZoneNotFoundError(zone_id)
+
+        # Validate and create animation
+        try:
+            anim_enum = AnimationID[animation_id.upper()]
+        except KeyError:
+            raise ValueError(f"Invalid animation ID '{animation_id}'")
+
+        # Build animation state with parameters
+        animation = AnimationState(id=anim_enum, parameter_values=parameters or {})
+
+        # Set zone to animation mode
+        self.zone_service.set_render_mode(zone_enum, ZoneRenderMode.ANIMATION, animation)
+
+        zone = self.zone_service.get_zone(zone_enum)
+        return self._zone_to_response(zone)
+
+    def stop_zone_animation(self, zone_id: str) -> ZoneResponse:
+        """Stop animation on a zone and return to static mode
+
+        Args:
+            zone_id: Zone ID string
+
+        Returns:
+            Updated ZoneResponse with animation stopped
+
+        Raises:
+            ZoneNotFoundError: If zone doesn't exist
+        """
+        from models.enums import ZoneRenderMode
+
+        try:
+            zone_enum = ZoneID[zone_id.upper()]
+        except KeyError:
+            raise ZoneNotFoundError(zone_id)
+
+        # Switch to static mode (no animation)
+        self.zone_service.set_render_mode(zone_enum, ZoneRenderMode.STATIC, None)
+
+        zone = self.zone_service.get_zone(zone_enum)
+        return self._zone_to_response(zone)
+
+    def update_zone_animation_parameters(self, zone_id: str, parameters: dict) -> ZoneResponse:
+        """Update animation parameters while animation is running
+
+        Args:
+            zone_id: Zone ID string
+            parameters: Animation parameters to update
+
+        Returns:
+            Updated ZoneResponse with new parameters applied
+
+        Raises:
+            ZoneNotFoundError: If zone doesn't exist
+            ValueError: If zone not in ANIMATION mode
+        """
+        from models.enums import ZoneRenderMode
+
+        try:
+            zone_enum = ZoneID[zone_id.upper()]
+        except KeyError:
+            raise ZoneNotFoundError(zone_id)
+
+        zone = self.zone_service.get_zone(zone_enum)
+
+        # Check if zone is in animation mode
+        if zone.state.mode != ZoneRenderMode.ANIMATION or not zone.state.animation:
+            raise ValueError("Zone is not in ANIMATION mode")
+
+        # Update animation parameters
+        zone.state.animation.parameter_values.update(parameters)
+
+        # Persist the change
+        self.zone_service.save()
+
+        zone = self.zone_service.get_zone(zone_enum)
+        return self._zone_to_response(zone)
+
     # ===== CONVERSION HELPERS =====
 
     def _request_to_color(self, color_request: ColorRequest) -> Color:

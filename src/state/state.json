@@ -2,14 +2,10 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          26,
-          24,
-          158
-        ]
+        "mode": "HUE",
+        "hue": 213
       },
-      "brightness": 89,
+      "brightness": 78,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -19,14 +15,10 @@
     },
     "lamp": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          28,
-          255,
-          0
-        ]
+        "mode": "HUE",
+        "hue": 320
       },
-      "brightness": 1,
+      "brightness": 91,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -53,14 +45,10 @@
     },
     "pixel": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          255,
-          184,
-          0
-        ]
+        "mode": "PRESET",
+        "preset_name": "magenta"
       },
-      "brightness": 76,
+      "brightness": 100,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -95,7 +83,7 @@
         ]
       },
       "brightness": 64,
-      "is_on": true,
+      "is_on": false,
       "mode": "ANIMATION",
       "animation": {
         "id": "COLOR_SNAKE",
@@ -108,9 +96,9 @@
     "circle": {
       "color": {
         "mode": "HUE",
-        "hue": 173
+        "hue": 65
       },
-      "brightness": 26,
+      "brightness": 100,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -120,11 +108,11 @@
     },
     "gate": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "sky_blue"
+        "mode": "HUE",
+        "hue": 330
       },
-      "brightness": 100,
-      "is_on": true,
+      "brightness": 83,
+      "is_on": false,
       "mode": "STATIC"
     }
   },
