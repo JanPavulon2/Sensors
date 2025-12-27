@@ -8,7 +8,6 @@ and status updates to connected clients in real-time.
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
 import json
-import logging
 from typing import Set, Optional, TYPE_CHECKING
 from utils.logger import get_category_logger, LogCategory
 
