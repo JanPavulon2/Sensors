@@ -143,6 +143,13 @@ async def main():
     _broadcaster.start()
     get_logger().set_broadcaster(_broadcaster)
 
+    # Create Socket.IO server EARLY so it's ready before initialization logs
+    # Event handlers will be registered later after services are set up
+    log.info("Creating Socket.IO server for log broadcasting...")
+    sio = create_socketio_server(cors_origins=["*"])
+    _broadcaster.set_socketio_server(sio)
+    log.info("Socket.IO server created and registered with LogBroadcaster")
+
     log.info("Starting Diuna application...")
 
     # ========================================================================
@@ -287,16 +294,9 @@ async def main():
     # ============================================================
     # SOCKET.IO INTEGRATION
     # ============================================================
-    # Create Socket.IO server and register event handlers
-    log.info("Setting up Socket.IO server...")
-    sio = create_socketio_server(cors_origins=["*"])  # Allow all origins for WebSocket
-
     # Register event handlers (subscribe to EventBus, register client handlers)
+    log.info("Setting up Socket.IO event handlers...")
     await socketio_handler.setup_event_handlers(sio, services)
-
-    # Register Socket.IO server with LogBroadcaster for log streaming
-    _broadcaster.set_socketio_server(sio)
-    log.info("Socket.IO registered with LogBroadcaster for log streaming")
 
     # Register Socket.IO server with task handler for task event broadcasting
     from api.websocket_tasks import set_socketio_server as set_task_socketio_server

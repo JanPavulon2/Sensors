@@ -5,19 +5,14 @@
 
 import { useLoggerWebSocket } from '@/features/logger/hooks/useLoggerWebSocket';
 import { LogViewer } from './LogViewer';
-import { LogFilterPanel } from './LogFilterPanel';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/ui/card';
-import { Zap, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 interface LoggerProps {
   /**
    * Enable/disable WebSocket connection
    */
   enabled?: boolean;
-  /**
-   * Custom WebSocket URL
-   */
-  wsUrl?: string;
   /**
    * Custom max height for log viewer
    */
@@ -26,10 +21,9 @@ interface LoggerProps {
 
 export function Logger({
   enabled = true,
-  wsUrl,
   maxHeight = 'h-96',
 }: LoggerProps): JSX.Element {
-  const { isConnected } = useLoggerWebSocket({ enabled, url: wsUrl });
+  const { isConnected } = useLoggerWebSocket({ enabled });
 
   return (
     <Card className="w-full">
@@ -54,18 +48,8 @@ export function Logger({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Filter Panel */}
-        <LogFilterPanel isCollapsible={true} />
-
-        {/* Log Viewer */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
-            <p className="text-sm font-medium text-foreground">Logs</p>
-          </div>
-          <LogViewer maxHeight={maxHeight} />
-        </div>
+      <CardContent>
+        <LogViewer maxHeight={maxHeight} />
       </CardContent>
     </Card>
   );

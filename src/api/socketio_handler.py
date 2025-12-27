@@ -230,7 +230,26 @@ class SocketIOHandler:
                 log.error(f"Error getting task tree: {e}")
                 await sio.emit('error', {'message': str(e)}, room=sid)
 
-        log.info("Client event handlers registered (zones, animations, tasks)")
+        # Log history command
+        @sio.event
+        async def logs_request_history(sid: str, data: dict) -> None:
+            """Client command: Request recent log history"""
+            try:
+                from services.log_broadcaster import get_broadcaster
+
+                limit = data.get('limit', 100)
+                broadcaster = get_broadcaster()
+                logs = broadcaster.get_recent_logs(limit)
+
+                # Convert LogMessage objects to dicts for Socket.IO
+                log_dicts = [log.model_dump() for log in logs]
+
+                await sio.emit('logs:history', {'logs': log_dicts}, room=sid)
+            except Exception as e:
+                log.error(f"Error getting log history: {e}")
+                await sio.emit('error', {'message': str(e)}, room=sid)
+
+        log.info("Client event handlers registered (zones, animations, tasks, logs)")
 
     async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
         """EventBus handler: Broadcast zone state change to all clients"""

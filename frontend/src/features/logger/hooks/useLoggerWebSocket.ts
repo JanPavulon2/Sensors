@@ -74,6 +74,9 @@ export const useLoggerWebSocket = ({
       socket.on('connect', () => {
         console.log('✓ Logger Socket.IO connected');
         setIsConnected(true);
+
+        // Request log history on first connect
+        socket.emit('logs_request_history', { limit: 500 });
       });
 
       // Listen to log entries from backend
@@ -109,6 +112,39 @@ export const useLoggerWebSocket = ({
           handleLogEntry(log);
         } catch (error) {
           console.error('Failed to process log entry:', error);
+        }
+      });
+
+      // Listen to log history response
+      socket.on('logs:history', (data: unknown) => {
+        try {
+          const historyData = data as { logs: any[] };
+          if (!Array.isArray(historyData.logs)) {
+            console.warn('Invalid log history format:', data);
+            return;
+          }
+
+          const store = useLoggerStreamStore.getState();
+
+          // Add historical logs in order (oldest to newest)
+          historyData.logs.forEach((logData: any) => {
+            const level = (['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(logData.level as string)
+              ? logData.level
+              : 'INFO') as LogLevel;
+
+            const log: LogEntry = {
+              id: `history-${logData.timestamp}-${Math.random()}`,
+              timestamp: (logData.timestamp as string) || new Date().toISOString(),
+              level,
+              category: (logData.category as string) || 'UNKNOWN',
+              message: (logData.message as string) || '',
+            };
+            store.addLog(log);
+          });
+
+          console.log(`✓ Loaded ${historyData.logs.length} historical logs`);
+        } catch (error) {
+          console.error('Failed to process log history:', error);
         }
       });
 

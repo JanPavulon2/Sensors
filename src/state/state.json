@@ -23,7 +23,9 @@
       "mode": "ANIMATION",
       "animation": {
         "id": "SNAKE",
-        "parameters": {}
+        "parameters": {
+          "speed": 50
+        }
       }
     },
     "back": {
@@ -53,7 +55,9 @@
       "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
-        "parameters": {}
+        "parameters": {
+          "speed": 60
+        }
       }
     },
     "preview": {
