@@ -138,11 +138,12 @@ class DataAssembler:
 
             for zone_config in zone_configs:
                 # Get state data using zone id (lowercase, e.g., "lamp" from ZoneID.LAMP)
-                zone_key = zone_config.id.name.lower()
+                zone_name = zone_config.id.name 
+                zone_key = zone_name.lower()
                 zone_state_data = state_json.get("zones", {}).get(zone_key, {})
 
                 if not zone_state_data:
-                    log.warn(f"No state found for zone {zone_config.id.name}, using defaults")
+                    log.warn(f"No state found for zone {zone_name}, using defaults")
                     color = Color.from_hue(0)
                     brightness = 100
                     mode = ZoneRenderMode.STATIC
@@ -156,9 +157,8 @@ class DataAssembler:
                     # Load zone mode with fallback to STATIC
                     try:
                         mode = Serializer.str_to_zone_render_mode(zone_state_data.get("mode", "STATIC"))
-                        log.info(f"Zone {zone_config.id.name} mode={mode.name}")
                     except ValueError:
-                        log.warn(f"Invalid mode for zone {zone_config.id.name}, using STATIC")
+                        log.warn(f"Invalid mode for zone {zone_name}, using STATIC")
                         mode = ZoneRenderMode.STATIC
 
                     # Load animation state (preserved for mode switching)
@@ -166,7 +166,7 @@ class DataAssembler:
                     anim_data = zone_state_data.get("animation")
                     if anim_data:
                         anim_id_str = anim_data.get("id")
-                        log.info(f"Zone {zone_config.id.name} has animation data: {anim_id_str}")
+                        
                         if anim_id_str:
                             try:
                                 animation_id = Serializer.str_to_enum(anim_id_str, AnimationID)
@@ -178,7 +178,7 @@ class DataAssembler:
                                 # Create AnimationState object
                                 animation_state = AnimationState(
                                     id=animation_id,
-                                    parameter_values=animation_parameters
+                                    parameters=animation_parameters
                                 )
                             except ValueError:
                                 log.warn(f"Invalid animation_id for zone {zone_config.id.name}: {anim_id_str}")
@@ -234,7 +234,7 @@ class DataAssembler:
                 if zone.state.animation:
                     zone_data["animation"] = {
                         "id": zone.state.animation.id.name,
-                        "parameters": Serializer.animation_params_enum_to_str(zone.state.animation.parameter_values)
+                        "parameters": Serializer.animation_params_enum_to_str(zone.state.animation.parameters)
                     }
 
                 state_json["zones"][zone_key] = zone_data

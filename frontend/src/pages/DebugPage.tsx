@@ -30,16 +30,16 @@ export function DebugPage(): JSX.Element {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DebugTab)}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="tasks" className="flex items-center gap-2">
+        <TabsList variant="underline" className="w-full">
+          <TabsTrigger variant="underline" value="tasks" className="flex items-center justify-center gap-2">
             <Activity className="w-4 h-4" />
             Tasks
           </TabsTrigger>
-          <TabsTrigger value="logs" className="flex items-center gap-2">
+          <TabsTrigger variant="underline" value="logs" className="flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" />
             Logs
           </TabsTrigger>
-          <TabsTrigger value="state" className="flex items-center gap-2">
+          <TabsTrigger variant="underline" value="state" className="flex items-center justify-center gap-2">
             <Database className="w-4 h-4" />
             State
           </TabsTrigger>

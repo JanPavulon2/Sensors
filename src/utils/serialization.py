@@ -11,6 +11,7 @@ Single source of truth for frontend JSON API compatibility.
 from typing import TypeVar, Type, Any, Dict, Optional
 from enum import Enum
 
+from models.domain.animation import AnimationState
 from models.enums import ZoneID, AnimationID, ColorMode, ZoneRenderMode
 from models.color import Color
 from models.animation_params import (
@@ -121,21 +122,19 @@ class Serializer:
     # ========================================================================
 
     @staticmethod
-    def animation_to_dict(anim_config) -> Dict[str, Any]:
+    def animation_state_to_dict(anim_state: AnimationState) -> Dict[str, Any]:
         """
-        Serialize animation config to dict
-
+        Serialize animation state to dict
+        
         Args:
-            anim_config: AnimationConfig object
+            anim_state: AnimationState object
 
         Returns:
-            Dict with id, display_name, description, parameters
+            Dict with animation id, parameters with values
         """
         return {
-            "id": anim_config.id.name,
-            "display_name": anim_config.display_name,
-            "description": anim_config.description,
-            "parameters": [p.name for p in anim_config.parameters],
+            "id": anim_state.id,
+            "parameters": [p.name for p in anim_state.parameters],
         }
 
 

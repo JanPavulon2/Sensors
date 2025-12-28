@@ -480,7 +480,7 @@ class ZoneStateResponse(BaseModel):
 
 class AnimationStateResponse(BaseModel):
     id: str
-    parameter_values: Dict[str, Any]
+    parameters: Dict[str, Any]
 ```
 
 ### 1.4 State Synchronization Strategy
@@ -1813,6 +1813,6 @@ class ZoneStateResponse(BaseModel):
 
 class AnimationStateResponse(BaseModel):
     id: str
-    parameter_values: Dict[str, Any]
+    parameters: Dict[str, Any]
 
     

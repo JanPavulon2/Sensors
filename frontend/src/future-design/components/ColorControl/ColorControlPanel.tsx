@@ -136,12 +136,12 @@ export const ColorControlPanel: React.FC<ColorControlPanelProps> = ({
               <input
                 type="range"
                 min="0"
-                max="255"
-                value={brightness}
-                onChange={(e) => handleBrightnessChange(parseInt(e.target.value, 10))}
+                max="100"
+                value={Math.min(100, brightness)}
+                onChange={(e) => handleBrightnessChange(Math.min(100, Math.max(0, parseInt(e.target.value, 10))))}
                 className={styles.slider}
               />
-              <span className={styles.value}>{Math.round((brightness / 255) * 100)}%</span>
+              <span className={styles.value}>{Math.min(100, brightness)}%</span>
             </div>
           </div>
         )}
@@ -227,17 +227,17 @@ export const ColorControlPanel: React.FC<ColorControlPanelProps> = ({
             <input
               type="range"
               min="0"
-              max="255"
-              value={brightness}
-              onChange={(e) => handleBrightnessChange(parseInt(e.target.value, 10))}
+              max="100"
+              value={Math.min(100, brightness)}
+              onChange={(e) => handleBrightnessChange(Math.min(100, Math.max(0, parseInt(e.target.value, 10))))}
               className={styles.slider}
             />
-            <span className={styles.value}>{Math.round((brightness / 255) * 100)}%</span>
+            <span className={styles.value}>{Math.min(100, brightness)}%</span>
           </div>
           <div
             className={styles.brightnessPreview}
             style={{
-              backgroundColor: `rgba(${currentRGB[0]}, ${currentRGB[1]}, ${currentRGB[2]}, ${brightness / 255})`,
+              backgroundColor: `rgba(${currentRGB[0]}, ${currentRGB[1]}, ${currentRGB[2]}, ${Math.min(100, brightness) / 100})`,
             }}
           />
         </div>

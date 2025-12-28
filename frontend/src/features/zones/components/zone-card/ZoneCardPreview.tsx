@@ -24,7 +24,7 @@ export function ZoneCardPreview({ zone }: ZoneCardPreviewProps) {
       <CompactLEDPreview
         pixels={mockPixels}
         pixelCount={zone.pixel_count}
-        brightness={zone.state.brightness || 255}
+        brightness={zone.state.brightness || 100}
         animationMode={zone.state.render_mode}
       />
     </div>

@@ -40,13 +40,14 @@ export function ZoneColorSection({
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-text-primary">Brightness</label>
               <span className="text-sm font-mono text-accent-primary">
-                {Math.round((zone.state.brightness / 255) * 100)}%
+                {zone.state.brightness}%
               </span>
             </div>
             <Slider
-              value={[zone.state.brightness || 255]}
+              value={[zone.state.brightness || 100]}
               onValueChange={handleBrightnessChange}
-              max={255}
+              min={0}
+              max={100}
               step={1}
               disabled={brightnessMutation.isPending}
               className="w-full"

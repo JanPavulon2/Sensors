@@ -87,7 +87,7 @@ class StaticModeController:
         # Subscribe to zone state changes (e.g., from API) to re-submit frames
         self.event_bus.subscribe(
             event_type=EventType.ZONE_STATE_CHANGED,
-            handler=self._on_zone_state_changed
+            handler=self._on_zone_state_changed  # type: ignore
         )
 
         log.info(f"Rendered {len(zones_colors)} STATIC zones")

@@ -1,8 +1,10 @@
 """Zone service - Business logic for zones"""
 
 import asyncio
-from typing import List, Optional
-from models.enums import ZoneID, ZoneRenderMode
+from typing import Any, Dict, List, Optional
+from models.animation_params.animation_param_id import AnimationParamID
+from models.domain.animation import AnimationState
+from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
 from models.events import EventType, ZoneStateChangedEvent
@@ -123,7 +125,9 @@ class ZoneService:
         
     def set_is_on(self, zone_id: ZoneID, is_on: bool) -> None:
         zone = self.get_zone(zone_id)
+        
         zone.state.is_on = is_on
+        
         self._save_zone(zone_id)
 
         log.info(
@@ -139,33 +143,87 @@ class ZoneService:
             )
         ))
 
-    def set_render_mode(self, zone_id: ZoneID, mode: ZoneRenderMode, animation=None) -> None:
-        """
-        Set zone render mode (STATIC, ANIMATION, or OFF).
-
-        Args:
-            zone_id: Zone ID to change
-            mode: New render mode (ZoneRenderMode enum)
-            animation: AnimationState for ANIMATION mode, None otherwise
-        """
+    def set_animation(
+        self, 
+        zone_id: ZoneID, 
+        animation_id: AnimationID, 
+        parameters: Dict[AnimationParamID, Any]
+    ) -> None:
         zone = self.get_zone(zone_id)
-        zone.state.mode = mode
-        if animation is not None:
-            zone.state.animation = animation
-
+        
+        zone.state.animation = AnimationState(
+            id=animation_id,
+            parameters=parameters
+        )
+        zone.state.mode = ZoneRenderMode.ANIMATION
+        
         self._save_zone(zone_id)
 
         log.info(
-            "Zone render mode changed",
+            "Zone animation changed",
             zone=zone.config.display_name,
-            mode=mode.name,
-            animation=animation.id.name if animation else None,
+            animation=zone.state.animation
         )
 
         asyncio.create_task(self.event_bus.publish(
             ZoneStateChangedEvent(
                 zone_id=zone_id,
-                render_mode=mode,
+                render_mode=zone.state.mode,
+                animation=zone.state.animation
+            )
+        ))
+
+    def set_animation_param(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any) -> None:
+        """
+        Set zone animation parameter value
+        """
+        zone = self.get_zone(zone_id)
+        
+        if zone.state.mode == ZoneRenderMode.STATIC:
+            raise ValueError("Zone is in static mode")
+            
+        if zone.state.animation is None:
+            raise ValueError("Zone has no active animation")
+        
+        zone.state.animation.parameters[param_id] = value
+        
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone animation parameter changed",
+            zone=zone_id,
+            animation=zone.state.animation
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                animation=zone.state.animation,
+            )
+        ))
+
+    
+    def set_render_mode(self, zone_id: ZoneID, render_mode: ZoneRenderMode, animation: AnimationState) -> None:
+        zone = self.get_zone(zone_id)
+        
+        zone.state.mode = render_mode
+        if animation:
+            zone.state.animation = animation  
+        
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone render mode changed",
+            zone=zone.config.display_name,
+            render_mode=render_mode,
+            animation=animation
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                render_mode=render_mode,
+                animation=animation
             )
         ))
 

@@ -67,7 +67,7 @@ export interface ZoneConfig {
 export interface ZoneState {
   id: ZoneID;
   color: Color;
-  brightness: number; // 0-255
+  brightness: number; // 0-100 (percentage)
   mode: RenderMode;
 }
 
@@ -175,13 +175,13 @@ export interface FrameData {
   timestamp: number;
   zones: Record<ZoneID, {
     pixels: [number, number, number][]; // RGB per pixel
-    brightness: number; // 0-255
+    brightness: number; // 0-100 (percentage from backend)
   }>;
 }
 
 export interface LEDPixelData {
   color: [number, number, number]; // RGB
-  brightness: number; // 0-255
+  brightness: number; // 0-100 (percentage from backend)
   x: number; // Position on canvas
   y: number;
 }

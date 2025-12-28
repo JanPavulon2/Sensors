@@ -360,7 +360,7 @@ class LightingController:
                 if available_animations:
                     from models.domain.animation import AnimationState
                     first_anim_id = available_animations[0].id
-                    selected_zone.state.animation = AnimationState(id=first_anim_id, parameter_values={})
+                    selected_zone.state.animation = AnimationState(id=first_anim_id, parameters={})
                     log.info(
                         "Auto-assigned animation to zone entering ANIMATION mode",
                         zone=zone_id.name,
@@ -374,7 +374,7 @@ class LightingController:
 
             # Start animation on this zone
             anim_id = selected_zone.state.animation.id
-            anim_params = selected_zone.state.animation.parameter_values
+            anim_params = selected_zone.state.animation.parameters
 
             # Build parameters for engine
             params = self.animation_service.build_params_for_zone(

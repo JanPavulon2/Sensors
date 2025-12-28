@@ -12,6 +12,7 @@ Responsible for:
 import sys
 from typing import List, Optional
 
+from api.socketio_handler import wrap_app_with_socketio
 from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
 from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
 from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
@@ -40,10 +41,12 @@ import asyncio
 
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
-from services.log_broadcaster import get_broadcaster
 from api.main import create_app
 from api.dependencies import set_service_container
-from api.socketio_handler import create_socketio_server, socketio_handler, wrap_app_with_socketio
+
+from api.socketio.server import create_socketio_server
+from api.socketio.registry import register_socketio
+from services.log_broadcaster import get_broadcaster
 
 from models.enums import LogCategory, LogLevel
 from components import KeyboardInputAdapter
@@ -95,20 +98,21 @@ from lifecycle.task_registry import (
 async def main():
     """Main async entry point (dependency injection and event loop startup)."""
 
-    # Initialize broadcaster first so all logs can be transmitted
-    _broadcaster = get_broadcaster()
-    _broadcaster.start()
-    get_logger().set_broadcaster(_broadcaster)
+    log.info("Initializing Diuna application...")
 
-    # Create Socket.IO server EARLY so it's ready before initialization logs
-    # Event handlers will be registered later after services are set up
-    log.info("Creating Socket.IO server for log broadcasting...")
-    sio = create_socketio_server(cors_origins=["*"])
-    _broadcaster.set_socketio_server(sio)
-    log.info("Socket.IO server created and registered with LogBroadcaster")
-
-    log.info("Starting Diuna application...")
-
+    # Create Socket.IO server
+    log.info("Creating Socket.IO server...")
+    socketio_server = create_socketio_server(cors_origins=["*"])
+    
+    # Initialize broadcaster early so all logs can be transmitted
+    broadcaster = get_broadcaster()
+    broadcaster.set_socketio_server(socketio_server)
+    broadcaster.start()
+    
+    get_logger().set_broadcaster(broadcaster)
+    
+    log.info("Socket.IO + LogBroadcaster initialized (early)")
+    
     # ========================================================================
     # 1. INFRASTRUCTURE
     # ========================================================================
@@ -235,6 +239,9 @@ async def main():
     )
 
     
+    log.info("Registering Socket.IO modules...")
+    await register_socketio(socketio_server, services)
+        
     # ========================================================================
     # 8. API SERVER
     # ========================================================================
@@ -245,43 +252,27 @@ async def main():
     port_mgr = PortManager.instance()
     await port_mgr.ensure_available(port=8000)
 
-    log.info("Starting API server...")
-    log.info("Creating FastAPI app with Socket.IO...")
-    app, sio_server = create_app(
+    log.info("Creating FastAPI app...")
+    fastapi_app = create_app(
         title="Diuna LED System",
         version="1.0.0",
         docs_enabled=True,
-        cors_origins=["*"],
-        enable_socketio=True  # ← Enable Socket.IO integration
+        cors_origins=["*"]
     )
     
+    log.info("Wrapping FastAPI app with Socket.IO...")
+    app = wrap_app_with_socketio(fastapi_app, socketio_server)
     
-    # Setup Socket.IO event handlers
-    if sio_server:
-        log.info("Setting up Socket.IO event handlers...")
-        await socketio_handler.setup_event_handlers(sio_server, services)
-        
-        # Register Socket.IO with log broadcaster
-        _broadcaster.set_socketio_server(sio_server)
-        log.info("Socket.IO registered with log broadcaster")
-        
-        # Register Socket.IO with task handler for task broadcasting
-        from api.websocket_tasks import set_socketio_server as set_task_socketio_server
-        set_task_socketio_server(sio_server)
-        log.info("Socket.IO registered with task handler")
-        
-        log.info("Socket.IO fully configured")
-    
-    # Use APIServerWrapper for clean shutdown with force_exit fix
     api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)
 
+    log.info("Starting FastAPI app...")
     api_task = create_tracked_task(
         api_wrapper.start(),
         category=TaskCategory.API,
         description="FastAPI/Uvicorn Server"
     )
     
-    log.info("API server task created")
+    log.info("FastAPI app started")
 
     # ============================================================
     # 10. SHUTDOWN COORDINATOR

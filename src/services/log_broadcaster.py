@@ -17,7 +17,7 @@ from lifecycle.task_registry import create_tracked_task, TaskCategory
 if TYPE_CHECKING:
     from socketio import AsyncServer
 
-log = get_logger().for_category(LogCategory.RENDER_ENGINE)
+log = get_logger().for_category(LogCategory.SYSTEM)
 
 
 class LogBroadcaster:

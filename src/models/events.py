@@ -11,6 +11,7 @@ from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Generic, TypeVar
 from models.animation_params.animation_param_id import AnimationParamID
 from models.color import Color
+from models.domain.animation import AnimationState
 from models.enums import EncoderSource, ButtonID, KeyboardSource, EventSource, ZoneID, ZoneRenderMode, AnimationID
 
 
@@ -145,14 +146,16 @@ class ZoneStateChangedEvent(Event[EventSource]):
     brightness: Optional[int] = None
     is_on: Optional[bool] = None
     render_mode: Optional[ZoneRenderMode] = None
-
+        
     def __init__(
         self,
+        *,
         zone_id: ZoneID,
         color: Optional[Color] = None,
         brightness: Optional[int] = None,
         is_on: Optional[bool] = None,
         render_mode: Optional[ZoneRenderMode] = None,
+        animation: Optional[AnimationState] = None
     ):
         # Initialize parent Event with structured data
         super().__init__(
@@ -164,15 +167,18 @@ class ZoneStateChangedEvent(Event[EventSource]):
                 "brightness": brightness,
                 "is_on": is_on,
                 "render_mode": render_mode.name if render_mode else None,
+                "animation": animation.to_dict() if animation else None
             },
             timestamp=time.time(),
         )
+        
         # Store structured data for type-safe access
         self.zone_id = zone_id
         self.color = color
         self.brightness = brightness
         self.is_on = is_on
         self.render_mode = render_mode
+        self.animation = animation
 
 
 @dataclass
@@ -241,6 +247,7 @@ class AnimationParameterChangedEvent(Event[EventSource]):
             },
             timestamp=time.time(),
         )
+        
         self.zone_id = zone_id
         self.param_id = param_id
         self.value = value

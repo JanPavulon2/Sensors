@@ -64,21 +64,21 @@ class ButtonID(Enum):
     BTN4 = auto()  # Toggle STATIC/ANIMATION mode
 
 
-class ZoneID(Enum):
+class ZoneID(str, Enum):
     """Zone identifiers"""
-    FLOOR = auto()
-    CIRCLE = auto()
-    LEFT = auto()
-    TOP = auto()
-    RIGHT = auto()
-    BOTTOM = auto()
-    LAMP = auto()
-    GATE = auto()
-    PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
-    PIXEL2 = auto()        # 30-pixel custom LED strip on GPIO 19
-    PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
-    BACK = auto()
-    DESK = auto()
+    FLOOR = "FLOOR"
+    CIRCLE = "CIRCLE"
+    # LEFT = auto()
+    # TOP = auto()
+    # RIGHT = auto()
+    # BOTTOM = auto()
+    LAMP = "LAMP"
+    GATE = "GATE"
+    PIXEL = "PIXEL"        # 30-pixel custom LED strip on GPIO 19
+    PIXEL2 = "PIXEL2"        # 30-pixel custom LED strip on GPIO 19
+    PREVIEW = "PREVIEW"      # 8-pixel preview panel on GPIO 19
+    # BACK = auto()
+    # DESK = auto()
 
 
 class LEDStripID(Enum):
@@ -95,14 +95,14 @@ class LEDStripType(Enum):
     APA102 = "APA102"
     SK6812 = "SK6812"
 
-class AnimationID(Enum):
+class AnimationID(str, Enum):
     """Animation identifiers"""
-    BREATHE = auto()
-    COLOR_FADE = auto()
-    SNAKE = auto()
-    COLOR_SNAKE = auto()
-    COLOR_CYCLE = auto()
-    MATRIX = auto()
+    BREATHE = "BREATHE"
+    COLOR_FADE = "COLOR_FADE"
+    SNAKE = "SNAKE"
+    COLOR_SNAKE = "COLOR_SNAKE"
+    COLOR_CYCLE = "COLOR_CYCLE"
+    MATRIX = "MATRIX"
 
 class ParameterType(Enum):
     """Parameter value types with validation rules"""

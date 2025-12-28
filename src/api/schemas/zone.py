@@ -7,17 +7,44 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any
 from enum import Enum
 
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID, ZoneRenderMode
 
-class BrightnessRequest(BaseModel):
-    brightness: int = Field(ge=0, le=255)
 
-class PowerRequest(BaseModel):
-    is_on: bool
+class ZoneSetBrightnessRequest(BaseModel):
+    """Request to update zone brightness"""
+    brightness: int = Field(
+        ge=0,
+        le=100,
+        description="New brightness 0-100%"
+    )
 
-class AnimationParamUpdateRequest(BaseModel):
-    param_id: str
-    value: object
+class ZoneSetIsOnRequest(BaseModel):
+    """Request to change zone's power on/off state"""
+    is_on: bool = Field(
+        description="Zone power on / power off state"
+    )
+
+class ZoneSetRenderModeRequest(BaseModel):
+    """Request to change zone render mode"""
+    render_mode: ZoneRenderMode = Field(
+        description="New render mode: STATIC (solid color) or ANIMATION (animated)"
+    )
+
+class ZoneSetAnimationRequest(BaseModel):
+    """Request to change zone animation"""
+    id: AnimationID = Field(
+        description="Zone's animation ID"
+    )
+    parameters: Dict[AnimationParamID, Any]
     
+class ZoneSetAnimationParamRequest(BaseModel):
+    """Request to change zone animation's parameter value"""
+    value: Any
+
+
+
+
 class ColorModeEnum(str, Enum):
     """Color mode enumeration - matches domain ColorMode"""
     RGB = "RGB"
@@ -187,62 +214,10 @@ class ZoneColorUpdateRequest(BaseModel):
         }
 
 
-class ZoneBrightnessUpdateRequest(BaseModel):
-    """Request to update zone brightness"""
-    brightness: int = Field(
-        ge=0,
-        le=255,
-        description="New brightness 0-255"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "brightness": 200
-            }
-        }
 
 
-class ZoneIsOnUpdateRequest(BaseModel):
-    """Request to enable/disable zone"""
-    is_on: bool = Field(description="Zone powered on/off state")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "is_on": True
-            }
-        }
 
 
-class ZoneRenderModeUpdateRequest(BaseModel):
-    """Request to change zone render mode"""
-    render_mode: ZoneRenderModeEnum = Field(
-        description="New render mode: STATIC (color), ANIMATION (animated), or OFF (disabled)"
-    )
-    animation_id: Optional[str] = Field(
-        None,
-        description="Animation ID if mode=ANIMATION, required when switching to ANIMATION"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "examples": [
-                {
-                    "render_mode": "STATIC",
-                    "description": "Switch zone to static color mode"
-                },
-                {
-                    "render_mode": "ANIMATION",
-                    "animation_id": "BREATHE",
-                    "description": "Start animation on zone"
-                },
-                {
-                    "render_mode": "OFF",
-                    "description": "Turn zone off"
-                }
-            ]
-        }
 
 
 class ZoneUpdateRequest(BaseModel):

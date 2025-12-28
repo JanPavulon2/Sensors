@@ -26,7 +26,7 @@ class AnimationModeController:
     PARAMETER FLOW:
     - cycle_param(): Get available params from anim.PARAMS (definitions)
     - adjust_param(): Call anim.adjust_param(id, delta) → stores in zone.state
-    - Adjusted values persist in zone.state.animation.parameter_values
+    - Adjusted values persist in zone.state.animation.parameters
     - Changes saved to state.json via zone_service
     """
 
@@ -91,7 +91,7 @@ class AnimationModeController:
         from models.domain.animation import AnimationState
         zone.state.animation = AnimationState(
             id=anim_id, 
-            parameter_values={}
+            parameters={}
         )
 
         log.info(
@@ -143,7 +143,7 @@ class AnimationModeController:
         """
         Adjust animation parameter for currently selected zone.
 
-        Updates zone.state.animation.parameter_values and propagates change
+        Updates zone.state.animation.parameters and propagates change
         to running animation engine.
         """
 
@@ -171,7 +171,7 @@ class AnimationModeController:
             return
 
         # Store adjusted value in zone state
-        zone.state.animation.parameter_values[param_id] = new_value
+        zone.state.animation.parameters[param_id] = new_value
         self.zone_service.save_state()
 
         # Get param definition for logging
@@ -203,7 +203,7 @@ class AnimationModeController:
 
         params = self.animation_service.build_params_for_zone(
             anim.id,
-            anim.parameter_values,
+            anim.parameters,
             zone,
         )
 
@@ -226,7 +226,7 @@ class AnimationModeController:
 
         from models.domain.animation import AnimationState
         first_anim = self.available_animations[0]
-        zone.state.animation = AnimationState(id=first_anim, parameter_values={})
+        zone.state.animation = AnimationState(id=first_anim, parameters={})
 
         log.info(
             "Auto-assigned animation",

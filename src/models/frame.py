@@ -47,7 +47,7 @@ class SingleZoneFrame(BaseFrame):
     EXACTLY ONE zone → EXACTLY ONE color.
     """
 
-    zone_id: ZoneID = ZoneID.BOTTOM  # dummy default; overwritten when created
+    zone_id: ZoneID = ZoneID.FLOOR  # dummy default; overwritten when created
     color: Color = field(default_factory=Color.black)
 
     def as_zone_update(self) -> Dict[ZoneID, Color]:

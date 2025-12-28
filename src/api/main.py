@@ -20,22 +20,19 @@ FastAPI automatically:
 - Validates request/response schemas against OpenAPI
 - Generates client SDK documentation
 """
-import asyncio
 import sys
-
-from socketio import ASGIApp, AsyncServer
+import asyncio
     
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
     sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
-
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import Optional
 
 from api.routes import zones, logger as logger_routes, system, animations
 from api.middleware.error_handler import register_exception_handlers
@@ -60,9 +57,8 @@ def create_app(
     description: str = "REST API for programmable LED control",
     version: str = "1.0.0",
     docs_enabled: bool = True,
-    cors_origins: Optional[list[str]] = None,
-    enable_socketio: bool = True
-) -> tuple[FastAPI | ASGIApp, Optional['AsyncServer']]:
+    cors_origins: Optional[list[str]] = None
+) -> FastAPI:
     """
     Create and configure FastAPI application.
 
@@ -181,29 +177,6 @@ def create_app(
 
     log.info("Health check endpoints registered")
     
-    # =========================================================================
-    # Socket.IO Integration (Optional)
-    # =========================================================================
-    
-    sio_server = None
-    
-    if enable_socketio:
-        log.info("Integrating Socket.IO with FastAPI...")
-        
-        # Import here to avoid circular dependency
-        from api.socketio_handler import create_socketio_server, wrap_app_with_socketio
-        
-        # Create Socket.IO server
-        sio_server = create_socketio_server(cors_origins=cors_origins)
-        
-        # Wrap FastAPI app with Socket.IO ASGI middleware
-        # This allows the same server to handle both HTTP and WebSocket
-        app = wrap_app_with_socketio(app, sio_server)
-        
-        log.info("Socket.IO integrated with FastAPI")
-    else:
-        log.info("Socket.IO disabled (testing mode)")
-    
     log.info(f"FastAPI app created successfully: {title}")
     
-    return app, sio_server
+    return app

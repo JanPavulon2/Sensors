@@ -21,7 +21,7 @@ from managers.color_manager import ColorManager
 
 from api.schemas.zone import (
     ZoneResponse, ZoneStateResponse, ColorResponse, ZoneListResponse,
-    ColorRequest, ZoneRenderModeEnum, ZoneIsOnUpdateRequest, ZoneRenderModeUpdateRequest
+    ColorRequest
 )
 from api.middleware.error_handler import ZoneNotFoundError, InvalidColorModeError
 
@@ -187,7 +187,7 @@ class ZoneAPIService:
 
             try:
                 anim_enum = AnimationID[animation_id.upper()]
-                animation = AnimationState(id=anim_enum, parameter_values={})
+                animation = AnimationState(id=anim_enum, parameters={})
             except KeyError:
                 raise ValueError(f"Invalid animation ID '{animation_id}'")
 
@@ -244,7 +244,7 @@ class ZoneAPIService:
             raise ValueError(f"Invalid animation ID '{animation_id}'")
 
         # Build animation state with parameters
-        animation = AnimationState(id=anim_enum, parameter_values=parameters or {})
+        animation = AnimationState(id=anim_enum, parameters=parameters or {})
 
         # Set zone to animation mode
         self.zone_service.set_render_mode(zone_enum, ZoneRenderMode.ANIMATION, animation)
@@ -305,7 +305,7 @@ class ZoneAPIService:
             raise ValueError("Zone is not in ANIMATION mode")
 
         # Update animation parameters
-        zone.state.animation.parameter_values.update(parameters)
+        zone.state.animation.parameters.update(parameters)
 
         # Persist the change
         self.zone_service._save_zone(zone.id)

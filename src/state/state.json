@@ -18,7 +18,7 @@
         "mode": "HUE",
         "hue": 320
       },
-      "brightness": 76,
+      "brightness": 59,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -28,29 +28,12 @@
         }
       }
     },
-    "back": {
-      "color": {
-        "mode": "HUE",
-        "hue": 264
-      },
-      "brightness": 0,
-      "is_on": true
-    },
-    "desk": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "pink"
-      },
-      "brightness": 63,
-      "is_on": true,
-      "mode": "STATIC"
-    },
     "pixel": {
       "color": {
         "mode": "HUE",
         "hue": 67
       },
-      "brightness": 94,
+      "brightness": 21,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -78,7 +61,7 @@
         "mode": "PRESET",
         "preset_name": "mint"
       },
-      "brightness": 100,
+      "brightness": 27,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -94,9 +77,9 @@
         "mode": "HUE",
         "hue": 234
       },
-      "brightness": 100,
+      "brightness": 74,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
@@ -123,7 +106,7 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 2,
+    "selected_zone_index": 1,
     "selected_zone_edit_target": "COLOR_HUE",
     "frame_by_frame_mode": false,
     "save_on_change": true

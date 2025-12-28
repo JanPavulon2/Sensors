@@ -7,56 +7,50 @@ Handles zone state changes, animation events, and system updates.
 Usage:
     from api.socketio_handler import create_socketio_server, socketio_handler
 
-    sio = create_socketio_server()
+    socketio_server = create_socketio_server()
     # Register handlers
-    socketio_handler.setup_event_handlers(sio, services)
+    socketio_handler.setup_event_handlers(socketio_server, services)
 
     # In FastAPI app:
     from socketio import ASGIApp
     app = FastAPI(...)
-    app = ASGIApp(sio, app)
+    app = ASGIApp(socketio_server, app)
 """
 
+from dataclasses import dataclass, asdict
 from typing import Optional, Any, Dict
 from socketio import AsyncServer, ASGIApp
-from models.enums import ZoneID, AnimationID, ZoneRenderMode
-from models.animation_params.animation_param_id import AnimationParamID
 from models.domain import ZoneCombined
-from models.color import Color
 from models.events import (
     EventType,
-    ZoneStateChangedEvent,
-    AnimationStartedEvent,
-    AnimationStoppedEvent,
-    AnimationParameterChangedEvent
+    ZoneStateChangedEvent
 )
 from services.event_bus import EventBus
 from services.service_container import ServiceContainer
-from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.SOCKETIO)
+
 
 
 class SocketIOHandler:
     """Manages Socket.IO server and event handling"""
 
     def __init__(self):
-        self.sio: Optional[AsyncServer] = None
+        self.socketio_server: Optional[AsyncServer] = None
         self.services: Optional[ServiceContainer] = None
         
-    async def setup_event_handlers(self, sio: AsyncServer, services: Any) -> None:
-        """Register all Socket.IO event handlers"""
-        self.sio = sio
+    async def setup(self, socketio_server: AsyncServer, services: ServiceContainer) -> None:
+        self.socketio_server = socketio_server
         self.services = services
 
         # Subscribe to backend EventBus events
         self._subscribe_to_events()
-
+        
         # Register Socket.IO client event handlers
-        self._register_client_handlers(sio)
+        self._register_connection_handlers()
 
-        log.info("Socket.IO handlers initialized")
+        log.info("Socket.IO ready")
 
     def _subscribe_to_events(self) -> None:
         """Subscribe to backend EventBus events for broadcasting"""
@@ -64,185 +58,102 @@ class SocketIOHandler:
             log.warn("EventBus not available for Socket.IO")
             return
 
-        self.event_bus: EventBus = self.services.event_bus
+        event_bus: EventBus = self.services.event_bus
 
         # Subscribe to zone state changes
-        self.event_bus.subscribe(
+        # Note: EventBus.subscribe() supports async handlers despite type hint saying otherwise
+        event_bus.subscribe(
             EventType.ZONE_STATE_CHANGED,
-            self._on_zone_state_changed
+            self._on_zone_state_changed  # type: ignore
         )
-
-        # # Subscribe to animation events
-        # event_bus.subscribe(
-        #     EventType.ANIMATION_STARTED,
-        #     self._on_animation_started
-        # )
-
-        # event_bus.subscribe(
-        #     EventType.ANIMATION_STOPPED,
-        #     self._on_animation_stopped
-        # )
-
-        # event_bus.subscribe(
-        #     EventType.ANIMATION_PARAMETER_CHANGED,
-        #     self._on_animation_param_changed
-        # )
 
         log.info("Socket.IO subscribed to EventBus events")
 
-    def _register_client_handlers(self, sio: AsyncServer) -> None:
+    def _register_connection_handlers(self) -> None:
         """Register client-side event handlers"""
-
-        if self.services is None:
-            log.warn("Invalid services container in socketio_handler")
+        
+        if not self.socketio_server:
             return
-
-        if self.services.zone_service is None:
-            log.warn("Invalid services container in socketio_handler")
+        
+        if not self.services or not self.services.zone_service:
             return
+        
+        socketio_server = self.socketio_server
          
-        @sio.event
-        async def zone_set_color(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Set zone color"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                color = Color.from_hue(data.get('hue', 0))
-                self.services.zone_service.set_color(zone_id, color)
-                log.info(f"Zone color set via WebSocket: {zone_id.name}")
-            except Exception as e:
-                log.error(f"Error setting zone color: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+        @socketio_server.event
+        async def connect(sid, environ, auth=None):
+            """Handle client connection and send initial state"""
+            client_ip = environ.get('REMOTE_ADDR', 'unknown')
+            log.info(f"Client connected: {sid} from {client_ip}")
 
-        @sio.event
-        async def zone_set_brightness(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Set zone brightness"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                brightness = data.get('brightness', 100)
-                self.services.zone_service.set_brightness(zone_id, brightness)
-                log.info(f"Zone brightness set via WebSocket: {zone_id.name}={brightness}")
-            except Exception as e:
-                log.error(f"Error setting zone brightness: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+            # Guard: ensure services are available
+            if not self.services or not self.services.zone_service:
+                log.warn(f"Skipping initial zone snapshot for {sid}: services not ready")
+                return
 
-        @sio.event
-        async def zone_set_enabled(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Toggle zone on/off"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                enabled = data.get('enabled', True)
-                self.services.zone_service.set_is_on(zone_id, enabled)
-                log.info(f"Zone enabled set via WebSocket: {zone_id.name}={enabled}")
-            except Exception as e:
-                log.error(f"Error setting zone enabled: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+            zones = self.services.zone_service.get_all()
+            snapshots = [
+                asdict(ZoneSnapshotDTO.from_zone(z))
+                for z in zones
+            ]
 
-        @sio.event
-        async def zone_set_render_mode(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Set zone render mode (STATIC or ANIMATION)"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                mode = ZoneRenderMode[data.get('mode', 'STATIC').upper()]
-                zone = self.services.zone_service.get_zone(zone_id)
-                zone.state.mode = mode
-                self.services.zone_service._save_zone(zone_id)
-                log.info(f"Zone render mode set via WebSocket: {zone_id.name}={mode.name}")
-            except Exception as e:
-                log.error(f"Error setting zone render mode: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+            await socketio_server.emit("zones.snapshot", snapshots, room=sid)
 
-        @sio.event
-        async def animation_start(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Start animation on zone"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                animation_id = AnimationID[data.get('animation_id', 'BREATHE').upper()]
-                parameters = data.get('parameters', {})
-
-                await self.services.animation_engine.start_for_zone(
-                    zone_id, animation_id, parameters
-                )
-                log.info(f"Animation started via WebSocket: {zone_id.name}={animation_id.name}")
-            except Exception as e:
-                log.error(f"Error starting animation: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
-
-        @sio.event
-        async def animation_stop(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Stop animation on zone"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                await self.services.animation_engine.stop_for_zone(zone_id)
-                log.info(f"Animation stopped via WebSocket: {zone_id.name}")
-            except Exception as e:
-                log.error(f"Error stopping animation: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
-
-        @sio.event
-        async def animation_set_param(sid: str, data: Dict[str, Any]) -> None:
-            """Client command: Update animation parameter"""
-            try:
-                zone_id = ZoneID[data['zone_id'].upper()]
-                param_id = AnimationParamID[data.get('param_id', '').upper()]
-                value = data.get('value')
-
-                self.services.animation_engine.update_param(zone_id, param_id, value)
-                log.info(f"Animation param updated via WebSocket: {zone_id.name}.{param_id.name}={value}")
-            except Exception as e:
-                log.error(f"Error updating animation parameter: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
-
+        @socketio_server.event
+        async def disconnect(sid):
+            log.info(f"Client disconnected: {sid}")
+            
         # Task monitoring commands
-        @sio.event
+        @socketio_server.event
         async def task_get_all(sid: str) -> None:
             """Client command: Get all tasks"""
             try:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 tasks = registry.get_all_as_dicts()
-                await sio.emit('tasks:all', {'tasks': tasks}, room=sid)
+                await socketio_server.emit('tasks:all', {'tasks': tasks}, room=sid)
             except Exception as e:
                 log.error(f"Error getting all tasks: {e}", exc_info=True)
-                await sio.emit('error', {'message': str(e)}, room=sid)
+                await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
-        @sio.event
+        @socketio_server.event
         async def task_get_active(sid: str) -> None:
             """Client command: Get active tasks"""
             try:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 tasks = registry.get_active_as_dicts()
-                await sio.emit('tasks:active', {'tasks': tasks}, room=sid)
+                await socketio_server.emit('tasks:active', {'tasks': tasks}, room=sid)
             except Exception as e:
                 log.error(f"Error getting active tasks: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+                await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
-        @sio.event
+        @socketio_server.event
         async def task_get_stats(sid: str) -> None:
             """Client command: Get task statistics"""
             try:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 stats = registry.get_stats()
-                await sio.emit('tasks:stats', {'stats': stats}, room=sid)
+                await socketio_server.emit('tasks:stats', {'stats': stats}, room=sid)
             except Exception as e:
                 log.error(f"Error getting task stats: {e}", exc_info=True)
-                await sio.emit('error', {'message': str(e)}, room=sid)
+                await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
-        @sio.event
+        @socketio_server.event
         async def task_get_tree(sid: str) -> None:
             """Client command: Get task tree"""
             try:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 tree = registry.get_task_tree()
-                await sio.emit('tasks:tree', {'tree': tree}, room=sid)
+                await socketio_server.emit('tasks:tree', {'tree': tree}, room=sid)
             except Exception as e:
                 log.error(f"Error getting task tree: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+                await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
         # Log history command
-        @sio.event
+        @socketio_server.event
         async def logs_request_history(sid: str, data: dict) -> None:
             """Client command: Request recent log history"""
             try:
@@ -255,81 +166,28 @@ class SocketIOHandler:
                 # Convert LogMessage objects to dicts for Socket.IO
                 log_dicts = [log.model_dump() for log in logs]
 
-                await sio.emit('logs:history', {'logs': log_dicts}, room=sid)
+                await socketio_server.emit('logs:history', {'logs': log_dicts}, room=sid)
             except Exception as e:
                 log.error(f"Error getting log history: {e}")
-                await sio.emit('error', {'message': str(e)}, room=sid)
+                await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
         log.info("Client event handlers registered (zones, animations, tasks, logs)")
 
     async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
+        """EventBus handler: Broadcast zone state change to all clients"""
+        if not self.socketio_server:
+            return
+        
         if self.services is None or self.services.zone_service is None:
             return
             
         zone = self.services.zone_service.get_zone(event.zone_id)
+        payload = ZoneSnapshotDTO.from_zone(zone)
 
-        """EventBus handler: Broadcast zone state change to all clients"""
-        if not self.sio:
-            return
+        await self.socketio_server.emit("zone.snapshot", asdict(payload))
 
-        zone_id = event.zone_id
-
-        
-        await self.sio.emit(
-            "zone.state_changed",
-            {
-                "id": zone.config.id.name,
-                "state": {
-                    "brightness": zone.state.brightness,
-                    "color": zone.state.color.to_dict(),
-                    "is_on": zone.state.is_on,
-                    "mode": zone.state.mode.name,
-                },
-            },
-        )
-
-        await self.sio.emit('zone:state_changed', payload)
-        log.debug(f"Broadcasted zone state change: {zone_id.name}")
-
-    async def _on_animation_started(self, event: AnimationStartedEvent) -> None:
-        """EventBus handler: Broadcast animation start event"""
-        if not self.sio:
-            return
-
-        payload = {
-            'zone_id': event.zone_id.name,
-            'animation_id': event.animation_id.name,
-            'parameters': event.parameters or {},
-        }
-
-        await self.sio.emit('animation:started', payload)
-        log.debug(f"Broadcasted animation started: {event.zone_id.name}={event.animation_id.name}")
-
-    async def _on_animation_stopped(self, event: AnimationStoppedEvent) -> None:
-        """EventBus handler: Broadcast animation stop event"""
-        if not self.sio:
-            return
-
-        payload = {
-            'zone_id': event.zone_id.name,
-        }
-
-        await self.sio.emit('animation:stopped', payload)
-        log.debug(f"Broadcasted animation stopped: {event.zone_id.name}")
-
-    async def _on_animation_param_changed(self, event: AnimationParameterChangedEvent) -> None:
-        """EventBus handler: Broadcast animation parameter change"""
-        if not self.sio:
-            return
-
-        payload = {
-            'zone_id': event.zone_id.name,
-            'param_id': event.param_id.name,
-            'value': event.value,
-        }
-
-        await self.sio.emit('animation:param_changed', payload)
-        log.debug(f"Broadcasted animation param changed: {event.zone_id.name}.{event.param_id.name}={event.value}")
+        # await self.socketio_server.emit('zone:state_changed', payload)
+        log.debug(f"Emitted zone snapshot: {zone.config.id.name}")
 
 
 # Global instance
@@ -352,26 +210,32 @@ def create_socketio_server(cors_origins: Optional[list[str]] = None) -> AsyncSer
             "http://192.168.137.139:8000",
             "http://192.168.137.139:5173",
             "http://localhost:3000",
+            "http://localhost:8000",
             "http://localhost:5173",
             "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
             "http://127.0.0.1:5173",
         ]
 
-    sio = AsyncServer(
+    # Setup Socket.IO logging to use Diuna logger
+    # from utils.socketio_logger import setup_socketio_logging
+    # setup_socketio_logging()
+
+    socketio_server = AsyncServer(
         async_mode='asgi',
         cors_allowed_origins=cors_origins,
         ping_timeout=60,
         ping_interval=25,
-        logger=False,  # Disable logging to avoid noise
-        engineio_logger=False,
+        logger=False,  
+        engineio_logger=False,  
     )
 
     log.info(f"Socket.IO server created with CORS origins: {cors_origins}")
 
-    return sio
+    return socketio_server
 
 
-def wrap_app_with_socketio(app, sio: AsyncServer):
+def wrap_app_with_socketio(app, socketio_server: AsyncServer):
     """
     Wrap FastAPI app with Socket.IO ASGI middleware.
 
@@ -379,9 +243,9 @@ def wrap_app_with_socketio(app, sio: AsyncServer):
 
     Args:
         app: FastAPI application instance
-        sio: AsyncServer instance
+        socketio_server: AsyncServer instance
 
     Returns:
         ASGIApp wrapping FastAPI with Socket.IO
     """
-    return ASGIApp(sio, app)
+    return ASGIApp(socketio_server, app)

@@ -21,12 +21,14 @@ from fastapi import APIRouter, Depends, status
 
 from api.schemas.zone import (
     ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
-    ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest, ZoneIsOnUpdateRequest, ZoneStateResponse
+    ZoneSetAnimationParamRequest, ZoneSetAnimationRequest, 
+    ZoneSetBrightnessRequest, ZoneSetIsOnRequest, ZoneSetRenderModeRequest, ZoneStateResponse
 )
 from api.schemas.animation import (
     AnimationStartRequest, AnimationStopRequest, AnimationParameterUpdateRequest
 )
 from api.services.zone_service import ZoneAPIService
+from models.animation_params.animation_param_id import AnimationParamID
 from models.domain.zone import ZoneCombined
 from models.enums import ZoneID
 from services.service_container import ServiceContainer
@@ -152,6 +154,69 @@ async def get_zone(
 # ============================================================================
 
 @router.put(
+    "/{zone_id}/is-on",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone is on"
+)
+async def set_zone_is_on(
+    zone_id: ZoneID,
+    request: ZoneSetIsOnRequest,
+    services: ServiceContainer = Depends(get_service_container)
+) -> None:
+    """
+    Sets a zone's power on/power off state.
+    """
+    services.zone_service.set_is_on(zone_id, request.is_on)
+    
+@router.put(
+    "/{zone_id}/brightness",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone brightness (0-100%)"
+)
+async def set_zone_brightness(
+    zone_id: ZoneID,
+    request: ZoneSetBrightnessRequest,
+    services: ServiceContainer = Depends(get_service_container)
+) -> None:
+    """
+    Sets zone brightness.
+    """
+    services.zone_service.set_brightness(zone_id, request.brightness)
+    
+@router.put(
+    "/{zone_id}/animation",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone animation"
+)
+async def set_zone_animation(
+    zone_id: ZoneID,
+    req: ZoneSetAnimationRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    services.zone_service.set_animation(
+        zone_id, req.id, req.parameters
+    )
+    
+
+@router.put(
+    "/{zone_id}/animation/params/{param_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone animation param value"
+)
+async def set_zone_animation_param(
+    zone_id: ZoneID,
+    param_id: AnimationParamID,
+    req: ZoneSetAnimationParamRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    services.zone_service.set_animation_param(
+        zone_id, param_id, req.value
+    )
+    
+
+
+
+@router.put(
     "/{zone_id}/color",
     response_model=ZoneResponse,
     status_code=status.HTTP_200_OK,
@@ -194,174 +259,38 @@ async def update_zone_color(
     return zone_service.update_zone_color(zone_id, color_request.color)
 
 
-@router.put(
-    "/{zone_id}/brightness",
-    response_model=ZoneCombined,
-    status_code=status.HTTP_200_OK,
-    summary="Update zone brightness",
-    description="Adjust zone brightness without changing color"
-)
-async def update_zone_brightness(
-    zone_id: str,
-    brightness_request: ZoneBrightnessUpdateRequest,
-    zone_service: ZoneService = Depends(get_old_zone_service)
-) -> ZoneCombined:
-    """
-    Update a zone's brightness.
-
-    **Parameters:**
-    - `zone_id`: Zone ID (e.g., "LAMP")
-
-    **Request Body:**
-    ```json
-    {
-      "brightness": 150
-    }
-    ```
-
-    **Brightness:** 0-255 where:
-    - 0 = off (black)
-    - 128 = half brightness
-    - 255 = full brightness
-
-    **Returns:** Updated zone with new brightness
-
-    **Note:** This adjusts brightness independently from color.
-    The color hue is preserved - only intensity changes.
-    """
-    
-    zone=Serializer.str_to_enum(zone_id, ZoneID)
-    
-    zone_service.set_brightness(zone, brightness_request.brightness)
-    updated_zone = zone_service.get_zone(zone)
-    
-    return updated_zone
-
-
-@router.put(
-    "/{zone_id}/is-on",
-    response_model=ZoneResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Toggle zone power",
-    description="Power zone on or off"
-)
-async def toggle_zone_is_on(
-    zone_id: str,
-    is_on_request: ZoneIsOnUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service)
-) -> ZoneResponse:
-    """
-    Power a zone on or off.
-
-    **Parameters:**
-    - `zone_id`: Zone ID (e.g., "FLOOR", "LAMP")
-
-    **Request Body:**
-    ```json
-    {
-      "is_on": true
-    }
-    ```
-
-    **Effect:**
-    - `is_on: true` - Zone displays color/animation normally
-    - `is_on: false` - Zone is powered off (renders black)
-
-    **Returns:** Updated zone with new power state
-
-    **Side Effects:**
-    - Changes persisted immediately
-    - Broadcasts update to all clients (WebSocket)
-    - Triggers hardware update if zone is on
-    """
-    return zone_service.update_zone_is_on(zone_id, is_on_request.is_on)
-
-
-@router.put(
-    "/{zone_id}/render-mode",
-    response_model=ZoneResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Change zone render mode",
-    description="Switch zone between static color or animation"
-)
-async def update_zone_render_mode(
-    zone_id: str,
-    mode_request: ZoneRenderModeUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service)
-) -> ZoneResponse:
-    """
-    Change what a zone is displaying.
-
-    **Parameters:**
-    - `zone_id`: Zone ID (e.g., "FLOOR", "LAMP")
-
-    **Request Body:**
-    ```json
-    {
-      "render_mode": "STATIC",
-      "animation_id": null
-    }
-    ```
-
-    **Render Modes:**
-    - `STATIC`: Display static color (no animation)
-    - `ANIMATION`: Run animation (requires animation_id)
-
-    **Returns:** Updated zone with new render mode
-
-    **Examples:**
-    ```json
-    // Switch to static color
-    {"render_mode": "STATIC"}
-
-    // Start animation
-    {"render_mode": "ANIMATION", "animation_id": "BREATHE"}
-    ```
-
-    **Side Effects:**
-    - Changes persisted immediately
-    - Broadcasts update to all clients (WebSocket)
-    - Stops any running animation if switching away from ANIMATION mode
-    - Starts animation if switching to ANIMATION mode with valid animation_id
-    """
-    return zone_service.update_zone_render_mode(
-        zone_id,
-        mode_request.render_mode.value,
-        mode_request.animation_id if mode_request.animation_id else ""
-    )
-
 
 # ============================================================================
 # POST ENDPOINTS - Actions (non-idempotent operations)
 # ============================================================================
 
-@router.post(
-    "/{zone_id}/reset",
-    response_model=ZoneResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Reset zone to defaults",
-    description="Reset zone to default color and brightness"
-)
-async def reset_zone(
-    zone_id: str,
-    zone_service: ZoneAPIService = Depends(get_zone_service)
-) -> ZoneResponse:
-    """
-    Reset a zone to its default state.
+# @router.post(
+#     "/{zone_id}/reset",
+#     response_model=ZoneResponse,
+#     status_code=status.HTTP_200_OK,
+#     summary="Reset zone to defaults",
+#     description="Reset zone to default color and brightness"
+# )
+# async def reset_zone(
+#     zone_id: str,
+#     zone_service: ZoneAPIService = Depends(get_zone_service)
+# ) -> ZoneResponse:
+#     """
+#     Reset a zone to its default state.
 
-    Resets:
-    - Color: Black (hue 0)
-    - Brightness: 100%
-    - Mode: STATIC
+#     Resets:
+#     - Color: Black (hue 0)
+#     - Brightness: 100%
+#     - Mode: STATIC
 
-    **Parameters:**
-    - `zone_id`: Zone ID
+#     **Parameters:**
+#     - `zone_id`: Zone ID
 
-    **Returns:** Reset zone
+#     **Returns:** Reset zone
 
-    **Use Case:** Quick reset button in UI
-    """
-    return zone_service.reset_zone(zone_id)
+#     **Use Case:** Quick reset button in UI
+#     """
+#     return zone_service.reset_zone(zone_id)
 
 
 # ============================================================================
