@@ -37,9 +37,6 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
 import asyncio
-import os
-import uvicorn
-from fastapi import FastAPI
 
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
@@ -48,12 +45,12 @@ from api.main import create_app
 from api.dependencies import set_service_container
 from api.socketio_handler import create_socketio_server, socketio_handler, wrap_app_with_socketio
 
-from models.enums import LogCategory, LogLevel, FramePriority
-from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
+from models.enums import LogCategory, LogLevel
+from components import KeyboardInputAdapter
 from hardware.gpio.gpio_manager import GPIOManager
-from hardware.hardware_coordinator import HardwareCoordinator, HardwareBundle
+from hardware.hardware_coordinator import HardwareCoordinator
 from controllers.led_controller.lighting_controller import LightingController
-from controllers import ControlPanelController, PreviewPanelController
+from controllers import ControlPanelController
 from managers import ConfigManager
 from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService, ServiceContainer
 from services.middleware import log_middleware
@@ -90,46 +87,6 @@ from lifecycle.task_registry import (
     TaskCategory,
     TaskRegistry
 )
-# ---------------------------------------------------------------------------
-# SHUTDOWN & CLEANUP
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# API SERVER RUNNER
-# ---------------------------------------------------------------------------
-
-async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) -> None:
-    """
-    Run FastAPI/Uvicorn server in asyncio event loop.
-
-    Disables uvicorn's own signal handlers to use our shutdown coordinator instead.
-    The server runs until cancelled (via CancelledError from shutdown system).
-    """
-    log.debug("API: run_api_server() entered")
-    
-    config = uvicorn.Config(
-        app=app,
-        host=host,
-        port=port,
-        loop="asyncio",
-        log_level="info",
-        access_log=False,
-        # lifespan="on"
-    )
-
-    server = uvicorn.Server(config)
-    server.install_signal_handlers = lambda: None  # Prevent uvicorn from handling signals
-
-    try:
-        log.debug(f"🌐 Starting API server on {host}:{port}")
-        await server.serve()
-    except asyncio.CancelledError:
-        # Expected during shutdown - uvicorn raises CancelledError on lifespan shutdown
-        log.debug("🌐 API server cancelled (expected during shutdown)")
-        raise  # Let the cancellation propagate to task handler
-
-    
-    log.debug("API: run_api_server() exiting (server.serve() returned)")
 
 # ---------------------------------------------------------------------------
 # Application Entry
@@ -164,7 +121,7 @@ async def main():
     config_manager.load()
 
     log.info("Initializing event bus...")
-    event_bus = EventBus()
+    event_bus = EventBus().instance()
     event_bus.add_middleware(log_middleware)
 
     log.info("Loading application state...")
@@ -201,18 +158,19 @@ async def main():
 
     log.info("Initializing FrameManager...")
     frame_manager = FrameManager(fps=60)
-    frame_manager_task = create_tracked_task(
-        frame_manager.start(),
-        category=TaskCategory.RENDER,
-        description="Frame Manager render loop"
-    )
+    asyncio.create_task(frame_manager.start())
+    # frame_manager_task = create_tracked_task(
+    #     frame_manager.start(),
+    #     category=TaskCategory.RENDER,
+    #     description="Frame Manager render loop"
+    # )
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.zone_strips.items():
         frame_manager.add_zone_strip(strip)
         # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        log.info(f"Zone strip registered on GPIO {gpio_pin}")
+        log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
 
     
     # ========================================================================
@@ -220,13 +178,14 @@ async def main():
     # ========================================================================
 
     services = ServiceContainer(
+        event_bus=event_bus,
         zone_service=zone_service,
         animation_service=animation_service,
         app_state_service=app_state_service,
         frame_manager=frame_manager,
-        event_bus=event_bus,
         color_manager=config_manager.color_manager,
-        config_manager=config_manager
+        config_manager=config_manager,
+        data_assembler=assembler
     )
 
     # Register service container with API for dependency injection
@@ -235,8 +194,6 @@ async def main():
 
     log.info("Initializing LED controller...")
     lighting_controller = LightingController(
-        config_manager=config_manager,
-        event_bus=event_bus,
         gpio_manager=gpio_manager,
         service_container=services
     )
@@ -289,25 +246,32 @@ async def main():
     await port_mgr.ensure_available(port=8000)
 
     log.info("Starting API server...")
-    app = create_app()
-
-    # ============================================================
-    # SOCKET.IO INTEGRATION
-    # ============================================================
-    # Register event handlers (subscribe to EventBus, register client handlers)
-    log.info("Setting up Socket.IO event handlers...")
-    await socketio_handler.setup_event_handlers(sio, services)
-
-    # Register Socket.IO server with task handler for task event broadcasting
-    from api.websocket_tasks import set_socketio_server as set_task_socketio_server
-    set_task_socketio_server(sio)
-    log.info("Socket.IO registered with task handler for task broadcasting")
-
-    # Wrap FastAPI app with Socket.IO ASGI middleware
-    # This allows the same server to handle both HTTP (FastAPI) and WebSocket (Socket.IO)
-    app = wrap_app_with_socketio(app, sio)
-    log.info("Socket.IO integrated with FastAPI")
-
+    log.info("Creating FastAPI app with Socket.IO...")
+    app, sio_server = create_app(
+        title="Diuna LED System",
+        version="1.0.0",
+        docs_enabled=True,
+        cors_origins=["*"],
+        enable_socketio=True  # ← Enable Socket.IO integration
+    )
+    
+    
+    # Setup Socket.IO event handlers
+    if sio_server:
+        log.info("Setting up Socket.IO event handlers...")
+        await socketio_handler.setup_event_handlers(sio_server, services)
+        
+        # Register Socket.IO with log broadcaster
+        _broadcaster.set_socketio_server(sio_server)
+        log.info("Socket.IO registered with log broadcaster")
+        
+        # Register Socket.IO with task handler for task broadcasting
+        from api.websocket_tasks import set_socketio_server as set_task_socketio_server
+        set_task_socketio_server(sio_server)
+        log.info("Socket.IO registered with task handler")
+        
+        log.info("Socket.IO fully configured")
+    
     # Use APIServerWrapper for clean shutdown with force_exit fix
     api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)
 
@@ -316,6 +280,7 @@ async def main():
         category=TaskCategory.API,
         description="FastAPI/Uvicorn Server"
     )
+    
     log.info("API server task created")
 
     # ============================================================
@@ -356,7 +321,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log.info("Keyboard interrupt received")
     except Exception as e:
-        log.error(f"Fatal error: {e}")
         log.error(f"Fatal error: {e}", exc_info=True)
     finally:
         sys.exit(0)

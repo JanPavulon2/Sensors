@@ -30,9 +30,12 @@ from models.events import (
     AnimationStoppedEvent,
     AnimationParameterChangedEvent
 )
+from services.event_bus import EventBus
+from services.service_container import ServiceContainer
+from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
 
-log = get_logger().for_category(LogCategory.API)
+log = get_logger().for_category(LogCategory.SOCKETIO)
 
 
 class SocketIOHandler:
@@ -40,8 +43,8 @@ class SocketIOHandler:
 
     def __init__(self):
         self.sio: Optional[AsyncServer] = None
-        self.services: Optional[Any] = None
-
+        self.services: Optional[ServiceContainer] = None
+        
     async def setup_event_handlers(self, sio: AsyncServer, services: Any) -> None:
         """Register all Socket.IO event handlers"""
         self.sio = sio
@@ -61,35 +64,43 @@ class SocketIOHandler:
             log.warn("EventBus not available for Socket.IO")
             return
 
-        event_bus = self.services.event_bus
+        self.event_bus: EventBus = self.services.event_bus
 
         # Subscribe to zone state changes
-        event_bus.subscribe(
+        self.event_bus.subscribe(
             EventType.ZONE_STATE_CHANGED,
             self._on_zone_state_changed
         )
 
-        # Subscribe to animation events
-        event_bus.subscribe(
-            EventType.ANIMATION_STARTED,
-            self._on_animation_started
-        )
+        # # Subscribe to animation events
+        # event_bus.subscribe(
+        #     EventType.ANIMATION_STARTED,
+        #     self._on_animation_started
+        # )
 
-        event_bus.subscribe(
-            EventType.ANIMATION_STOPPED,
-            self._on_animation_stopped
-        )
+        # event_bus.subscribe(
+        #     EventType.ANIMATION_STOPPED,
+        #     self._on_animation_stopped
+        # )
 
-        event_bus.subscribe(
-            EventType.ANIMATION_PARAMETER_CHANGED,
-            self._on_animation_param_changed
-        )
+        # event_bus.subscribe(
+        #     EventType.ANIMATION_PARAMETER_CHANGED,
+        #     self._on_animation_param_changed
+        # )
 
         log.info("Socket.IO subscribed to EventBus events")
 
     def _register_client_handlers(self, sio: AsyncServer) -> None:
         """Register client-side event handlers"""
 
+        if self.services is None:
+            log.warn("Invalid services container in socketio_handler")
+            return
+
+        if self.services.zone_service is None:
+            log.warn("Invalid services container in socketio_handler")
+            return
+         
         @sio.event
         async def zone_set_color(sid: str, data: Dict[str, Any]) -> None:
             """Client command: Set zone color"""
@@ -252,20 +263,30 @@ class SocketIOHandler:
         log.info("Client event handlers registered (zones, animations, tasks, logs)")
 
     async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
+        if self.services is None or self.services.zone_service is None:
+            return
+            
+        zone = self.services.zone_service.get_zone(event.zone_id)
+
         """EventBus handler: Broadcast zone state change to all clients"""
         if not self.sio:
             return
 
         zone_id = event.zone_id
-        zone = self.services.zone_service.get_zone(zone_id)
 
-        payload = {
-            'zone_id': zone_id.name,
-            'color': zone.state.color.to_dict() if zone.state.color else None,
-            'brightness': zone.state.brightness,
-            'is_on': zone.state.is_on,
-            'render_mode': zone.state.mode.name,
-        }
+        
+        await self.sio.emit(
+            "zone.state_changed",
+            {
+                "id": zone.config.id.name,
+                "state": {
+                    "brightness": zone.state.brightness,
+                    "color": zone.state.color.to_dict(),
+                    "is_on": zone.state.is_on,
+                    "mode": zone.state.mode.name,
+                },
+            },
+        )
 
         await self.sio.emit('zone:state_changed', payload)
         log.debug(f"Broadcasted zone state change: {zone_id.name}")

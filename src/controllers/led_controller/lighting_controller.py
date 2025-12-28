@@ -38,13 +38,11 @@ class LightingController:
 
     def __init__(
         self,
-        config_manager: "ConfigManager",
-        event_bus: "EventBus",
         gpio_manager: "GPIOManager",
         service_container: "ServiceContainer"
     ):
-        self.config_manager = config_manager
-        self.event_bus = event_bus
+        self.config_manager = service_container.config_manager
+        self.event_bus = service_container.event_bus
         self.gpio_manager = gpio_manager
         self.services = service_container
         
@@ -78,7 +76,7 @@ class LightingController:
         
         self.selected_zone_indicator = SelectedZoneIndicator(
             frame_manager=self.frame_manager,
-            event_bus=event_bus
+            event_bus=self.event_bus
         )
 
         # TODO: Disabled - needs direct FrameManager rendering implementation
@@ -322,7 +320,7 @@ class LightingController:
         
     async def _set_zone_render_mode_async(self, target_mode: ZoneRenderMode):
         """
-        Set the render mode of the selectedly selected zone.
+        Set the render mode of the selected selected zone.
 
         This is called directly by keyboard events (Z - static/X - animation).
         """

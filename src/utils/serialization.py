@@ -36,12 +36,7 @@ class Serializer:
     # ========================================================================
     # ENUM SERIALIZATION
     # ========================================================================
-
-    @staticmethod
-    def enum_to_str(value: Optional[Enum]) -> Optional[str]:
-        """Convert any enum to string name"""
-        return value.name if value else None
-
+    
     @staticmethod
     def to_str(value) -> Optional[str]:
         """
@@ -64,6 +59,12 @@ class Serializer:
             return value
         return str(value)
 
+
+    @staticmethod
+    def enum_to_str(value: Optional[Enum]) -> Optional[str]:
+        """Convert any enum to string name"""
+        return value.name if value else None
+
     @staticmethod
     def str_to_enum(value: str, enum_type: Type[T]) -> T:
         """Convert string to enum, raise ValueError if invalid"""
@@ -71,6 +72,72 @@ class Serializer:
             return enum_type[value]
         except KeyError:
             raise ValueError(f"Invalid {enum_type.__name__}: {value}")
+
+    # ========================================================================
+    # ZONE SERIALIZATION
+    # ========================================================================
+
+    @staticmethod
+    def zone_to_dict(zone) -> Dict[str, Any]:
+        """
+        Serialize zone to JSON-compatible dict
+
+        Args:
+            zone: ZoneCombined object
+
+        Returns:
+            Dict with id, display_name, pixel_count, enabled, state
+        """
+        return {
+            "id": zone.config.id.name,
+            "display_name": zone.config.display_name,
+            "pixel_count": zone.config.pixel_count,
+            "enabled": zone.config.enabled,
+            "brightness": zone.brightness,
+            "color": Serializer.color_to_dict(zone.state.color),
+        }
+
+        
+    # ========================================================================
+    # ZONE MODE SERIALIZATION
+    # ========================================================================
+
+    @staticmethod
+    def zone_render_mode_to_str(mode: ZoneRenderMode) -> str:
+        """Convert ZoneRenderMode enum to string"""
+        return mode.name
+
+    @staticmethod
+    def str_to_zone_render_mode(value: str) -> ZoneRenderMode:
+        """Convert string to ZoneRenderMode enum"""
+        try:
+            return ZoneRenderMode[value]
+        except KeyError:
+            raise ValueError(f"Invalid ZoneRenderMode: {value}")
+
+
+    # ========================================================================
+    # ANIMATION SERIALIZATION
+    # ========================================================================
+
+    @staticmethod
+    def animation_to_dict(anim_config) -> Dict[str, Any]:
+        """
+        Serialize animation config to dict
+
+        Args:
+            anim_config: AnimationConfig object
+
+        Returns:
+            Dict with id, display_name, description, parameters
+        """
+        return {
+            "id": anim_config.id.name,
+            "display_name": anim_config.display_name,
+            "description": anim_config.description,
+            "parameters": [p.name for p in anim_config.parameters],
+        }
+
 
     # ========================================================================
     # ANIMATION PARAMETER DICT CONVERSION
@@ -102,30 +169,6 @@ class Serializer:
             except ValueError:
                 log.warn(f"Unknown animation parameter: {param_str}, skipping")
         return result
-
-    # ========================================================================
-    # ZONE SERIALIZATION
-    # ========================================================================
-
-    @staticmethod
-    def zone_to_dict(zone) -> Dict[str, Any]:
-        """
-        Serialize zone to JSON-compatible dict
-
-        Args:
-            zone: ZoneCombined object
-
-        Returns:
-            Dict with id, display_name, pixel_count, enabled, state
-        """
-        return {
-            "id": zone.config.id.name,
-            "display_name": zone.config.display_name,
-            "pixel_count": zone.config.pixel_count,
-            "enabled": zone.config.enabled,
-            "brightness": zone.brightness,
-            "color": Serializer.color_to_dict(zone.state.color),
-        }
 
     # ========================================================================
     # COLOR SERIALIZATION
@@ -181,42 +224,3 @@ class Serializer:
         except (KeyError, TypeError, ValueError) as e:
             log.error(f"Failed to deserialize color: {e}")
             raise
-
-    # ========================================================================
-    # ANIMATION SERIALIZATION
-    # ========================================================================
-
-    @staticmethod
-    def animation_to_dict(anim_config) -> Dict[str, Any]:
-        """
-        Serialize animation config to dict
-
-        Args:
-            anim_config: AnimationConfig object
-
-        Returns:
-            Dict with id, display_name, description, parameters
-        """
-        return {
-            "id": anim_config.id.name,
-            "display_name": anim_config.display_name,
-            "description": anim_config.description,
-            "parameters": [p.name for p in anim_config.parameters],
-        }
-
-    # ========================================================================
-    # ZONE MODE SERIALIZATION
-    # ========================================================================
-
-    @staticmethod
-    def zone_render_mode_to_str(mode: ZoneRenderMode) -> str:
-        """Convert ZoneRenderMode enum to string"""
-        return mode.name
-
-    @staticmethod
-    def str_to_zone_render_mode(value: str) -> ZoneRenderMode:
-        """Convert string to ZoneRenderMode enum"""
-        try:
-            return ZoneRenderMode[value]
-        except KeyError:
-            raise ValueError(f"Invalid ZoneRenderMode: {value}")

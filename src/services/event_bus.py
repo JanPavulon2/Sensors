@@ -53,6 +53,14 @@ class EventBus:
         await bus.publish(event)
     """
 
+    _instance: Optional["EventBus"] = None
+
+    @classmethod
+    def instance(cls) -> "EventBus":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
     def __init__(self):
         # Handlers organized by event type
         self._handlers: Dict[EventType, List[EventHandler]] = {}

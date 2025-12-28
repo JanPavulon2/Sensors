@@ -24,7 +24,7 @@ export function ZoneAnimationSection({
   const selectedAnimation: AnimationID = isStatic ? 'STATIC' : ((zone.state.animation_id as AnimationID) || 'STATIC');
 
   return (
-    <div className="border-t border-border-default">
+    <div>
       {/* Section Header */}
       <h3 className="text-base font-semibold text-text-primary px-4 pt-4">Animation</h3>
 

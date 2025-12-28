@@ -29,7 +29,7 @@ export function ZoneColorSection({
   const defaultColorTab = zone.state.color.mode === 'PRESET' ? 'preset' : 'hue';
 
   return (
-    <div className="border-t border-border-default">
+    <div>
       {/* Section Header */}
       <h3 className="text-base font-semibold text-text-primary px-4 pt-4">Appearance</h3>
 
@@ -55,9 +55,9 @@ export function ZoneColorSection({
 
           {/* Color Picker Tabs */}
           <Tabs defaultValue={defaultColorTab} className="w-full">
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="hue">🎨 Hue</TabsTrigger>
-              <TabsTrigger value="preset">⭐ Preset</TabsTrigger>
+            <TabsList variant="underline" className="w-full">
+              <TabsTrigger variant="underline" value="hue">🎨 Hue</TabsTrigger>
+              <TabsTrigger variant="underline" value="preset">⭐ Preset</TabsTrigger>
             </TabsList>
 
             <TabsContent value="hue" className="space-y-3 mt-3">

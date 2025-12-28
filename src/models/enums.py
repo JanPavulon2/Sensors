@@ -149,7 +149,9 @@ class LogCategory(Enum):
     SYSTEM = auto()      # Startup, shutdown, errors
     TRANSITION = auto()  # LED state transitions
     EVENT = auto()       # Event bus events and handling
+    
     RENDER_ENGINE = auto()
+    FRAME_MANAGER = auto()
     
     INDICATOR = auto()
     ANIM_CONTROLLER = auto()
@@ -158,6 +160,7 @@ class LogCategory(Enum):
     
     API = auto()
     WEBSOCKET = auto()
+    SOCKETIO = auto()
     
     SHUTDOWN = auto()
     LIFECYCLE = auto()

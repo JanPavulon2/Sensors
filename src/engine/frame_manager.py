@@ -29,7 +29,7 @@ from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripF
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
-log = get_logger().for_category(LogCategory.RENDER_ENGINE)
+log = get_logger().for_category(LogCategory.FRAME_MANAGER)
 
 class WS2811Timing:
     """
@@ -128,14 +128,14 @@ class FrameManager:
         """Register a LED strip (ZoneStrip)."""
 
         if strip in self.zone_strips:
+            log.warn(f"Skipping registering zone strip in FrameManager - already registered")
             return
 
         self.zone_strips.append(strip)
-        log.info(f"FrameManager: added strip {strip}")
-
+        
         # Initialize zone render states for all zones in this strip
         strip_zone_ids = strip.mapper.all_zone_ids()
-        log.info(f"add_zone_strip: strip has {len(strip_zone_ids)} zones: {[z.name for z in strip_zone_ids]}")
+        log.info(f"Registering zone strip with {len(strip_zone_ids)} zones ({[z.name for z in strip_zone_ids]}) registered in FrameManager")
 
         for zone_id in strip_zone_ids:
             if zone_id not in self.zone_render_states:
@@ -144,9 +144,9 @@ class FrameManager:
                     zone_id=zone_id,
                     pixels=[Color.black()] * zone_length,
                 )
-                log.debug(f"  Initialized render state for {zone_id.name} ({zone_length} pixels)")
+                log.debug(f"Initialized black render state for zone {zone_id.name} ({zone_length} pixels)")
 
-        log.info(f"Added main strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
+        log.info(f"Added strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
         
     def remove_zone_strip(self, strip: ZoneStrip) -> None:
         """Unregister a LED strip."""
@@ -511,7 +511,7 @@ class FrameManager:
                 log.error(f"Render error on strip {strip}: {e}", exc_info=True)
     
         
-    def _prepare_strip_frame(self, strip, merged):
+    def _prepare_strip_frame(self, strip: ZoneStrip, merged):
         """Extract only zones belonging to this strip."""
         zone_ids = strip.mapper.all_zone_ids()
 
@@ -520,7 +520,7 @@ class FrameManager:
             for z in zone_ids
         }
     
-    def _validate_strip_frame(self, strip, strip_frame):
+    def _validate_strip_frame(self, strip: ZoneStrip, strip_frame):
         """Check lengths, mapping, and hardware buffer size."""
         pixel_count = getattr(strip, "pixel_count", None)
         zone_ids = list(strip_frame.keys())
@@ -548,7 +548,7 @@ class FrameManager:
         except Exception as ex:
             log.debug(f"hardware.get_frame() failed: {ex}", exc_info=True)
     
-    def _apply_strip_frame(self, strip, strip_frame):
+    def _apply_strip_frame(self, strip: ZoneStrip, strip_frame):
         """Send pixel data to hardware."""
         #log.debug(
         #    f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "

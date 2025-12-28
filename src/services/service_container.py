@@ -8,7 +8,7 @@ from services.application_state_service import ApplicationStateService
 from services.event_bus import EventBus
 from engine.frame_manager import FrameManager
 from managers.color_manager import ColorManager
-
+from services.data_assembler import DataAssembler
 
 @dataclass
 class ServiceContainer:
@@ -54,11 +54,14 @@ class ServiceContainer:
         async def get_zones(services: ServiceContainer):
             return services.zone_service.get_all()
     """
-
+    event_bus: EventBus
+    
     zone_service: ZoneService
     animation_service: AnimationService
     app_state_service: ApplicationStateService
+    
     frame_manager: FrameManager
-    event_bus: EventBus
     color_manager: ColorManager
     config_manager: ConfigManager
+    
+    data_assembler: DataAssembler

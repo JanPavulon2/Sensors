@@ -192,7 +192,7 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
         onMouseLeave={handleMouseUp}
         style={{ cursor: disabled ? 'not-allowed' : 'crosshair' }}
       />
-      <p className="text-xs text-text-tertiary">← Click or drag to select hue →</p>
+      <p className="text-xs text-text-tertiary hidden">← Click or drag to select hue →</p>
     </div>
   );
 };

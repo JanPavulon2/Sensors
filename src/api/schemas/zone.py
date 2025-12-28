@@ -8,6 +8,16 @@ from typing import Optional, Dict, Any
 from enum import Enum
 
 
+class BrightnessRequest(BaseModel):
+    brightness: int = Field(ge=0, le=255)
+
+class PowerRequest(BaseModel):
+    is_on: bool
+
+class AnimationParamUpdateRequest(BaseModel):
+    param_id: str
+    value: object
+    
 class ColorModeEnum(str, Enum):
     """Color mode enumeration - matches domain ColorMode"""
     RGB = "RGB"
@@ -179,7 +189,7 @@ class ZoneColorUpdateRequest(BaseModel):
 
 class ZoneBrightnessUpdateRequest(BaseModel):
     """Request to update zone brightness"""
-    brightness: float = Field(
+    brightness: int = Field(
         ge=0,
         le=255,
         description="New brightness 0-255"

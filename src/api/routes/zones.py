@@ -21,13 +21,18 @@ from fastapi import APIRouter, Depends, status
 
 from api.schemas.zone import (
     ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
-    ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest, ZoneIsOnUpdateRequest
+    ZoneBrightnessUpdateRequest, ZoneRenderModeUpdateRequest, ZoneIsOnUpdateRequest, ZoneStateResponse
 )
 from api.schemas.animation import (
     AnimationStartRequest, AnimationStopRequest, AnimationParameterUpdateRequest
 )
 from api.services.zone_service import ZoneAPIService
+from models.domain.zone import ZoneCombined
+from models.enums import ZoneID
+from services.service_container import ServiceContainer
+from services.zone_service import ZoneService
 from api.dependencies import get_service_container
+from utils.serialization import Serializer
 
 # Create router for zone endpoints
 # The router is included in the main app with prefix="/api/v1"
@@ -39,8 +44,9 @@ router = APIRouter(
 )
 
 
+
 async def get_zone_service(
-    services = Depends(get_service_container)
+    services: ServiceContainer = Depends(get_service_container)
 ) -> ZoneAPIService:
     """Dependency to get zone service instance from the service container.
 
@@ -52,6 +58,20 @@ async def get_zone_service(
         color_manager=services.color_manager
     )
 
+
+async def get_old_zone_service(
+    services = Depends(get_service_container)
+) -> ZoneService:
+    """Dependency to get zone service instance from the service container.
+
+    Uses the ServiceContainer initialized by main_asyncio.py, which contains
+    the real Phase 6 ZoneService and ColorManager.
+    """
+    return ZoneService(
+        assembler=services.data_assembler,
+        app_state_service=services.app_state_service,
+        event_bus=services.event_bus
+    )
 
 # ============================================================================
 # GET ENDPOINTS - Retrieve zone data (read-only, safe)
@@ -176,7 +196,7 @@ async def update_zone_color(
 
 @router.put(
     "/{zone_id}/brightness",
-    response_model=ZoneResponse,
+    response_model=ZoneCombined,
     status_code=status.HTTP_200_OK,
     summary="Update zone brightness",
     description="Adjust zone brightness without changing color"
@@ -184,8 +204,8 @@ async def update_zone_color(
 async def update_zone_brightness(
     zone_id: str,
     brightness_request: ZoneBrightnessUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service)
-) -> ZoneResponse:
+    zone_service: ZoneService = Depends(get_old_zone_service)
+) -> ZoneCombined:
     """
     Update a zone's brightness.
 
@@ -209,7 +229,13 @@ async def update_zone_brightness(
     **Note:** This adjusts brightness independently from color.
     The color hue is preserved - only intensity changes.
     """
-    return zone_service.update_zone_brightness(zone_id, brightness_request.brightness)
+    
+    zone=Serializer.str_to_enum(zone_id, ZoneID)
+    
+    zone_service.set_brightness(zone, brightness_request.brightness)
+    updated_zone = zone_service.get_zone(zone)
+    
+    return updated_zone
 
 
 @router.put(
@@ -301,7 +327,7 @@ async def update_zone_render_mode(
     return zone_service.update_zone_render_mode(
         zone_id,
         mode_request.render_mode.value,
-        mode_request.animation_id
+        mode_request.animation_id if mode_request.animation_id else ""
     )
 
 

@@ -17,6 +17,7 @@ from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneID
 from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import TaskCategory, create_tracked_task
 
 log = get_logger().for_category(LogCategory.ANIMATION)
 
@@ -107,8 +108,14 @@ class AnimationEngine:
             # Store meta
             self.active_anim_ids[zone_id] = anim_id
             self.active_animations[zone_id] = anim
+            
             # Spawn task
-            task = asyncio.create_task(self._run_loop(zone_id, anim))
+            # task = asyncio.create_task(self._run_loop(zone_id, anim))
+            task = create_tracked_task(
+                self._run_loop(zone_id, anim),
+                category=TaskCategory.ANIMATION,
+                description=f"Animation loop for zone {zone_id} ({anim})"
+            )
             self.tasks[zone_id] = task
 
             log.info(

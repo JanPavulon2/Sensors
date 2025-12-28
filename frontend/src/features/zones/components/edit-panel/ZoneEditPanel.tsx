@@ -44,12 +44,14 @@ export function ZoneEditPanel({
         <ZoneEditPanelHeader zone={zone} onClose={onClose} />
 
         {/* Sticky Preview */}
-        <ZoneEditPanelPreview zone={zone} useSettings />
+        <div className="border-b border-border-default">
+          <ZoneEditPanelPreview zone={zone} useSettings />
+        </div>
 
         {/* Scrollable Sections - Side-by-side layout on desktop */}
         <div className={`flex-1 overflow-y-auto ${!zone.state.is_on ? 'pointer-events-none' : ''}`}>
           {/* Main Content Grid - side by side layout */}
-          <div className="grid grid-cols-2 gap-0 w-full border-t border-border-default">
+          <div className="grid grid-cols-2 gap-0 w-full">
             {/* Appearance Section - left column */}
             <div className="w-full border-r border-border-default overflow-y-auto">
               <ZoneColorSection zone={zone} />

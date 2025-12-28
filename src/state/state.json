@@ -5,7 +5,7 @@
         "mode": "PRESET",
         "preset_name": "cyan"
       },
-      "brightness": 86,
+      "brightness": 68,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -18,9 +18,9 @@
         "mode": "HUE",
         "hue": 320
       },
-      "brightness": 91,
+      "brightness": 76,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "SNAKE",
         "parameters": {
@@ -52,7 +52,7 @@
       },
       "brightness": 94,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "BREATHE",
         "parameters": {
@@ -95,10 +95,10 @@
         "hue": 234
       },
       "brightness": 100,
-      "is_on": false,
+      "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "SNAKE",
+        "id": "BREATHE",
         "parameters": {}
       }
     },
@@ -123,7 +123,7 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 4,
+    "selected_zone_index": 2,
     "selected_zone_edit_target": "COLOR_HUE",
     "frame_by_frame_mode": false,
     "save_on_change": true

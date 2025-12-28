@@ -22,20 +22,24 @@ FastAPI automatically:
 """
 import asyncio
 import sys
+
+from socketio import ASGIApp, AsyncServer
     
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
     sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from typing import Optional
 
 from api.routes import zones, logger as logger_routes, system, animations
 from api.middleware.error_handler import register_exception_handlers
-from utils.logger import get_logger
+from utils.logger import get_logger, LogCategory
 from models.enums import LogCategory
 
 log = get_logger().for_category(LogCategory.API)
@@ -47,17 +51,18 @@ async def lifespan(app: FastAPI):
         yield
     except asyncio.CancelledError:
         # Normal shutdown cancellation – swallow it
-        log.debug("!!!FastAPI lifespan cancelled!!!")
+        log.debug("FastAPI lifespan cancelled (normal shutdown)")
     finally:
-        log.info("!!!FastAPI lifespan shutdown complete!!!")
+        log.info("FastAPI lifespan shutdown complete")
 
 def create_app(
     title: str = "Diuna LED System",
     description: str = "REST API for programmable LED control",
     version: str = "1.0.0",
     docs_enabled: bool = True,
-    cors_origins: list[str] = None
-) -> FastAPI:
+    cors_origins: Optional[list[str]] = None,
+    enable_socketio: bool = True
+) -> tuple[FastAPI | ASGIApp, Optional['AsyncServer']]:
     """
     Create and configure FastAPI application.
 
@@ -91,14 +96,7 @@ def create_app(
     # =========================================================================
     # CORS Configuration
     # =========================================================================
-    # CORS (Cross-Origin Resource Sharing) allows browsers to make requests
-    # from different origins (domains). Without this, browser requests from
-    # http://localhost:3000 to http://localhost:8000 would be blocked.
-
     if cors_origins is None:
-        # For development: Allow all origins on dev ports (5173, 5175, 3000)
-        # In production, restrict to specific domains
-        # IMPORTANT: This development config allows any origin accessing the API
         cors_origins = ["*"]
         log.warn("CORS configured to allow all origins (development mode). Restrict this in production!")
 
@@ -131,11 +129,8 @@ def create_app(
     # =========================================================================
     # Exception Handlers
     # =========================================================================
-    # Register handlers for different error types.
-    # These convert exceptions to properly formatted JSON responses.
-
+    
     register_exception_handlers(app)
-
     log.info("Exception handlers registered")
 
     # =========================================================================
@@ -145,25 +140,10 @@ def create_app(
     # Each router has its own prefix (e.g., /zones) and is composed
     # into the main app under /api/v1.
 
-    app.include_router(
-        zones.router,
-        prefix="/api/v1"
-    )
-
-    app.include_router(
-        logger_routes.router,
-        prefix="/api/v1"
-    )
-
-    app.include_router(
-        system.router,
-        prefix="/api/v1"
-    )
-
-    app.include_router(
-        animations.router,
-        prefix="/api/v1"
-    )
+    app.include_router(zones.router, prefix="/api/v1")
+    app.include_router(logger_routes.router, prefix="/api/v1")
+    app.include_router(system.router, prefix="/api/v1")
+    app.include_router(animations.router, prefix="/api/v1")
 
     log.debug("Routes registered: zones, logger, system, animations (all under /api/v1)")
 
@@ -177,7 +157,6 @@ def create_app(
         summary="Health check",
         description="Check if API is running and responding"
     )
-    
     async def health_check():
         """Simple health check endpoint for monitoring"""
         return {
@@ -186,12 +165,9 @@ def create_app(
             "version": version
         }
 
-    log.debug("Health check endpoint registered at /api/health")
-
     # =========================================================================
     # Root Redirect
     # =========================================================================
-
     @app.get("/", include_in_schema=False)
     async def root():
         """Redirect root to documentation"""
@@ -203,18 +179,31 @@ def create_app(
             }
         )
 
+    log.info("Health check endpoints registered")
+    
+    # =========================================================================
+    # Socket.IO Integration (Optional)
+    # =========================================================================
+    
+    sio_server = None
+    
+    if enable_socketio:
+        log.info("Integrating Socket.IO with FastAPI...")
+        
+        # Import here to avoid circular dependency
+        from api.socketio_handler import create_socketio_server, wrap_app_with_socketio
+        
+        # Create Socket.IO server
+        sio_server = create_socketio_server(cors_origins=cors_origins)
+        
+        # Wrap FastAPI app with Socket.IO ASGI middleware
+        # This allows the same server to handle both HTTP and WebSocket
+        app = wrap_app_with_socketio(app, sio_server)
+        
+        log.info("Socket.IO integrated with FastAPI")
+    else:
+        log.info("Socket.IO disabled (testing mode)")
+    
     log.info(f"FastAPI app created successfully: {title}")
-
-    return app
-
-
-# ============================================================================
-# NOTE: This module is imported by main_asyncio.py
-# ============================================================================
-#
-# Entry point is: python -m src.main_asyncio
-#
-# This module provides the create_app() factory function used to bootstrap
-# the FastAPI application. It's kept separate for clean separation of concerns:
-# - api/main.py: FastAPI app configuration
-# - main_asyncio.py: Async runtime + API server integration
+    
+    return app, sio_server

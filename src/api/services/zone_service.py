@@ -150,7 +150,7 @@ class ZoneAPIService:
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
 
-    def update_zone_render_mode(self, zone_id: str, render_mode: str, animation_id: str = None) -> ZoneResponse:
+    def update_zone_render_mode(self, zone_id: str, render_mode: str, animation_id: str = "") -> ZoneResponse:
         """Change zone render mode
 
         Args:
@@ -308,7 +308,7 @@ class ZoneAPIService:
         zone.state.animation.parameter_values.update(parameters)
 
         # Persist the change
-        self.zone_service.save()
+        self.zone_service._save_zone(zone.id)
 
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
