@@ -13,14 +13,14 @@ FastAPI automatically:
 Example: @app.put("/zones/{zone_id}/color")
 - {zone_id} becomes a function parameter
 - FastAPI validates it and passes the value
-- Request body must match ColorUpdateRequest schema
+- Request body must match ZoneSetColorRequest schema
 - Return ZoneResponse which becomes JSON
 """
 
 from fastapi import APIRouter, Depends, status
 
 from api.schemas.zone import (
-    ZoneListResponse, ZoneResponse, ZoneColorUpdateRequest,
+    ZoneListResponse, ZoneResponse, ZoneSetColorRequest,
     ZoneSetAnimationParamRequest, ZoneSetAnimationRequest, 
     ZoneSetBrightnessRequest, ZoneSetIsOnRequest, ZoneSetRenderModeRequest, ZoneStateResponse
 )
@@ -29,12 +29,17 @@ from api.schemas.animation import (
 )
 from api.services.zone_service import ZoneAPIService
 from models.animation_params.animation_param_id import AnimationParamID
+from models.color import Color
+from models.domain.animation import AnimationState
 from models.domain.zone import ZoneCombined
-from models.enums import ZoneID
+from models.enums import LogCategory, ZoneID, ZoneRenderMode
 from services.service_container import ServiceContainer
 from services.zone_service import ZoneService
 from api.dependencies import get_service_container
+from utils.logger import get_logger
 from utils.serialization import Serializer
+
+log = get_logger().for_category(LogCategory.API)
 
 # Create router for zone endpoints
 # The router is included in the main app with prefix="/api/v1"
@@ -182,7 +187,50 @@ async def set_zone_brightness(
     Sets zone brightness.
     """
     services.zone_service.set_brightness(zone_id, request.brightness)
+
     
+@router.put(
+    "/{zone_id}/color",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone color"
+)
+async def set_zone_color(
+    zone_id: ZoneID,
+    req: ZoneSetColorRequest,
+    services: ServiceContainer = Depends(get_service_container)
+) -> None:
+    color_req = req.color
+    if color_req.mode == "PRESET" and color_req.preset_name is not None:
+        color = Color.from_preset(color_req.preset_name, services.color_manager)
+        services.zone_service.set_color(zone_id, color)
+    else:
+        color = Color.from_request(color_req)
+        services.zone_service.set_color(zone_id, color)
+    
+
+@router.put(
+    "/{zone_id}/render-mode",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Set zone render mode"
+)
+async def set_zone_render_mode(
+    zone_id: ZoneID,
+    req: ZoneSetRenderModeRequest,
+    services: ServiceContainer = Depends(get_service_container)
+) -> None:
+    """
+    Change zone render mode between STATIC and ANIMATION.
+
+    - STATIC: Zone displays solid color. If animation was running, it's stopped but preserved in state.
+    - ANIMATION: Zone displays animation. Uses saved animation from state if available, otherwise uses default.
+    """
+    services.zone_service.set_render_mode(
+        zone_id=zone_id, 
+        render_mode=ZoneRenderMode[req.render_mode]
+    )
+    
+    
+        
 @router.put(
     "/{zone_id}/animation",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -194,7 +242,7 @@ async def set_zone_animation(
     services: ServiceContainer = Depends(get_service_container),
 ) -> None:
     services.zone_service.set_animation(
-        zone_id, req.id, req.parameters
+        zone_id, req.animation_id
     )
     
 
@@ -207,58 +255,11 @@ async def set_zone_animation_param(
     zone_id: ZoneID,
     param_id: AnimationParamID,
     req: ZoneSetAnimationParamRequest,
-    services: ServiceContainer = Depends(get_service_container),
+    services: ServiceContainer = Depends(get_service_container)
 ) -> None:
     services.zone_service.set_animation_param(
         zone_id, param_id, req.value
     )
-    
-
-
-
-@router.put(
-    "/{zone_id}/color",
-    response_model=ZoneResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Update zone color",
-    description="Set zone to a new color (any mode: RGB, HUE, PRESET)"
-)
-async def update_zone_color(
-    zone_id: str,
-    color_request: ZoneColorUpdateRequest,
-    zone_service: ZoneAPIService = Depends(get_zone_service)
-) -> ZoneResponse:
-    """
-    Update a zone's color.
-
-    **Parameters:**
-    - `zone_id`: Zone ID (e.g., "FLOOR")
-
-    **Request Body:** Color specification
-    ```json
-    {
-      "color": {
-        "mode": "HUE",
-        "hue": 240
-      }
-    }
-    ```
-
-    **Supported Color Modes:**
-    - `HUE`: Hue value 0-360 (e.g., 240 = blue, 0 = red)
-    - `RGB`: [r, g, b] values 0-255 (e.g., [255, 0, 0] = red)
-    - `PRESET`: Named color like "RED", "WARM_WHITE" (e.g., "WARM_WHITE")
-
-    **Returns:** Updated zone with new color applied
-
-    **Side Effects:**
-    - Changes persisted immediately
-    - Broadcasts update to all clients (WebSocket)
-    - Triggers on-screen update if in live preview mode
-    """
-    return zone_service.update_zone_color(zone_id, color_request.color)
-
-
 
 # ============================================================================
 # POST ENDPOINTS - Actions (non-idempotent operations)
@@ -271,6 +272,7 @@ async def update_zone_color(
 #     summary="Reset zone to defaults",
 #     description="Reset zone to default color and brightness"
 # )
+
 # async def reset_zone(
 #     zone_id: str,
 #     zone_service: ZoneAPIService = Depends(get_zone_service)

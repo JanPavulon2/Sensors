@@ -162,12 +162,7 @@ class ZoneStateChangedEvent(Event[EventSource]):
             type=EventType.ZONE_STATE_CHANGED,
             source=EventSource.ZONE_SERVICE,
             data={
-                "zone_id": zone_id.name,
-                "color": str(color) if color else None,
-                "brightness": brightness,
-                "is_on": is_on,
-                "render_mode": render_mode.name if render_mode else None,
-                "animation": animation.to_dict() if animation else None
+                "zone_id": zone_id.name
             },
             timestamp=time.time(),
         )

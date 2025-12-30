@@ -7,26 +7,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { Slider } from '@/shared/ui/slider';
 import { Label } from '@/shared/ui/label';
-import { useUpdateZoneColorMutation, useUpdateZoneBrightnessMutation } from '@/features/zones/api';
-import type { Zone } from '@/shared/types/domain/zone';
+// import { useUpdateZoneColorMutation, useUpdateZoneBrightnessMutation } from '@/features/zones/api';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import { HexColorPicker } from 'react-colorful';
 import { useState } from 'react';
 
 interface ZoneCardProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
   onSelect?: (zoneId: string) => void;
 }
 
 export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [tempColor, setTempColor] = useState(
-    zone.state.color.rgb
-      ? `#${zone.state.color.rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`
+    zone.color.rgb
+      ? `#${zone.color.rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`
       : '#00E5FF'
   );
 
-  const colorMutation = useUpdateZoneColorMutation(zone.id);
-  const brightnessMutation = useUpdateZoneBrightnessMutation(zone.id);
+  // const colorMutation = useUpdateZoneColorMutation(zone.id);
+  // const brightnessMutation = useUpdateZoneBrightnessMutation(zone.id);
 
   const handleColorChange = (color: string) => {
     setTempColor(color);
@@ -35,22 +35,22 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
     const g = parseInt(color.slice(3, 5), 16);
     const b = parseInt(color.slice(5, 7), 16);
 
-    colorMutation.mutate({
-      color: {
-        mode: 'RGB',
-        rgb: [r, g, b],
-      },
-    });
+    // colorMutation.mutate({
+    //   color: {
+    //     mode: 'RGB',
+    //     rgb: [r, g, b],
+    //   },
+    // });
   };
 
   const handleBrightnessChange = (value: number[]) => {
-    brightnessMutation.mutate({
-      brightness: value[0],
-    });
+    // brightnessMutation.mutate({
+    //   brightness: value[0],
+    // });
   };
 
-  const colorRgb = zone.state.color.rgb
-    ? `rgb(${zone.state.color.rgb.join(',')})`
+  const colorRgb = zone.color.rgb
+    ? `rgb(${zone.color.rgb.join(',')})`
     : '#00E5FF';
 
   return (
@@ -58,7 +58,7 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-lg">{zone.name}</CardTitle>
+            <CardTitle className="text-lg">{zone.display_name}</CardTitle>
             <p className="text-xs text-text-tertiary mt-1">
               {zone.pixel_count} pixels
             </p>
@@ -95,15 +95,15 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
           <div className="flex items-center justify-between">
             <Label>Brightness</Label>
             <span className="text-sm font-medium text-accent-primary">
-              {Math.round((zone.state.brightness / 255) * 100)}%
+              {zone.brightness}%
             </span>
           </div>
           <Slider
-            value={[zone.state.brightness]}
+            value={[zone.brightness]}
             onValueChange={handleBrightnessChange}
             max={255}
             step={1}
-            disabled={brightnessMutation.isPending}
+            // disabled={brightnessMutation.isPending}
             className="w-full"
           />
         </div>
@@ -112,9 +112,9 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
         <div className="pt-2 border-t border-border-subtle">
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <div
-              className={`w-2 h-2 rounded-full ${zone.state.is_on ? 'bg-success' : 'bg-warning'}`}
+              className={`w-2 h-2 rounded-full ${zone.is_on ? 'bg-success' : 'bg-warning'}`}
             />
-            {zone.state.is_on ? 'On' : 'Off'}
+            {zone.is_on ? 'On' : 'Off'}
           </div>
         </div>
 
@@ -133,7 +133,7 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
           </Button>
         </div>
 
-        {/* Loading States */}
+        {/* Loading States
         {(colorMutation.isPending || brightnessMutation.isPending) && (
           <div className="text-xs text-text-tertiary italic">
             Updating...
@@ -144,7 +144,7 @@ export function ZoneCard({ zone, onSelect }: ZoneCardProps): JSX.Element {
         )}
         {brightnessMutation.isError && (
           <div className="text-xs text-error">Brightness update failed</div>
-        )}
+        )} */}
       </CardContent>
     </Card>
   );

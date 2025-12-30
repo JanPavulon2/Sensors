@@ -74,145 +74,145 @@ class ZoneAPIService:
             valid_ids = [z.name for z in ZoneID]
             raise ZoneNotFoundError(zone_id)
 
-    def update_zone_color(self, zone_id: str, color_request: ColorRequest) -> ZoneResponse:
-        """Update zone color
+    # def update_zone_color(self, zone_id: str, color_request: ColorRequest) -> ZoneResponse:
+    #     """Update zone color
 
-        Args:
-            zone_id: Zone ID string
-            color_request: New color specification
+    #     Args:
+    #         zone_id: Zone ID string
+    #         color_request: New color specification
 
-        Returns:
-            Updated ZoneResponse
+    #     Returns:
+    #         Updated ZoneResponse
 
-        Raises:
-            ZoneNotFoundError: If zone doesn't exist
-            InvalidColorModeError: If color mode invalid
-        """
-        try:
-            zone_enum = ZoneID[zone_id.upper()]
-        except KeyError:
-            raise ZoneNotFoundError(zone_id)
+    #     Raises:
+    #         ZoneNotFoundError: If zone doesn't exist
+    #         InvalidColorModeError: If color mode invalid
+    #     """
+    #     try:
+    #         zone_enum = ZoneID[zone_id.upper()]
+    #     except KeyError:
+    #         raise ZoneNotFoundError(zone_id)
 
-        # Convert API request to domain Color object
-        color = self._request_to_color(color_request)
+    #     # Convert API request to domain Color object
+    #     color = self._request_to_color(color_request)
 
-        # Update in domain service
-        self.zone_service.set_color(zone_enum, color)
+    #     # Update in domain service
+    #     self.zone_service.set_color(zone_enum, color)
 
-        # Fetch updated zone and return
-        zone = self.zone_service.get_zone(zone_enum)
-        return self._zone_to_response(zone)
+    #     # Fetch updated zone and return
+    #     zone = self.zone_service.get_zone(zone_enum)
+    #     return self._zone_to_response(zone)
 
-    def update_zone_brightness(self, zone_id: str, brightness: float) -> ZoneResponse:
-        """Update zone brightness
+    # def update_zone_brightness(self, zone_id: str, brightness: float) -> ZoneResponse:
+    #     """Update zone brightness
 
-        Args:
-            zone_id: Zone ID string
-            brightness: Brightness 0-255 (API input range)
+    #     Args:
+    #         zone_id: Zone ID string
+    #         brightness: Brightness 0-255 (API input range)
 
-        Returns:
-            Updated ZoneResponse
-        """
-        try:
-            zone_enum = ZoneID[zone_id.upper()]
-        except KeyError:
-            raise ZoneNotFoundError(zone_id)
+    #     Returns:
+    #         Updated ZoneResponse
+    #     """
+    #     try:
+    #         zone_enum = ZoneID[zone_id.upper()]
+    #     except KeyError:
+    #         raise ZoneNotFoundError(zone_id)
 
-        # Convert from API range (0-255) to domain range (0-100)
-        # brightness_percent = (brightness / 255) * 100
-        brightness_percent = round((brightness / 255) * 100)
+    #     # Convert from API range (0-255) to domain range (0-100)
+    #     # brightness_percent = (brightness / 255) * 100
+    #     brightness_percent = round((brightness / 255) * 100)
 
-        self.zone_service.set_brightness(zone_enum, brightness_percent)
+    #     self.zone_service.set_brightness(zone_enum, brightness_percent)
 
-        zone = self.zone_service.get_zone(zone_enum)
-        return self._zone_to_response(zone)
+    #     zone = self.zone_service.get_zone(zone_enum)
+    #     return self._zone_to_response(zone)
 
-    def update_zone_is_on(self, zone_id: str, is_on: bool) -> ZoneResponse:
-        """Enable or disable a zone
+    # def update_zone_is_on(self, zone_id: str, is_on: bool) -> ZoneResponse:
+    #     """Enable or disable a zone
 
-        Args:
-            zone_id: Zone ID string
-            is_on: True to power on, False to power off
+    #     Args:
+    #         zone_id: Zone ID string
+    #         is_on: True to power on, False to power off
 
-        Returns:
-            Updated ZoneResponse
+    #     Returns:
+    #         Updated ZoneResponse
 
-        Raises:
-            ZoneNotFoundError: If zone doesn't exist
-        """
-        try:
-            zone_enum = ZoneID[zone_id.upper()]
-        except KeyError:
-            raise ZoneNotFoundError(zone_id)
+    #     Raises:
+    #         ZoneNotFoundError: If zone doesn't exist
+    #     """
+    #     try:
+    #         zone_enum = ZoneID[zone_id.upper()]
+    #     except KeyError:
+    #         raise ZoneNotFoundError(zone_id)
 
-        self.zone_service.set_is_on(zone_enum, is_on)
+    #     self.zone_service.set_is_on(zone_enum, is_on)
 
-        zone = self.zone_service.get_zone(zone_enum)
-        return self._zone_to_response(zone)
+    #     zone = self.zone_service.get_zone(zone_enum)
+    #     return self._zone_to_response(zone)
 
-    def update_zone_render_mode(self, zone_id: str, render_mode: str, animation_id: str = "") -> ZoneResponse:
-        """Change zone render mode
+    # def update_zone_render_mode(self, zone_id: str, render_mode: str, animation_id: str = "") -> ZoneResponse:
+    #     """Change zone render mode
 
-        Args:
-            zone_id: Zone ID string
-            render_mode: New render mode ("STATIC", "ANIMATION", or "OFF")
-            animation_id: Animation ID for ANIMATION mode
+    #     Args:
+    #         zone_id: Zone ID string
+    #         render_mode: New render mode ("STATIC", "ANIMATION", or "OFF")
+    #         animation_id: Animation ID for ANIMATION mode
 
-        Returns:
-            Updated ZoneResponse
+    #     Returns:
+    #         Updated ZoneResponse
 
-        Raises:
-            ZoneNotFoundError: If zone doesn't exist
-            ValueError: If render mode invalid
-        """
-        from models.enums import ZoneRenderMode, AnimationID
-        from models.domain.animation import AnimationState
+    #     Raises:
+    #         ZoneNotFoundError: If zone doesn't exist
+    #         ValueError: If render mode invalid
+    #     """
+    #     from models.enums import ZoneRenderMode, AnimationID
+    #     from models.domain.animation import AnimationState
 
-        try:
-            zone_enum = ZoneID[zone_id.upper()]
-        except KeyError:
-            raise ZoneNotFoundError(zone_id)
+    #     try:
+    #         zone_enum = ZoneID[zone_id.upper()]
+    #     except KeyError:
+    #         raise ZoneNotFoundError(zone_id)
 
-        # Parse and validate render mode
-        try:
-            mode = ZoneRenderMode[render_mode.upper()]
-        except KeyError:
-            raise ValueError(f"Invalid render mode '{render_mode}'. Must be STATIC, ANIMATION, or OFF")
+    #     # Parse and validate render mode
+    #     try:
+    #         mode = ZoneRenderMode[render_mode.upper()]
+    #     except KeyError:
+    #         raise ValueError(f"Invalid render mode '{render_mode}'. Must be STATIC or ANIMATION")
 
-        # Handle animation assignment for ANIMATION mode
-        animation = None
-        if mode == ZoneRenderMode.ANIMATION:
-            if not animation_id:
-                raise ValueError("animation_id required when switching to ANIMATION mode")
+    #     # Handle animation assignment for ANIMATION mode
+    #     animation = None
+    #     if mode == ZoneRenderMode.ANIMATION:
+    #         if not animation_id:
+    #             raise ValueError("animation_id required when switching to ANIMATION mode")
 
-            try:
-                anim_enum = AnimationID[animation_id.upper()]
-                animation = AnimationState(id=anim_enum, parameters={})
-            except KeyError:
-                raise ValueError(f"Invalid animation ID '{animation_id}'")
+    #         try:
+    #             anim_enum = AnimationID[animation_id.upper()]
+    #             animation = AnimationState(id=anim_enum, parameters={})
+    #         except KeyError:
+    #             raise ValueError(f"Invalid animation ID '{animation_id}'")
 
-        self.zone_service.set_render_mode(zone_enum, mode, animation)
+    #     self.zone_service.set_render_mode(zone_enum, mode, animation)
 
-        zone = self.zone_service.get_zone(zone_enum)
-        return self._zone_to_response(zone)
+    #     zone = self.zone_service.get_zone(zone_enum)
+    #     return self._zone_to_response(zone)
 
-    def reset_zone(self, zone_id: str) -> ZoneResponse:
-        """Reset zone to default state
+    # def reset_zone(self, zone_id: str) -> ZoneResponse:
+    #     """Reset zone to default state
 
-        Returns zone to its initial/default color and brightness
-        """
-        try:
-            zone_enum = ZoneID[zone_id.upper()]
-        except KeyError:
-            raise ZoneNotFoundError(zone_id)
+    #     Returns zone to its initial/default color and brightness
+    #     """
+    #     try:
+    #         zone_enum = ZoneID[zone_id.upper()]
+    #     except KeyError:
+    #         raise ZoneNotFoundError(zone_id)
 
-        # Reset to black color
-        default_color = Color.from_hue(0)
-        self.zone_service.set_color(zone_enum, default_color)
-        self.zone_service.set_brightness(zone_enum, 100)
+    #     # Reset to black color
+    #     default_color = Color.from_hue(0)
+    #     self.zone_service.set_color(zone_enum, default_color)
+    #     self.zone_service.set_brightness(zone_enum, 100)
 
-        zone = self.zone_service.get_zone(zone_enum)
-        return self._zone_to_response(zone)
+    #     zone = self.zone_service.get_zone(zone_enum)
+    #     return self._zone_to_response(zone)
 
     def start_zone_animation(self, zone_id: str, animation_id: str, parameters: Optional[dict] = None) -> ZoneResponse:
         """Start animation on a zone
@@ -272,7 +272,7 @@ class ZoneAPIService:
             raise ZoneNotFoundError(zone_id)
 
         # Switch to static mode (no animation)
-        self.zone_service.set_render_mode(zone_enum, ZoneRenderMode.STATIC, None)
+        self.zone_service.set_render_mode(zone_enum, ZoneRenderMode.STATIC)
 
         zone = self.zone_service.get_zone(zone_enum)
         return self._zone_to_response(zone)
@@ -314,49 +314,6 @@ class ZoneAPIService:
         return self._zone_to_response(zone)
 
     # ===== CONVERSION HELPERS =====
-
-    def _request_to_color(self, color_request: ColorRequest) -> Color:
-        """Convert ColorRequest to domain Color object
-
-        Handles all color modes: RGB, HUE, PRESET, HSV
-
-        Args:
-            color_request: API request with color specification
-
-        Returns:
-            Domain Color object
-
-        Raises:
-            InvalidColorModeError: If mode/values invalid
-        """
-        # Extract mode as string - ColorModeEnum is a str enum so value is the string value
-        mode = str(color_request.mode) if color_request.mode else None
-
-        if mode == "RGB":
-            if not color_request.rgb:
-                raise InvalidColorModeError(mode, ["HUE", "RGB", "PRESET", "HSV"])
-            r, g, b = color_request.rgb
-            return Color.from_rgb(r, g, b)
-
-        elif mode == "HUE":
-            if color_request.hue is None:
-                raise InvalidColorModeError(mode, ["HUE", "RGB", "PRESET", "HSV"])
-            return Color.from_hue(color_request.hue)
-
-        elif mode == "PRESET":
-            if not color_request.preset_name:
-                raise InvalidColorModeError(mode, ["HUE", "RGB", "PRESET", "HSV"])
-            return Color.from_preset(color_request.preset_name, self.color_manager)
-
-        elif mode == "HSV":
-            # HSV conversion: store as HUE, brightness is separate
-            if color_request.hue is None:
-                raise InvalidColorModeError(mode, ["HUE", "RGB", "PRESET", "HSV"])
-            return Color.from_hue(color_request.hue)
-
-        else:
-            valid = ["HUE", "RGB", "PRESET", "HSV"]
-            raise InvalidColorModeError(mode, valid)
 
     def _color_to_response(self, color: Color) -> ColorResponse:
         """Convert domain Color to API response"""

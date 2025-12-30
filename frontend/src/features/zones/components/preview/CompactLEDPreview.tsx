@@ -95,7 +95,7 @@ export const CompactLEDPreview: React.FC<CompactLEDPreviewProps> = ({
                 height: `${ledSize}px`,
                 backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.2)',
                 boxShadow: boxShadowLayers,
-                opacity: brightness / 255,
+                opacity: brightness / 100,
               }}
               title={`Pixel ${index}: RGB(${r}, ${g}, ${b})`}
             />

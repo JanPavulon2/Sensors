@@ -3,67 +3,18 @@ Zone schemas - Pydantic models for zone-related requests/responses
 Includes: Color, ZoneState, ZoneRenderMode, and complete Zone information
 """
 
-from pydantic import BaseModel, Field, validator
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field, model_validator, validator
+from typing import Optional, Dict, Any, Literal, Tuple
 from enum import Enum
 
 from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneRenderMode
 
 
-class ZoneSetBrightnessRequest(BaseModel):
-    """Request to update zone brightness"""
-    brightness: int = Field(
-        ge=0,
-        le=100,
-        description="New brightness 0-100%"
-    )
-
-class ZoneSetIsOnRequest(BaseModel):
-    """Request to change zone's power on/off state"""
-    is_on: bool = Field(
-        description="Zone power on / power off state"
-    )
-
-class ZoneSetRenderModeRequest(BaseModel):
-    """Request to change zone render mode"""
-    render_mode: ZoneRenderMode = Field(
-        description="New render mode: STATIC (solid color) or ANIMATION (animated)"
-    )
-
-class ZoneSetAnimationRequest(BaseModel):
-    """Request to change zone animation"""
-    id: AnimationID = Field(
-        description="Zone's animation ID"
-    )
-    parameters: Dict[AnimationParamID, Any]
-    
-class ZoneSetAnimationParamRequest(BaseModel):
-    """Request to change zone animation's parameter value"""
-    value: Any
-
-
-
-
-class ColorModeEnum(str, Enum):
-    """Color mode enumeration - matches domain ColorMode"""
-    RGB = "RGB"
-    HSV = "HSV"
-    HUE = "HUE"
-    PRESET = "PRESET"
-
-
-class ZoneRenderModeEnum(str, Enum):
-    """Zone render mode - what the zone is currently displaying"""
-    STATIC = "STATIC"          # Static color (no animation)
-    ANIMATION = "ANIMATION"    # Running animation
-    OFF = "OFF"                # Zone powered off
-
-
 class ColorRequest(BaseModel):
     """Color specification in a request - flexible to support all color modes"""
-    mode: ColorModeEnum = Field(description="Color mode (RGB, HSV, HUE, or PRESET)")
-
+    mode: Literal["RGB", "HUE", "PRESET"]
+    
     # HUE mode
     hue: Optional[int] = Field(
         None,
@@ -84,47 +35,70 @@ class ColorRequest(BaseModel):
         description="Preset name like 'RED', 'WARM_WHITE', 'COOL_WHITE' (PRESET mode)"
     )
 
-    # Optional brightness/saturation (for HSV mode)
-    brightness: Optional[int] = Field(
-        None,
-        ge=0,
-        le=255,
-        description="Brightness 0-255 (used in multiple modes)"
-    )
-    saturation: Optional[int] = Field(
-        None,
+    @model_validator(mode="after")
+    def validate_color(self):
+        if self.mode == "HUE" and self.hue is None:
+            raise ValueError("hue is required for HUE mode")
+        if self.mode == "RGB" and self.rgb is None:
+            raise ValueError("rgb is required for RGB mode")
+        if self.mode == "PRESET" and self.preset_name is None:
+            raise ValueError("preset_name is required for PRESET mode")
+        return self
+    
+    
+class ZoneSetBrightnessRequest(BaseModel):
+    """Request to update zone brightness"""
+    brightness: int = Field(
         ge=0,
         le=100,
-        description="Saturation 0-100 (HSV mode)"
+        description="New brightness 0-100%"
     )
 
-    @validator('rgb')
-    def validate_rgb(cls, v):
-        if v is not None:
-            if len(v) != 3 or not all(0 <= val <= 255 for val in v):
-                raise ValueError('RGB must be [r, g, b] with values 0-255')
-        return v
+class ZoneSetIsOnRequest(BaseModel):
+    """Request to change zone's power on/off state"""
+    is_on: bool = Field(
+        description="Zone power on / power off state"
+    )
 
-    class Config:
-        json_schema_extra = {
-            "examples": [
-                {
-                    "mode": "HUE",
-                    "hue": 240,
-                    "description": "Pure blue hue"
-                },
-                {
-                    "mode": "RGB",
-                    "rgb": [255, 0, 0],
-                    "description": "Pure red RGB"
-                },
-                {
-                    "mode": "PRESET",
-                    "preset": "WARM_WHITE",
-                    "description": "Named warm white preset"
-                }
-            ]
-        }
+class ZoneSetColorRequest(BaseModel):
+    color: ColorRequest
+    
+class ZoneSetRenderModeRequest(BaseModel):
+    """Request to change zone render mode"""
+    render_mode: Literal["STATIC", "ANIMATION"] = Field(
+        description="New render mode: STATIC (solid color) or ANIMATION (animated)"
+    )
+
+class ZoneSetAnimationRequest(BaseModel):
+    """Request to change zone animation"""
+    animation_id: AnimationID = Field(
+        description="Zone's animation ID"
+    )
+    
+    
+    
+class ZoneSetAnimationParamRequest(BaseModel):
+    """Request to change zone animation's parameter value"""
+    value: Any
+
+
+
+    
+class ColorModeEnum(str, Enum):
+    """Color mode enumeration - matches domain ColorMode"""
+    RGB = "RGB"
+    HSV = "HSV"
+    HUE = "HUE"
+    PRESET = "PRESET"
+
+
+class ZoneRenderModeEnum(str, Enum):
+    """Zone render mode - what the zone is currently displaying"""
+    STATIC = "STATIC"          # Static color (no animation)
+    ANIMATION = "ANIMATION"    # Running animation
+    OFF = "OFF"                # Zone powered off
+
+
 
 
 class ColorResponse(BaseModel):
@@ -197,28 +171,6 @@ class ZoneListResponse(BaseModel):
     """List of all zones"""
     zones: list[ZoneResponse]
     count: int = Field(description="Total number of zones")
-
-
-class ZoneColorUpdateRequest(BaseModel):
-    """Request to update zone color"""
-    color: ColorRequest = Field(description="New color")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "color": {
-                    "mode": "HUE",
-                    "hue": 240
-                }
-            }
-        }
-
-
-
-
-
-
-
 
 class ZoneUpdateRequest(BaseModel):
     """Request to update entire zone (flexible update)"""

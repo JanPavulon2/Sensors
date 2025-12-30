@@ -27,7 +27,8 @@ def register_logs(sio):
             logs = broadcaster.get_recent_logs(limit)
             payload = [log.model_dump() for log in logs]
 
-            await sio.emit("logs.snapshot", payload, room=sid)
+            await sio.emit("logs:history", {'logs': payload}, room=sid)
+            log.debug(f"Sent {len(payload)} logs to {sid}")
 
         except Exception as e:
             log.error("Failed to send log history", exc_info=True)

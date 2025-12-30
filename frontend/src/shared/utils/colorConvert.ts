@@ -13,9 +13,9 @@ export function colorToRGB(color: Color): [number, number, number] {
     return color.rgb;
   }
 
-  // If we have HSV, convert to RGB
-  if (color.hsv) {
-    return hsvToRgb(color.hsv.h, color.hsv.s, color.hsv.v);
+  // If we have hue, convert to RGB (full saturation and brightness)
+  if (color.hue !== undefined) {
+    return hsvToRgb(color.hue, 100, 100);
   }
 
   // Default to white if unable to determine color
@@ -143,12 +143,12 @@ export function createRgbColor(r: number, g: number, b: number): Color {
 }
 
 /**
- * Create a Color object from HSV values
+ * Create a Color object from HSV values (stored as HUE mode)
  */
-export function createHsvColor(h: number, s: number, v: number): Color {
+export function createHsvColor(h: number, _s: number, _v: number): Color {
   return {
-    mode: 'HSV',
-    hsv: { h, s, v },
+    mode: 'HUE',
+    hue: Math.round(h),
   };
 }
 

@@ -7,8 +7,9 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { useLoggerStreamStore } from '@/features/logger/stores/loggerStreamStore';
 import { useLogFilterStore } from '@/features/logger/stores/logFilterStore';
+import { useLoggerWebSocket } from '@/features/logger/hooks/useLoggerWebSocket';
 import { shouldShowLog, LOG_LEVEL_COLORS } from '@/shared/types/domain/logger';
-import { Copy, Trash2, FileText, Settings } from 'lucide-react';
+import { Copy, Trash2, FileText, Settings, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import {
   DropdownMenu,
@@ -25,6 +26,7 @@ export function LogViewer({ maxHeight = 'h-96' }: LogViewerProps): JSX.Element {
   const logs = useLoggerStreamStore((state) => state.logs);
   const clearLogs = useLoggerStreamStore((state) => state.clearLogs);
   const filters = useLogFilterStore((state) => state.filters);
+  const { isConnected } = useLoggerWebSocket({ enabled: true });
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportSentinelRef = useRef<HTMLDivElement>(null);
   const [isLoggerVisible, setIsLoggerVisible] = useState(true);

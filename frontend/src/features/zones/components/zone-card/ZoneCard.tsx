@@ -5,13 +5,13 @@
  */
 
 import { Card, CardContent, CardHeader } from '@/shared/ui/card';
-import type { Zone } from '@/shared/types/domain/zone';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import { ZoneCardHeader } from './ZoneCardHeader';
 import { ZoneCardPreview } from './ZoneCardPreview';
 import { ZoneCardFooter } from './ZoneCardFooter';
 
 interface ZoneCardProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
   onSelect?: (zoneId: string) => void;
 }
 

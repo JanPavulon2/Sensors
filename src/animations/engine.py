@@ -204,10 +204,6 @@ class AnimationEngine:
     # RUNTIME HELPERS
     # ------------------------------------------------------------------
 
-    def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
-        """Get name of currently running animation"""
-        return self.active_anim_ids.get(zone_id)
-
     def create_animation_instance(self, anim_id: AnimationID, zone_id: Optional[ZoneID] = None, **params):
         """
         Create an animation instance for offline use (frame-by-frame debugging).

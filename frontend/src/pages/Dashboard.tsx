@@ -11,20 +11,24 @@ import {
   CardTitle,
 } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { useZonesQuery } from '@/features/zones/api';
 import { useCheckBackendConnection } from '@/shared/hooks';
+import { useZones } from '@/features/zones/hooks';
 import { ZonesGrid, ZoneEditPanel } from '@/features/zones/components';
 
 export function Dashboard(): JSX.Element {
-  const { data: zonesData, isLoading: zonesLoading, error: zonesError } = useZonesQuery();
+  // Real-time zone updates via Socket.IO
+  const zones = useZones();
   const { isConnected, isLoading: connectionLoading } = useCheckBackendConnection();
+
+  // Note: Real-time zone updates via Socket.IO are automatically initialized
+  // when the zones module is imported (see features/zones/index.ts)
 
   // Zone detail panel state
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
-  const zones = zonesData?.zones || [];
   const zoneCount = zones.length;
   const totalPixels = zones.reduce((sum: number, zone) => sum + zone.pixel_count, 0);
+  const zonesLoading = zoneCount === 0 && !isConnected;
 
   // Find selected zone and its index
   const selectedZone = zones.find(z => z.id === selectedZoneId);
@@ -153,17 +157,6 @@ export function Dashboard(): JSX.Element {
           </CardContent>
         </Card>
       </div>
-
-      {/* Error State */}
-      {zonesError && (
-        <Card className="border-error bg-error/10">
-          <CardContent className="pt-6">
-            <p className="text-sm text-error">
-              Error loading zones: {zonesError instanceof Error ? zonesError.message : 'Unknown error'}
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Zones Section */}
       {isConnected && zoneCount > 0 && (

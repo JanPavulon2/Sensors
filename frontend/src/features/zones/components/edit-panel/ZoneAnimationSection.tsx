@@ -3,25 +3,49 @@
  * Carousel-style animation selection with parameters below
  */
 
-import type { Zone } from '@/shared/types/domain/zone';
-import { ZoneRenderMode } from '@/shared/types/domain/zone';
+import { useCallback } from 'react';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import { AnimationCarousel, AnimationParametersPanel } from '@/features/zones/components/animations';
 import type { AnimationID } from '@/features/zones/components/animations';
-import { useUpdateZoneAnimationMutation, useUpdateZoneAnimationParametersMutation } from '@/features/zones/api';
+import { api } from '@/shared/api/client';
 
 interface ZoneAnimationSectionProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
 }
 
 export function ZoneAnimationSection({
   zone,
 }: ZoneAnimationSectionProps) {
-  const animationMutation = useUpdateZoneAnimationMutation(zone.id);
-  const parametersMutation = useUpdateZoneAnimationParametersMutation(zone.id);
-
   // Determine selected animation based on render mode (not animation_id)
-  const isStatic = zone.state.render_mode === ZoneRenderMode.STATIC;
-  const selectedAnimation: AnimationID = isStatic ? 'STATIC' : ((zone.state.animation_id as AnimationID) || 'STATIC');
+  const isStatic = zone.render_mode === 'STATIC';
+  const selectedAnimation: AnimationID = isStatic ? 'STATIC' : ((zone.animation?.id as AnimationID) || 'STATIC');
+
+  const handleAnimationSelect = useCallback((animationId: AnimationID) => {
+    if (animationId === 'STATIC') {
+      // Stop animation and return to static mode
+      api.post(`/v1/zones/${zone.id}/animation/stop`).catch((error) => {
+        console.error('Failed to stop animation:', error);
+      });
+    } else {
+      // Start animation
+      api.put(`/v1/zones/${zone.id}/animation`, {
+        id: animationId,
+        parameters: {},
+      }).catch((error) => {
+        console.error('Failed to set animation:', error);
+      });
+    }
+  }, [zone.id]);
+
+  const handleParameterChange = useCallback((key: string, value: string | number | boolean) => {
+    api.put(`/v1/zones/${zone.id}/animation/parameters`, {
+      parameters: {
+        [key]: value,
+      },
+    }).catch((error) => {
+      console.error('Failed to update animation parameter:', error);
+    });
+  }, [zone.id]);
 
   return (
     <div>
@@ -33,30 +57,18 @@ export function ZoneAnimationSection({
         {/* Animation Carousel */}
         <AnimationCarousel
           selectedAnimation={selectedAnimation}
-          onSelect={(animationId: AnimationID) => {
-            animationMutation.mutate({
-              animation_id: animationId === 'STATIC' ? null : animationId,
-            });
-          }}
-          disabled={animationMutation.isPending}
+          onSelect={handleAnimationSelect}
         />
 
         {/* Animation Parameters Section - Reserved height to prevent flicker */}
         <div className="border-t border-border-default pt-4 space-y-3 min-h-[120px]">
-          {!isStatic && zone.state.animation_id ? (
+          {!isStatic && zone.animation?.id ? (
             <>
               <h4 className="text-sm font-medium text-text-primary">Parameters</h4>
               <AnimationParametersPanel
-                animationId={zone.state.animation_id as any}
-                parameters={{}}
-                onParameterChange={(key, value) => {
-                  parametersMutation.mutate({
-                    animation_parameters: {
-                      [key]: value,
-                    },
-                  });
-                }}
-                disabled={parametersMutation.isPending}
+                animationId={zone.animation?.id as any}
+                parameters={zone.animation?.parameters || {}}
+                onParameterChange={handleParameterChange}
               />
             </>
           ) : (

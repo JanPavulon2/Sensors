@@ -5,6 +5,7 @@ Handles color in multiple formats (HUE, PRESET, RGB) and automatic conversions.
 Uses ColorManager for preset data and utils.colors for conversion functions.
 """
 
+from pydantic import validator
 from .enums import ColorMode
 from dataclasses import dataclass
 from typing import Optional, Tuple, TYPE_CHECKING
@@ -12,6 +13,7 @@ from utils.colors import hue_to_rgb, rgb_to_hue, find_closest_preset_name
 
 if TYPE_CHECKING:
     from managers import ColorManager
+    from api.schemas.zone import ColorRequest
 
 @dataclass
 class Color:
@@ -104,6 +106,35 @@ class Color:
         """
         return cls(_rgb=(r, g, b), mode=ColorMode.RGB)
 
+    @classmethod
+    def from_request(cls, request: "ColorRequest") -> "Color":
+        """
+        Factory method: API DTO -> domain Color
+
+        NOTE: This method does NOT handle PRESET mode - use from_preset() instead.
+        PRESET colors require color_manager to cache RGB values.
+        """
+
+        if request.mode == "HUE":
+            return cls(
+                mode=ColorMode.HUE,
+                _hue=request.hue,
+            )
+
+        if request.mode == "RGB":
+            if request.rgb is None or len(request.rgb) != 3:
+                raise ValueError("RGB color must have exactly 3 components")
+
+            return cls(
+                mode=ColorMode.RGB,
+                _rgb=Tuple(request.rgb) # type: ignore
+            )
+
+        if request.mode == "PRESET":
+            raise ValueError("PRESET colors must be created via from_preset() with color_manager")
+
+        raise ValueError(f"Unsupported color mode: {request.mode}")
+    
     # === RENDERING (always returns RGB) ===
 
     def to_rgb(self) -> Tuple[int, int, int]:

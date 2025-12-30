@@ -7,7 +7,7 @@ from models.domain.animation import AnimationState
 from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
-from models.events import EventType, ZoneStateChangedEvent
+from models.events import ZoneStateChangedEvent
 from services.data_assembler import DataAssembler
 from services.application_state_service import ApplicationStateService
 from services.event_bus import EventBus
@@ -71,15 +71,15 @@ class ZoneService:
     def set_color(self, zone_id: ZoneID, color: Color) -> None:
         zone = self.get_zone(zone_id)
         zone.state.color = color
-        
+
         self._save_zone(zone_id)
-        
+
         log.info(
-            "Zone color set", 
+            "Zone color set",
             zone=zone.config.display_name,
             color=color
         )
-        
+
         asyncio.create_task(self.event_bus.publish(
             ZoneStateChangedEvent(
                 zone_id=zone_id,
@@ -90,6 +90,7 @@ class ZoneService:
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
         zone = self.get_zone(zone_id)
         zone.state.brightness = max(0, min(100, brightness))
+
         self._save_zone(zone_id)
 
         log.info(
@@ -108,6 +109,7 @@ class ZoneService:
     def adjust_brightness(self, zone_id: ZoneID, delta: int) -> None:
         zone = self.get_zone(zone_id)
         zone.state.brightness = max(0, min(100, zone.state.brightness + delta))
+
         self._save_zone(zone_id)
 
         log.info(
@@ -125,9 +127,8 @@ class ZoneService:
         
     def set_is_on(self, zone_id: ZoneID, is_on: bool) -> None:
         zone = self.get_zone(zone_id)
-        
         zone.state.is_on = is_on
-        
+
         self._save_zone(zone_id)
 
         log.info(
@@ -143,20 +144,55 @@ class ZoneService:
             )
         ))
 
-    def set_animation(
+    def set_render_mode(
         self, 
         zone_id: ZoneID, 
-        animation_id: AnimationID, 
-        parameters: Dict[AnimationParamID, Any]
+        render_mode: ZoneRenderMode
     ) -> None:
         zone = self.get_zone(zone_id)
-        
+
+        if zone.state.mode == render_mode:
+            return
+
+        zone.state.mode = render_mode
+        # if render_mode == ZoneRenderMode.STATIC:
+        #     self.animation_service.stop(zone_id)
+        # elif render_mode == ZoneRenderMode.ANIMATION:
+        #     if zone.state.animation is None:
+        #         self.animation_service.start_default(zone_id)
+        #     else:
+        #         self.animation_service.start(zone_id, zone.state.animation.id)
+                
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone render mode changed",
+            zone=zone.config.display_name,
+            render_mode=render_mode
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStateChangedEvent(
+                zone_id=zone_id,
+                render_mode=render_mode
+            )
+        ))
+
+    def set_animation(
+        self,
+        zone_id: ZoneID,
+        animation_id: AnimationID
+    ) -> None:
+        zone = self.get_zone(zone_id)
+
         zone.state.animation = AnimationState(
             id=animation_id,
-            parameters=parameters
+            parameters={}
         )
-        zone.state.mode = ZoneRenderMode.ANIMATION
         
+        zone.state.mode = ZoneRenderMode.ANIMATION
+
+        # start here
         self._save_zone(zone_id)
 
         log.info(
@@ -173,20 +209,23 @@ class ZoneService:
             )
         ))
 
+
+
+
     def set_animation_param(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any) -> None:
         """
         Set zone animation parameter value
         """
         zone = self.get_zone(zone_id)
-        
+
         if zone.state.mode == ZoneRenderMode.STATIC:
             raise ValueError("Zone is in static mode")
-            
+
         if zone.state.animation is None:
             raise ValueError("Zone has no active animation")
-        
+
         zone.state.animation.parameters[param_id] = value
-        
+
         self._save_zone(zone_id)
 
         log.info(
@@ -203,37 +242,13 @@ class ZoneService:
         ))
 
     
-    def set_render_mode(self, zone_id: ZoneID, render_mode: ZoneRenderMode, animation: AnimationState) -> None:
-        zone = self.get_zone(zone_id)
-        
-        zone.state.mode = render_mode
-        if animation:
-            zone.state.animation = animation  
-        
-        self._save_zone(zone_id)
-
-        log.info(
-            "Zone render mode changed",
-            zone=zone.config.display_name,
-            render_mode=render_mode,
-            animation=animation
-        )
-
-        asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
-                zone_id=zone_id,
-                render_mode=render_mode,
-                animation=animation
-            )
-        ))
-
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
     
     def _save_zone(self, zone_id: ZoneID) -> None:
         """
-        Save only the specified zone to state.json.
+        Save only the specified zone to state.json (non-blocking).
 
         This is more efficient than saving all zones when only one was modified.
         The assembler's debouncing will batch rapid saves within 500ms window.
@@ -243,7 +258,7 @@ class ZoneService:
         """
         self._last_modified_zone_id = zone_id
         zone = self.get_zone(zone_id)
-        
+
         # Pass only the modified zone to reduce I/O (assembler handles debouncing)
         self.assembler.save_zone_state([zone])
 

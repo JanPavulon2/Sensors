@@ -3,36 +3,38 @@
  * Displays zone name, power toggle, pixel count, and render mode indicator
  */
 
-import type { Zone } from '@/shared/types/domain/zone';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import { PowerSwitch } from '@/shared/ui/power-switch';
 import { ZoneRenderModeIndicator } from '../common';
-import { ZoneRenderMode } from '@/shared/types/domain/zone';
-import { useToggleZonePowerMutation } from '@/features/zones/api';
+import { useZonePowerCommand } from '@/features/zones/hooks/useZonePowerCommand';
 
 interface ZoneCardHeaderProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
 }
 
 export function ZoneCardHeader({ zone }: ZoneCardHeaderProps) {
-  const isOn = zone.state.is_on;
-  const powerMutation = useToggleZonePowerMutation(zone.id);
+  const powerCommand = useZonePowerCommand(zone.id);
+
+  const isOn = zone.is_on;
+  // const powerMutation = useToggleZonePowerMutation(zone.id);
 
   const handleToggle = (checked: boolean) => {
-    powerMutation.mutate({ is_on: checked });
+    powerCommand.setPower(checked);
+    // powerMutation.mutate({ is_on: checked });
   };
 
-  const isAnimationMode = zone.state.render_mode === ZoneRenderMode.ANIMATION;
+  const isAnimationMode = zone.render_mode === "ANIMATION";
 
   return (
     <div className="space-y-1">
       {/* Name + Power Switch */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-text-primary">{zone.name}</h3>
+        <h3 className="text-lg font-semibold text-text-primary">{zone.display_name}</h3>
         <PowerSwitch
-          checked={isOn}
+          checked={zone.is_on}
           onCheckedChange={handleToggle}
-          disabled={powerMutation.isPending}
-          label={`Toggle ${zone.name} on/off`}
+          disabled={powerCommand.isSending}
+          label={`Toggle ${zone.display_name} on/off`}
         />
       </div>
 
@@ -43,7 +45,7 @@ export function ZoneCardHeader({ zone }: ZoneCardHeaderProps) {
         <div className="scale-90 origin-left">
           <ZoneRenderModeIndicator
             renderMode={isAnimationMode ? 'animation' : 'static'}
-            animationName={zone.state.animation_id}
+            animationName={zone.animation?.id}
             compact={true}
           />
         </div>

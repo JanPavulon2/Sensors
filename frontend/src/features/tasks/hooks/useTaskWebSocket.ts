@@ -32,10 +32,9 @@
  *    - Refs maintain current values without triggering re-renders
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
+import { useEffect, useState, useCallback } from "react";
+import { socket } from "@/realtime/socket";
 import { useTaskStreamStore } from "@/features/tasks/stores/taskStreamStore";
-import { config } from "@/config/constants";
 import type { Task, TaskStats } from "@/shared/types/domain/task";
 
 interface UseTaskWebSocketOptions {
@@ -55,7 +54,6 @@ export function useTaskWebSocket(
 ): UseTaskWebSocketReturn {
   const { enabled = true } = options;
 
-  const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,127 +144,86 @@ export function useTaskWebSocket(
   useEffect(() => {
     if (!enabled) return;
 
-    // Prevent duplicate connections
-    if (socketRef.current?.connected) {
-      return;
-    }
+    // Connection established
+    const handleConnect = () => {
+      console.log("✓ Task Socket.IO connected");
+      setIsConnected(true);
+      setIsConnecting(false);
+      setError(null);
+      setRetryCount(0);
+      useTaskStreamStore.getState().setConnected(true);
 
-    setIsConnecting(true);
-    setError(null);
+      // Request initial data
+      socket.emit("task_get_stats");
+      socket.emit("task_get_all");
+    };
 
-    try {
-      // Connect to Socket.IO server (same host/port as HTTP frontend)
-      // Note: Try polling first as fallback if WebSocket has issues
-      const socket = io(config.websocket.url, {
-        reconnection: true,
-        reconnectionDelay: 3000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: Infinity,
-        transports: ["polling", "websocket"], // HTTP polling first, WebSocket fallback
-      });
+    // Listen to task push events (real-time updates)
+    const handleTaskCreated = (task: unknown) => handleTaskEvent("task:created", task);
+    const handleTaskUpdated = (task: unknown) => handleTaskEvent("task:updated", task);
+    const handleTaskCompleted = (task: unknown) => handleTaskEvent("task:completed", task);
+    const handleTaskFailed = (task: unknown) => handleTaskEvent("task:failed", task);
+    const handleTaskCancelled = (task: unknown) => handleTaskEvent("task:cancelled", task);
+    const handleTasksAll = (tasks: unknown) => handleTaskEvent("tasks:all", tasks);
+    const handleTasksActive = (tasks: unknown) => handleTaskEvent("tasks:active", tasks);
+    const handleTasksStats = (stats: unknown) => handleTaskEvent("tasks:stats", stats);
+    const handleTasksTree = (tree: unknown) => handleTaskEvent("tasks:tree", tree);
 
-      // Connection established
-      socket.on("connect", () => {
-        console.log("✓ Task Socket.IO connected");
-        setIsConnected(true);
-        setIsConnecting(false);
-        setError(null);
-        setRetryCount(0);
-        useTaskStreamStore.getState().setConnected(true);
+    // Connection lost
+    const handleDisconnect = (reason: string) => {
+      console.log(`Task Socket.IO disconnected: ${reason}`);
+      setIsConnected(false);
+      setIsConnecting(false);
+      useTaskStreamStore.getState().setConnected(false);
+    };
 
-        // Request initial data
-        socket.emit("task_get_stats");
-        socket.emit("task_get_all");
-      });
-
-      // Listen to task push events (real-time updates)
-      socket.on("task:created", (task: unknown) => {
-        handleTaskEvent("task:created", task);
-      });
-
-      socket.on("task:updated", (task: unknown) => {
-        handleTaskEvent("task:updated", task);
-      });
-
-      socket.on("task:completed", (task: unknown) => {
-        handleTaskEvent("task:completed", task);
-      });
-
-      socket.on("task:failed", (task: unknown) => {
-        handleTaskEvent("task:failed", task);
-      });
-
-      socket.on("task:cancelled", (task: unknown) => {
-        handleTaskEvent("task:cancelled", task);
-      });
-
-      // Listen to task command response events
-      socket.on("tasks:all", (tasks: unknown) => {
-        handleTaskEvent("tasks:all", tasks);
-      });
-
-      socket.on("tasks:active", (tasks: unknown) => {
-        handleTaskEvent("tasks:active", tasks);
-      });
-
-      socket.on("tasks:stats", (stats: unknown) => {
-        handleTaskEvent("tasks:stats", stats);
-      });
-
-      socket.on("tasks:tree", (tree: unknown) => {
-        handleTaskEvent("tasks:tree", tree);
-      });
-
-      // Connection lost
-      socket.on("disconnect", (reason) => {
-        console.log(`Task Socket.IO disconnected: ${reason}`);
-        setIsConnected(false);
-        setIsConnecting(false);
-        useTaskStreamStore.getState().setConnected(false);
-      });
-
-      // Connection error
-      socket.on("connect_error", (connectError: unknown) => {
-        const errorMsg = connectError instanceof Error ? connectError.message : String(connectError);
-        console.error("Task Socket.IO connection error:", errorMsg);
-        setError(errorMsg);
-        setIsConnecting(false);
-        setRetryCount((count) => count + 1);
-      });
-
-      socketRef.current = socket;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("Failed to create Task Socket.IO connection:", errorMsg);
+    // Connection error
+    const handleConnectError = (connectError: unknown) => {
+      const errorMsg = connectError instanceof Error ? connectError.message : String(connectError);
+      console.error("Task Socket.IO connection error:", errorMsg);
       setError(errorMsg);
       setIsConnecting(false);
-    }
+      setRetryCount((count) => count + 1);
+    };
+
+    // Register listeners on shared socket
+    socket.on("connect", handleConnect);
+    socket.on("task:created", handleTaskCreated);
+    socket.on("task:updated", handleTaskUpdated);
+    socket.on("task:completed", handleTaskCompleted);
+    socket.on("task:failed", handleTaskFailed);
+    socket.on("task:cancelled", handleTaskCancelled);
+    socket.on("tasks:all", handleTasksAll);
+    socket.on("tasks:active", handleTasksActive);
+    socket.on("tasks:stats", handleTasksStats);
+    socket.on("tasks:tree", handleTasksTree);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+
+    // Set initial connection state
+    setIsConnected(socket.connected);
+    useTaskStreamStore.getState().setConnected(socket.connected);
 
     return () => {
-      // Cleanup on unmount - unregister all listeners and disconnect
-      if (socketRef.current) {
-        socketRef.current.off("connect");
-        socketRef.current.off("task:created");
-        socketRef.current.off("task:updated");
-        socketRef.current.off("task:completed");
-        socketRef.current.off("task:failed");
-        socketRef.current.off("task:cancelled");
-        socketRef.current.off("tasks:all");
-        socketRef.current.off("tasks:active");
-        socketRef.current.off("tasks:stats");
-        socketRef.current.off("tasks:tree");
-        socketRef.current.off("disconnect");
-        socketRef.current.off("connect_error");
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
+      // Cleanup listeners
+      socket.off("connect", handleConnect);
+      socket.off("task:created", handleTaskCreated);
+      socket.off("task:updated", handleTaskUpdated);
+      socket.off("task:completed", handleTaskCompleted);
+      socket.off("task:failed", handleTaskFailed);
+      socket.off("task:cancelled", handleTaskCancelled);
+      socket.off("tasks:all", handleTasksAll);
+      socket.off("tasks:active", handleTasksActive);
+      socket.off("tasks:stats", handleTasksStats);
+      socket.off("tasks:tree", handleTasksTree);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
     };
   }, [enabled, handleTaskEvent]); // Only stable dependencies
 
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
-      if (!socketRef.current?.connected) {
+      if (!socket.connected) {
         console.warn("[TaskMonitor] Task Socket.IO not connected");
         return;
       }
@@ -276,16 +233,16 @@ export function useTaskWebSocket(
         const { command: cmd } = command;
         switch (cmd) {
           case "get_all":
-            socketRef.current.emit("task_get_all");
+            socket.emit("task_get_all");
             break;
           case "get_active":
-            socketRef.current.emit("task_get_active");
+            socket.emit("task_get_active");
             break;
           case "get_stats":
-            socketRef.current.emit("task_get_stats");
+            socket.emit("task_get_stats");
             break;
           case "get_tree":
-            socketRef.current.emit("task_get_tree");
+            socket.emit("task_get_tree");
             break;
           default:
             console.warn("[TaskMonitor] Unknown command:", cmd);

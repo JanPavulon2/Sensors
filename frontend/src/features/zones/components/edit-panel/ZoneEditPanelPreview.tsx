@@ -4,7 +4,7 @@
  */
 
 import { Settings } from 'lucide-react';
-import type { Zone } from '@/shared/types/domain/zone';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -13,23 +13,22 @@ import {
 import { Button } from '@/shared/ui/button';
 import { FullLEDPreview } from '../preview';
 import { LEDPreviewSettings } from '@/features/zones/components/preview/LEDPreviewSettings';
+import { colorToRGB } from '@/shared/utils/colorConvert';
 
 interface ZoneEditPanelPreviewProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
   useSettings?: boolean;
 }
 
 export function ZoneEditPanelPreview({ zone, useSettings = false }: ZoneEditPanelPreviewProps) {
-  // Mock pixel data
+  // Mock pixel data - convert zone color to RGB
+  const zoneRGB = colorToRGB(zone.color);
   const mockPixels = Array(zone.pixel_count)
     .fill(null)
-    .map(() => {
-      const [r, g, b] = zone.state.color.rgb || [0, 0, 0];
-      return [r, g, b] as [number, number, number];
-    });
+    .map(() => zoneRGB as [number, number, number]);
 
   return (
-    <div className="sticky top-[88px] z-10 bg-bg-panel p-4">
+    <div className="sticky top-[88px] z-10 p-4">
       <div className="flex items-center justify-between">
         <p className="text-base font-semibold text-text-primary">Preview</p>
         <DropdownMenu>
@@ -54,8 +53,8 @@ export function ZoneEditPanelPreview({ zone, useSettings = false }: ZoneEditPane
       <FullLEDPreview
         pixels={mockPixels}
         pixelCount={zone.pixel_count}
-        brightness={zone.state.brightness || 255}
-        animationMode={zone.state.render_mode}
+        brightness={zone.brightness || 255}
+        animationMode={zone.render_mode}
         useSettings={useSettings}
       />
     </div>

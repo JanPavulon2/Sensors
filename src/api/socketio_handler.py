@@ -27,6 +27,7 @@ from models.events import (
 )
 from services.event_bus import EventBus
 from services.service_container import ServiceContainer
+from api.socketio.zones.dto import ZoneSnapshotDTO
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.SOCKETIO)
@@ -71,13 +72,10 @@ class SocketIOHandler:
 
     def _register_connection_handlers(self) -> None:
         """Register client-side event handlers"""
-        
+
         if not self.socketio_server:
             return
-        
-        if not self.services or not self.services.zone_service:
-            return
-        
+
         socketio_server = self.socketio_server
          
         @socketio_server.event
@@ -111,6 +109,7 @@ class SocketIOHandler:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 tasks = registry.get_all_as_dicts()
+                log.debug(f"[Socket.IO] task_get_all handler: sending {len(tasks)} tasks to {sid}")
                 await socketio_server.emit('tasks:all', {'tasks': tasks}, room=sid)
             except Exception as e:
                 log.error(f"Error getting all tasks: {e}", exc_info=True)
@@ -135,6 +134,7 @@ class SocketIOHandler:
                 from lifecycle.task_registry import TaskRegistry
                 registry = TaskRegistry.instance()
                 stats = registry.get_stats()
+                log.debug(f"[Socket.IO] task_get_stats handler: sending stats to {sid}")
                 await socketio_server.emit('tasks:stats', {'stats': stats}, room=sid)
             except Exception as e:
                 log.error(f"Error getting task stats: {e}", exc_info=True)
@@ -165,6 +165,7 @@ class SocketIOHandler:
 
                 # Convert LogMessage objects to dicts for Socket.IO
                 log_dicts = [log.model_dump() for log in logs]
+                log.debug(f"[Socket.IO] logs_request_history handler: sending {len(log_dicts)} logs to {sid}")
 
                 await socketio_server.emit('logs:history', {'logs': log_dicts}, room=sid)
             except Exception as e:

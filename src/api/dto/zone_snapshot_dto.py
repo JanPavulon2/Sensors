@@ -1,11 +1,11 @@
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, asdict
+from typing import Optional, Dict, Any
 
 from models.domain.zone import ZoneCombined
 
 
 @dataclass
-class AnimationStateSnapshotDTO:
+class AnimationSnapshotDTO:
     id: str
     parameters: Dict[str, Any]
 
@@ -15,8 +15,8 @@ class AnimationStateSnapshotDTO:
             id=animation_state.id.name,
             parameters={
                 param_id.name: value
-                for param_id, value in animation_state.parameters.items()
-            }
+                for param_id, value in animation_state.parameter_values.items()
+            },
         )
 
 
@@ -26,21 +26,15 @@ class ZoneSnapshotDTO:
     display_name: str
     pixel_count: int
 
-    # state
     is_on: bool
     brightness: int
     color: dict
     render_mode: str
 
-    animation: Optional[AnimationStateSnapshotDTO]
-    
+    animation: Optional[AnimationSnapshotDTO]
+
     @classmethod
     def from_zone(cls, zone: ZoneCombined) -> "ZoneSnapshotDTO":
-        color_dict = zone.state.color.to_dict()
-        # Always include RGB values for frontend, regardless of storage mode
-        r, g, b = zone.state.color.to_rgb()
-        color_dict["rgb"] = [r, g, b]
-
         return cls(
             id=zone.config.id.name,
             display_name=zone.config.display_name,
@@ -48,13 +42,15 @@ class ZoneSnapshotDTO:
 
             is_on=zone.state.is_on,
             brightness=zone.state.brightness,
-            color=color_dict,
+            color=zone.state.color.to_dict(),
             render_mode=zone.state.mode.name,
 
             animation=(
-                AnimationStateSnapshotDTO.from_state(zone.state.animation)
+                AnimationSnapshotDTO.from_state(zone.state.animation)
                 if zone.state.animation
                 else None
-            )
+            ),
         )
-        
+
+    def to_dict(self) -> dict:
+        return asdict(self)

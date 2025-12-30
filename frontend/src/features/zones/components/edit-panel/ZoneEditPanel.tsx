@@ -4,8 +4,8 @@
  * Composed of: Header, Preview, ColorSection, AnimationSection, Footer
  */
 
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
-import type { Zone } from '@/shared/types/domain/zone';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/shared/ui/dialog';
+import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 import { ZoneEditPanelHeader } from './ZoneEditPanelHeader';
 import { ZoneEditPanelPreview } from './ZoneEditPanelPreview';
 import { ZoneColorSection } from './ZoneColorSection';
@@ -13,7 +13,7 @@ import { ZoneAnimationSection } from './ZoneAnimationSection';
 import { ZoneEditPanelFooter } from './ZoneEditPanelFooter';
 
 interface ZoneEditPanelProps {
-  zone: Zone;
+  zone: ZoneSnapshot;
   currentIndex: number;
   totalZones: number;
   onClose: () => void;
@@ -32,13 +32,16 @@ export function ZoneEditPanel({
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className={`max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden md:max-w-4xl lg:max-w-5xl transition-opacity ${
-          !zone.state.is_on ? 'opacity-50' : ''
+        className={`max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0 md:max-w-4xl lg:max-w-5xl transition-opacity ${
+          !zone.is_on ? 'opacity-50' : ''
         }`}
         onEscapeKeyDown={() => onClose()}
       >
         {/* Accessible title for screen readers */}
-        <DialogTitle className="sr-only">Edit {zone.name}</DialogTitle>
+        <DialogTitle className="sr-only">Edit {zone.display_name}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Configure zone {zone.display_name} settings including brightness, color, and animations
+        </DialogDescription>
 
         {/* Sticky Header */}
         <ZoneEditPanelHeader zone={zone} onClose={onClose} />
@@ -49,7 +52,7 @@ export function ZoneEditPanel({
         </div>
 
         {/* Scrollable Sections - Side-by-side layout on desktop */}
-        <div className={`flex-1 overflow-y-auto ${!zone.state.is_on ? 'pointer-events-none' : ''}`}>
+        <div className={`flex-1 overflow-y-auto ${!zone.is_on ? 'pointer-events-none' : ''}`}>
           {/* Main Content Grid - side by side layout */}
           <div className="grid grid-cols-2 gap-0 w-full">
             {/* Appearance Section - left column */}

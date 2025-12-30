@@ -2,45 +2,41 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "cyan"
+        "mode": "HUE",
+        "hue": 63
       },
-      "brightness": 68,
+      "brightness": 43,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
-        "id": "COLOR_SNAKE",
+        "id": "BREATHE",
         "parameters": {}
       }
     },
     "lamp": {
       "color": {
-        "mode": "HUE",
-        "hue": 320
+        "mode": "PRESET",
+        "preset_name": "white"
       },
-      "brightness": 59,
+      "brightness": 94,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "SNAKE",
-        "parameters": {
-          "speed": 50
-        }
+        "id": "BREATHE",
+        "parameters": {}
       }
     },
     "pixel": {
       "color": {
         "mode": "HUE",
-        "hue": 67
+        "hue": 175
       },
-      "brightness": 21,
-      "is_on": true,
-      "mode": "STATIC",
+      "brightness": 100,
+      "is_on": false,
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
-        "parameters": {
-          "speed": 60
-        }
+        "parameters": {}
       }
     },
     "preview": {
@@ -49,8 +45,8 @@
         "hue": 170
       },
       "brightness": 100,
-      "is_on": true,
-      "mode": "ANIMATION",
+      "is_on": false,
+      "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
         "parameters": {}
@@ -59,36 +55,33 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "mint"
+        "preset_name": "lime"
+      },
+      "brightness": 86,
+      "is_on": true,
+      "mode": "STATIC",
+      "animation": {
+        "id": "COLOR_SNAKE",
+        "parameters": {}
+      }
+    },
+    "circle": {
+      "color": {
+        "mode": "HUE",
+        "hue": 102
       },
       "brightness": 27,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {
-          "speed": 68,
-          "length": 4
-        }
-      }
-    },
-    "circle": {
-      "color": {
-        "mode": "HUE",
-        "hue": 234
-      },
-      "brightness": 74,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "BREATHE",
         "parameters": {}
       }
     },
     "gate": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "purple"
+        "mode": "HUE",
+        "hue": 240
       },
       "brightness": 83,
       "is_on": false,

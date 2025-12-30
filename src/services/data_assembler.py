@@ -233,7 +233,7 @@ class DataAssembler:
                 # (even if mode=STATIC, for preservation when switching back to ANIMATION)
                 if zone.state.animation:
                     zone_data["animation"] = {
-                        "id": zone.state.animation.id.name,
+                        "id": zone.state.animation.id,
                         "parameters": Serializer.animation_params_enum_to_str(zone.state.animation.parameters)
                     }
 

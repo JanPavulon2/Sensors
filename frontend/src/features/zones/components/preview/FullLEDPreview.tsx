@@ -65,7 +65,6 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
           orientation={shape.orientation || 'horizontal'}
           brightness={brightness}
           height={containerHeight}
-          useSettings={useSettings}
           previewSettings={previewSettings}
         />
       )}
@@ -75,7 +74,6 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
           pixels={displayPixels}
           brightness={brightness}
           diameter={containerHeight}
-          useSettings={useSettings}
           previewSettings={previewSettings}
         />
       )}
@@ -87,7 +85,6 @@ export const FullLEDPreview: React.FC<FullLEDPreviewProps> = ({
           rows={shape.rows || 8}
           columns={shape.columns || 8}
           brightness={brightness}
-          useSettings={useSettings}
           previewSettings={previewSettings}
         />
       )}
@@ -105,14 +102,14 @@ const StripPreview: React.FC<{
   height?: number;
   useSettings?: boolean;
   previewSettings?: any;
-}> = ({ pixels, orientation, brightness, height, useSettings = false, previewSettings }) => {
+}> = ({ pixels, orientation, brightness, height, previewSettings }) => {
   const isHorizontal = orientation === 'horizontal';
   const defaultLedSize = Math.max(6, Math.min(20, Math.floor((isHorizontal ? 400 : 200) / pixels.length)));
-  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
-  const gap = useSettings && previewSettings ? previewSettings.spacing : 2;
-  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
-  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
-  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+  const ledSize = previewSettings?.size ?? defaultLedSize;
+  const gap = previewSettings?.spacing ?? 2;
+  const glowIntensity = ((previewSettings?.glowIntensity ?? 80) / 100);
+  const showGlow = previewSettings?.showGlow !== false; // Always true by default
+  const shape = previewSettings?.shape ?? 'square';
 
   const getShapeClass = (shape: string) => {
     switch (shape) {
@@ -128,7 +125,11 @@ const StripPreview: React.FC<{
   return (
     <div
       className={`flex items-start justify-center ${isHorizontal ? 'flex-row' : 'flex-col'}`}
-      style={{ gap: `${gap}px`, ...(height ? { height: `${height}px` } : {}) }}
+      style={{
+        gap: `${gap}px`,
+        overflow: 'visible',
+        ...(height ? { height: `${height}px` } : {}),
+      }}
     >
       {pixels.map((rgb, index) => {
         const [r, g, b] = rgb;
@@ -158,7 +159,7 @@ const StripPreview: React.FC<{
               height: `${ledSize}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
               boxShadow: boxShadowLayers,
-              opacity: brightness / 255,
+              opacity: brightness / 100,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}
           />
@@ -177,13 +178,13 @@ const CirclePreview: React.FC<{
   diameter?: number;
   useSettings?: boolean;
   previewSettings?: any;
-}> = ({ pixels, brightness, diameter = 200, useSettings = false, previewSettings }) => {
+}> = ({ pixels, brightness, diameter = 200, previewSettings }) => {
   const radius = diameter / 2;
   const defaultLedSize = Math.max(8, Math.min(16, diameter / pixels.length));
-  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
-  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
-  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
-  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+  const ledSize = previewSettings?.size ?? defaultLedSize;
+  const glowIntensity = ((previewSettings?.glowIntensity ?? 80) / 100);
+  const showGlow = previewSettings?.showGlow !== false; // Always true by default
+  const shape = previewSettings?.shape ?? 'square';
 
   const getShapeClass = (shape: string) => {
     switch (shape) {
@@ -237,7 +238,7 @@ const CirclePreview: React.FC<{
               top: `${radius + y - ledSize / 2}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
               boxShadow: boxShadowLayers,
-              opacity: brightness / 255,
+              opacity: brightness / 100,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}
           />
@@ -258,13 +259,13 @@ const MatrixPreview: React.FC<{
   brightness: number;
   useSettings?: boolean;
   previewSettings?: any;
-}> = ({ pixels, pixelCount, rows, columns, brightness, useSettings = false, previewSettings }) => {
+}> = ({ pixels, pixelCount, rows, columns, brightness, previewSettings }) => {
   const defaultLedSize = Math.max(8, Math.min(16, Math.floor(350 / Math.max(rows, columns))));
-  const ledSize = useSettings && previewSettings ? previewSettings.size : defaultLedSize;
-  const gap = useSettings && previewSettings ? previewSettings.spacing : Math.max(1, Math.floor(defaultLedSize / 3));
-  const glowIntensity = useSettings && previewSettings ? previewSettings.glowIntensity / 100 : 1;
-  const showGlow = useSettings && previewSettings ? previewSettings.showGlow : true;
-  const shape = useSettings && previewSettings ? previewSettings.shape : 'square';
+  const ledSize = previewSettings?.size ?? defaultLedSize;
+  const gap = previewSettings?.spacing ?? Math.max(1, Math.floor(defaultLedSize / 3));
+  const glowIntensity = ((previewSettings?.glowIntensity ?? 80) / 100);
+  const showGlow = previewSettings?.showGlow !== false; // Always true by default
+  const shape = previewSettings?.shape ?? 'square';
 
   const getShapeClass = (shape: string) => {
     switch (shape) {
@@ -317,7 +318,7 @@ const MatrixPreview: React.FC<{
               height: `${ledSize}px`,
               backgroundColor: hasColor ? `rgb(${r}, ${g}, ${b})` : 'rgba(128, 128, 128, 0.15)',
               boxShadow: boxShadowLayers,
-              opacity: brightness / 255,
+              opacity: brightness / 100,
             }}
             title={`LED ${index}: RGB(${r}, ${g}, ${b})`}
           />

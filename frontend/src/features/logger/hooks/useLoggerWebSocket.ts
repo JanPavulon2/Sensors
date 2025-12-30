@@ -24,15 +24,61 @@
  *    - Refs maintain current values without triggering re-renders
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useEffect, useState } from 'react';
+import { socket } from '@/realtime/socket';
 import { useLoggerStreamStore } from '@/features/logger/stores/loggerStreamStore';
-import { config } from '@/config/constants';
 import type { LogEntry, LogLevel } from '@/shared/types/domain/logger';
 
 interface UseLoggerWebSocketOptions {
   enabled?: boolean;
 }
+
+// Register log:entry listener ONCE at module level to avoid duplicates
+// This listener stays active permanently to capture logs even when tab is inactive
+let logEntryListenerRegistered = false;
+
+const registerLogEntryListener = () => {
+  if (logEntryListenerRegistered) return;
+
+  socket.on('log:entry', (logData: unknown) => {
+    try {
+      // Handle both direct log data and wrapped format
+      let data = logData as Record<string, unknown>;
+      if (!data || typeof data !== 'object') {
+        console.warn('Invalid log entry data:', logData);
+        return;
+      }
+
+      // Check if data is wrapped in a log property
+      if (!('level' in data) && 'log' in data) {
+        const wrapped = data.log as Record<string, unknown>;
+        if (wrapped && typeof wrapped === 'object') {
+          data = wrapped;
+        }
+      }
+
+      const level = (['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(data.level as string)
+        ? data.level
+        : 'INFO') as LogLevel;
+
+      const log: LogEntry = {
+        id: `${Date.now()}-${Math.random()}`,
+        timestamp: (data.timestamp as string) || new Date().toISOString(),
+        level,
+        category: (data.category as string) || 'UNKNOWN',
+        message: (data.message as string) || '',
+      };
+
+      // Add to store using getState() to always get fresh store instance
+      const store = useLoggerStreamStore.getState();
+      store.addLog(log);
+    } catch (error) {
+      console.error('Failed to process log entry:', error);
+    }
+  });
+
+  logEntryListenerRegistered = true;
+};
 
 /**
  * Connect to Socket.IO for real-time log streaming
@@ -41,142 +87,87 @@ interface UseLoggerWebSocketOptions {
 export const useLoggerWebSocket = ({
   enabled = true,
 }: UseLoggerWebSocketOptions = {}) => {
-  const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-
-  // Define handleMessage callback that accesses fresh store state
-  // This prevents stale closures by always calling getState() instead of capturing addLog
-  const handleLogEntry = useCallback((logData: LogEntry) => {
-    const store = useLoggerStreamStore.getState();
-    store.addLog(logData);
-  }, []); // No dependencies - we get fresh store state each time
 
   useEffect(() => {
     if (!enabled) return;
 
-    // Prevent duplicate connections
-    if (socketRef.current?.connected) {
-      return;
-    }
+    // Register the permanent log:entry listener once
+    registerLogEntryListener();
 
-    try {
-      // Connect to Socket.IO server (same host/port as HTTP frontend)
-      // Note: Try polling first as fallback if WebSocket has issues
-      const socket = io(config.websocket.url, {
-        reconnection: true,
-        reconnectionDelay: 3000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: Infinity,
-        transports: ['polling', 'websocket'], // HTTP polling first, WebSocket fallback
-      });
+    // Connection established
+    const handleConnect = () => {
+      console.log('✓ Logger Socket.IO connected');
+      setIsConnected(true);
+      // Request log history on first connect
+      socket.emit('logs_request_history', { limit: 500 });
+    };
 
-      // Connection established
-      socket.on('connect', () => {
-        console.log('✓ Logger Socket.IO connected');
-        setIsConnected(true);
+    // Listen to log history response
+    const handleLogHistory = (data: unknown) => {
+      try {
+        const historyData = data as { logs: any[] };
+        if (!Array.isArray(historyData.logs)) {
+          console.warn('Invalid log history format:', data);
+          return;
+        }
 
-        // Request log history on first connect
-        socket.emit('logs_request_history', { limit: 500 });
-      });
+        const store = useLoggerStreamStore.getState();
 
-      // Listen to log entries from backend
-      socket.on('log:entry', (logData: unknown) => {
-        try {
-          // Handle both direct log data and wrapped format
-          let data = logData as Record<string, unknown>;
-          if (!data || typeof data !== 'object') {
-            console.warn('Invalid log entry data:', logData);
-            return;
-          }
-
-          // Check if data is wrapped in a log property
-          if (!('level' in data) && 'log' in data) {
-            const wrapped = data.log as Record<string, unknown>;
-            if (wrapped && typeof wrapped === 'object') {
-              data = wrapped;
-            }
-          }
-
-          const level = (['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(data.level as string)
-            ? data.level
+        // Add historical logs in order (oldest to newest)
+        historyData.logs.forEach((logData: any) => {
+          const level = (['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(logData.level as string)
+            ? logData.level
             : 'INFO') as LogLevel;
 
           const log: LogEntry = {
-            id: `${Date.now()}-${Math.random()}`,
-            timestamp: (data.timestamp as string) || new Date().toISOString(),
+            id: `history-${logData.timestamp}-${Math.random()}`,
+            timestamp: (logData.timestamp as string) || new Date().toISOString(),
             level,
-            category: (data.category as string) || 'UNKNOWN',
-            message: (data.message as string) || '',
+            category: (logData.category as string) || 'UNKNOWN',
+            message: (logData.message as string) || '',
           };
-          // Use handleLogEntry callback to get fresh store instance
-          handleLogEntry(log);
-        } catch (error) {
-          console.error('Failed to process log entry:', error);
-        }
-      });
+          store.addLog(log);
+        });
 
-      // Listen to log history response
-      socket.on('logs:history', (data: unknown) => {
-        try {
-          const historyData = data as { logs: any[] };
-          if (!Array.isArray(historyData.logs)) {
-            console.warn('Invalid log history format:', data);
-            return;
-          }
-
-          const store = useLoggerStreamStore.getState();
-
-          // Add historical logs in order (oldest to newest)
-          historyData.logs.forEach((logData: any) => {
-            const level = (['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(logData.level as string)
-              ? logData.level
-              : 'INFO') as LogLevel;
-
-            const log: LogEntry = {
-              id: `history-${logData.timestamp}-${Math.random()}`,
-              timestamp: (logData.timestamp as string) || new Date().toISOString(),
-              level,
-              category: (logData.category as string) || 'UNKNOWN',
-              message: (logData.message as string) || '',
-            };
-            store.addLog(log);
-          });
-
-          console.log(`✓ Loaded ${historyData.logs.length} historical logs`);
-        } catch (error) {
-          console.error('Failed to process log history:', error);
-        }
-      });
-
-      // Connection lost
-      socket.on('disconnect', (reason) => {
-        console.log(`Logger Socket.IO disconnected: ${reason}`);
-        setIsConnected(false);
-      });
-
-      // Connection error
-      socket.on('connect_error', (error) => {
-        console.error('Logger Socket.IO connection error:', error);
-      });
-
-      socketRef.current = socket;
-    } catch (error) {
-      console.error('Failed to create Logger Socket.IO connection:', error);
-    }
-
-    return () => {
-      // Disconnect on cleanup
-      if (socketRef.current) {
-        socketRef.current.off('log:entry', handleLogEntry);
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
+        console.log(`✓ Loaded ${historyData.logs.length} historical logs`);
+      } catch (error) {
+        console.error('Failed to process log history:', error);
       }
     };
-  }, [enabled, handleLogEntry]); // Only stable dependencies
+
+    // Connection lost
+    const handleDisconnect = (reason: string) => {
+      console.log(`Logger Socket.IO disconnected: ${reason}`);
+      setIsConnected(false);
+    };
+
+    // Connection error
+    const handleConnectError = (error: unknown) => {
+      console.error('Logger Socket.IO connection error:', error);
+    };
+
+    // Register listeners on shared socket
+    socket.on('connect', handleConnect);
+    socket.on('logs:history', handleLogHistory);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+
+    // Set initial connection state
+    setIsConnected(socket.connected);
+
+    return () => {
+      // Cleanup: Only unregister connect/disconnect handlers
+      // log:entry listener stays active permanently
+      socket.off('connect', handleConnect);
+      socket.off('logs:history', handleLogHistory);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('connect_error', handleConnectError);
+    };
+  }, [enabled]);
 
   return {
     isConnected,
-    socket: socketRef.current,
+    socket,
   };
 };
