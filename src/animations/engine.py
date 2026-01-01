@@ -125,19 +125,30 @@ class AnimationEngine:
             
     async def stop_for_zone(self, zone_id: ZoneID):
         """Stop animation for a single zone."""
+
+        log.info(f"Stopping animation on zone {zone_id.name}")
+
+        # Extract task without holding lock during await
+        task = None
         async with self._lock:
             task = self.tasks.pop(zone_id, None)
-            if task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
 
+        # Cancel and wait for task outside the lock to prevent deadlocks
+        if task:
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=1.0)
+            except asyncio.CancelledError:
+                pass
+            except asyncio.TimeoutError:
+                log.warn(f"Animation task for {zone_id.name} did not respond to cancellation")
+
+        # Clean up state
+        async with self._lock:
             self.active_anim_ids.pop(zone_id, None)
             self.active_animations.pop(zone_id, None)
-            
-            log.info(f"Stopped animation on zone {zone_id.name}")
+
+        log.info(f"Stopped animation on zone {zone_id.name}")
             
 
     async def stop_all(self):

@@ -46,7 +46,7 @@ class ColorRequest(BaseModel):
         return self
     
     
-class ZoneSetBrightnessRequest(BaseModel):
+class SetZoneBrightnessRequest(BaseModel):
     """Request to update zone brightness"""
     brightness: int = Field(
         ge=0,
@@ -54,36 +54,39 @@ class ZoneSetBrightnessRequest(BaseModel):
         description="New brightness 0-100%"
     )
 
-class ZoneSetIsOnRequest(BaseModel):
+class SetZoneIsOnRequest(BaseModel):
     """Request to change zone's power on/off state"""
     is_on: bool = Field(
         description="Zone power on / power off state"
     )
 
-class ZoneSetColorRequest(BaseModel):
+class SetZoneColorRequest(BaseModel):
     color: ColorRequest
     
-class ZoneSetRenderModeRequest(BaseModel):
+class SetZoneRenderModeRequest(BaseModel):
     """Request to change zone render mode"""
     render_mode: Literal["STATIC", "ANIMATION"] = Field(
         description="New render mode: STATIC (solid color) or ANIMATION (animated)"
     )
 
-class ZoneSetAnimationRequest(BaseModel):
+class SetZoneAnimationRequest(BaseModel):
     """Request to change zone animation"""
     animation_id: AnimationID = Field(
         description="Zone's animation ID"
     )
     
-    
-    
-class ZoneSetAnimationParamRequest(BaseModel):
+class SetZoneAnimationParamRequest(BaseModel):
     """Request to change zone animation's parameter value"""
     value: Any
 
 
+class SetZoneAnimationParametersRequest(BaseModel):
+    """Request to update multiple animation parameters at once"""
+    parameters: Dict[str, Any] = Field(
+        description="Dictionary of parameter_id (string key): value pairs"
+    )
 
-    
+
 class ColorModeEnum(str, Enum):
     """Color mode enumeration - matches domain ColorMode"""
     RGB = "RGB"
@@ -91,111 +94,7 @@ class ColorModeEnum(str, Enum):
     HUE = "HUE"
     PRESET = "PRESET"
 
-
 class ZoneRenderModeEnum(str, Enum):
     """Zone render mode - what the zone is currently displaying"""
     STATIC = "STATIC"          # Static color (no animation)
     ANIMATION = "ANIMATION"    # Running animation
-    OFF = "OFF"                # Zone powered off
-
-
-
-
-class ColorResponse(BaseModel):
-    """Color in a response - complete color information"""
-    mode: ColorModeEnum = Field(description="Current color mode")
-    hue: Optional[int] = Field(None, description="Hue value if applicable")
-    rgb: Optional[list[int]] = Field(None, description="RGB representation [r, g, b]")
-    preset_name: Optional[str] = Field(None, description="Preset name if in PRESET mode")
-    brightness: Optional[int] = Field(None, description="Brightness component")
-    saturation: Optional[int] = Field(None, description="Saturation component")
-
-
-class ZoneStateResponse(BaseModel):
-    """Zone state - what's currently being displayed on the zone"""
-    color: ColorResponse = Field(description="Current color")
-    brightness: float = Field(
-        ge=0,
-        le=255,
-        description="Zone brightness level 0-255"
-    )
-    is_on: bool = Field(description="Zone powered on/off state")
-    render_mode: ZoneRenderModeEnum = Field(
-        description="What zone is displaying: STATIC (color), ANIMATION (animated), or OFF (powered off)"
-    )
-    animation_id: Optional[str] = Field(
-        None,
-        description="Running animation ID if render_mode=ANIMATION, else null"
-    )
-
-
-class ZoneResponse(BaseModel):
-    """Complete zone information - configuration + current state"""
-    id: str = Field(description="Zone ID (e.g., 'FLOOR', 'LAMP')")
-    name: str = Field(description="Display name (e.g., 'Floor Strip')")
-    pixel_count: int = Field(ge=1, description="Number of addressable pixels in zone")
-    state: ZoneStateResponse = Field(description="Current zone state")
-    gpio: int = Field(description="GPIO pin number controlling this zone's LED strip")
-    layout: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Optional layout info (coordinates, rotation, physical arrangement)"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "FLOOR",
-                "name": "Floor Strip",
-                "pixel_count": 45,
-                "state": {
-                    "color": {
-                        "mode": "HUE",
-                        "hue": 240,
-                        "brightness": None,
-                        "rgb": [0, 0, 255],
-                        "preset": None,
-                        "saturation": None
-                    },
-                    "brightness": 200,
-                    "is_on": True,
-                    "render_mode": "STATIC",
-                    "animation_id": None
-                },
-                "gpio": 18,
-                "layout": None
-            }
-        }
-
-
-class ZoneListResponse(BaseModel):
-    """List of all zones"""
-    zones: list[ZoneResponse]
-    count: int = Field(description="Total number of zones")
-
-class ZoneUpdateRequest(BaseModel):
-    """Request to update entire zone (flexible update)"""
-    color: Optional[ColorRequest] = Field(None, description="New color (optional)")
-    brightness: Optional[float] = Field(
-        None,
-        ge=0,
-        le=255,
-        description="New brightness (optional)"
-    )
-    enabled: Optional[bool] = Field(None, description="Enable/disable zone (optional)")
-    render_mode: Optional[ZoneRenderModeEnum] = Field(
-        None,
-        description="Change render mode (optional)"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "color": {
-                    "mode": "HUE",
-                    "hue": 240
-                },
-                "brightness": 200,
-                "enabled": True,
-                "render_mode": "STATIC"
-            }
-        }

@@ -5,10 +5,10 @@ import {
 } from './zones.store';
 import type { ZoneSnapshot } from '@/shared/types/domain/zone';
 
-socket.on('zones.snapshot', (zones: ZoneSnapshot[]) => {
+socket.on('zones:snapshot', (zones: ZoneSnapshot[]) => {
   setZonesSnapshot(zones);
 });
 
-socket.on('zone.snapshot', (zone: ZoneSnapshot) => {
+socket.on('zone:snapshot', (zone: ZoneSnapshot) => {
   updateZoneSnapshot(zone);
 });

@@ -8,15 +8,11 @@ Provides event-driven interface for hardware input polling.
 Publishes events to EventBus instead of using callbacks.
 """
 
-import asyncio
 from components import RotaryEncoder, PreviewPanel
 #from hardware.input.button import Button
 from hardware import Button
-from managers.hardware_manager import HardwareManager
 from hardware.gpio.gpio_manager import GPIOManager
-from services.event_bus import EventBus
-from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
-from models.enums import EncoderSource, ButtonID, LEDStripID
+from managers.hardware_manager import HardwareManager
 
 
 class ControlPanel:

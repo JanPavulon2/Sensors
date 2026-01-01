@@ -98,8 +98,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         """Handle Pydantic validation errors (bad JSON structure)"""
         request_id = str(uuid.uuid4())
 
+        # Get error count correctly - exc.errors() returns a list
+        error_count = len(exc.errors())
+
         log.warn(
-            f"Validation error ({request_id}): {exc.errors().count} errors",
+            f"Validation error ({request_id}): {error_count} errors",
             extra={"request_id": request_id}
         )
 
@@ -117,7 +120,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             error=ErrorDetail(
                 code="VALIDATION_ERROR",
                 message="Request validation failed",
-                details={"error_count": exc.errors().count},
+                details={"error_count": error_count},
                 timestamp=datetime.utcnow()
             ),
             validation_errors=validation_errors,
@@ -126,7 +129,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=json.loads(response.model_dump_json())
+            content=response.model_dump(mode='json')
         )
 
     # Handle domain-specific errors (our custom exceptions)

@@ -7,4 +7,4 @@ def register_zone_on_connect(sio, services):
     async def connect(sid, environ, auth=None):
         zones = services.zone_service.get_all()
         payload = [asdict(ZoneSnapshotDTO.from_zone(z)) for z in zones]
-        await sio.emit("zones.snapshot", payload, room=sid)
+        await sio.emit("zones:snapshot", payload, room=sid)

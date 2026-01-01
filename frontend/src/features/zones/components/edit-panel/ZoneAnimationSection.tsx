@@ -29,8 +29,7 @@ export function ZoneAnimationSection({
     } else {
       // Start animation
       api.put(`/v1/zones/${zone.id}/animation`, {
-        id: animationId,
-        parameters: {},
+        animation_id: animationId,
       }).catch((error) => {
         console.error('Failed to set animation:', error);
       });

@@ -26,6 +26,7 @@ from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
 from services.service_container import ServiceContainer
 from models.enums import FramePriority
+from services.snapshot_publisher import SnapshotPublisher
 
 # ---------------------------------------------------------------------------
 # UTF-8 ENCODING FIX (important for Raspberry Pi)
@@ -191,6 +192,12 @@ async def main():
         config_manager=config_manager,
         data_assembler=assembler
     )
+    
+    snapshot_publisher = SnapshotPublisher(
+        zone_service=zone_service,
+        event_bus=event_bus,
+    )
+
 
     # Register service container with API for dependency injection
     set_service_container(services)

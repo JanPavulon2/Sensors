@@ -87,33 +87,33 @@ class WebSocketService {
     this.socket?.on('frame:update', callback);
   }
 
-  /**
-   * Send zone color command
-   */
-  setZoneColor(zoneId: string, color: unknown): void {
-    this.socket?.emit('zone:set_color', { zone_id: zoneId, color });
-  }
+  // /**
+  //  * Send zone color command
+  //  */
+  // setZoneColor(zoneId: string, color: unknown): void {
+  //   this.socket?.emit('zone:set_color', { zone_id: zoneId, color });
+  // }
 
-  /**
-   * Send zone brightness command
-   */
-  setZoneBrightness(zoneId: string, brightness: number): void {
-    this.socket?.emit('zone:set_brightness', { zone_id: zoneId, brightness });
-  }
+  // /**
+  //  * Send zone brightness command
+  //  */
+  // setZoneBrightness(zoneId: string, brightness: number): void {
+  //   this.socket?.emit('zone:set_brightness', { zone_id: zoneId, brightness });
+  // }
 
-  /**
-   * Start animation
-   */
-  startAnimation(animationId: string, params?: Record<string, unknown>): void {
-    this.socket?.emit('animation:start', { animation_id: animationId, params });
-  }
+  // /**
+  //  * Start animation
+  //  */
+  // startAnimation(animationId: string, params?: Record<string, unknown>): void {
+  //   this.socket?.emit('animation:start', { animation_id: animationId, params });
+  // }
 
-  /**
-   * Stop animation
-   */
-  stopAnimation(animationId: string): void {
-    this.socket?.emit('animation:stop', { animation_id: animationId });
-  }
+  // /**
+  //  * Stop animation
+  //  */
+  // stopAnimation(animationId: string): void {
+  //   this.socket?.emit('animation:stop', { animation_id: animationId });
+  // }
 
   /**
    * Disconnect WebSocket

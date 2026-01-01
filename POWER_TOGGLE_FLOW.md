@@ -36,7 +36,7 @@ async function setPower(isOn: boolean) {
 
 ```python
 @router.put("/{zone_id}/is-on")
-async def set_zone_is_on(zone_id: ZoneID, request: ZoneSetIsOnRequest):
+async def set_zone_is_on(zone_id: ZoneID, request: SetZoneIsOnRequest):
     services.zone_service.set_is_on(zone_id, request.is_on)
 ```
 
@@ -70,7 +70,7 @@ async def _on_zone_state_changed(self, event: ZoneStateChangedEvent):
     zone = self.services.zone_service.get_zone(event.zone_id)
     payload = ZoneSnapshotDTO.from_zone(zone)  # ✅ FIXED: Now has import
 
-    await self.socketio_server.emit("zone.snapshot", asdict(payload))
+    await self.socketio_server.emit("zone:snapshot", asdict(payload))
 ```
 
 **Result**: zone.snapshot event emitted to all connected clients
