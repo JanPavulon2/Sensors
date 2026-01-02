@@ -10,10 +10,8 @@ import asyncio
 from models.enums import FramePriority, FrameSource, ZoneEditTarget, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.frame import MultiZoneFrame, SingleZoneFrame
-from models.events import ZoneStateChangedEvent, EventType
+from models.events import ZoneStaticStateChangedEvent, EventType
 from services import ServiceContainer
-from services.zone_service import ZoneService
-from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.STATIC_CONTROLLER)
@@ -41,11 +39,11 @@ class StaticModeController:
     ]
 
     def __init__(self, services: ServiceContainer):
-        self.zone_service: ZoneService = services.zone_service
+        self.zone_service = services.zone_service
         self.app_state_service = services.app_state_service
         self.frame_manager = services.frame_manager
         self.color_manager = services.color_manager
-        self.event_bus: EventBus = services.event_bus
+        self.event_bus = services.event_bus
 
     # ------------------------------------------------------------------
     # Initialization
@@ -65,17 +63,17 @@ class StaticModeController:
         if not static_zones:
             log.info("No static zones to initialize")
             return
-
-        zones_colors={}
-
-        for zone in static_zones:
-            zones_colors[zone.id] = zone.state.color.with_brightness(zone.brightness)
-
+        
         # Ensure valid edit target
         state = self.app_state_service.get_state()
         if state.selected_zone_edit_target not in self.EDIT_TARGETS:
             self.app_state_service.set_selected_zone_edit_target(ZoneEditTarget.BRIGHTNESS)
             
+        # Batch render
+        zones_colors = {}
+        for zone in static_zones:
+            zones_colors[zone.id] = zone.state.color.with_brightness(zone.brightness)
+
         frame = MultiZoneFrame(
             zone_colors=zones_colors,
             priority=FramePriority.MANUAL,
@@ -86,11 +84,24 @@ class StaticModeController:
 
         # Subscribe to zone state changes (e.g., from API) to re-submit frames
         self.event_bus.subscribe(
-            event_type=EventType.ZONE_STATE_CHANGED,
-            handler=self._on_zone_state_changed  # type: ignore
+            event_type=EventType.ZONE_STATIC_STATE_CHANGED,
+            handler=self._on_zone_static_state_changed  # type: ignore
         )
 
         log.info(f"Rendered {len(zones_colors)} STATIC zones")
+
+    def enter_zone(self, zone: ZoneCombined):
+        """
+        Render static frame immediately when entering STATIC mode.
+        """
+        self.publish_zone_frame(zone)
+        
+    def leave_zone(self, zone: ZoneCombined):
+        """
+        Nothing to clean up for static mode.
+        Frame TTL will expire naturally.
+        """
+        pass
 
     # ------------------------------------------------------------------
     # Parameter editing
@@ -148,7 +159,7 @@ class StaticModeController:
             return
 
         
-        self.submit_zone(zone)
+        self.publish_zone_frame(zone)
         
         log.info(
             "Static zone edited",
@@ -156,7 +167,7 @@ class StaticModeController:
             target=target.name,
         )
 
-    def submit_zone(self, zone: ZoneCombined):
+    def publish_zone_frame(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
         # Respect is_on state: show black when powered off
         if not zone.state.is_on:
@@ -177,18 +188,13 @@ class StaticModeController:
     # Event Handling
     # ------------------------------------------------------------------
 
-    async def _on_zone_state_changed(self, event: ZoneStateChangedEvent) -> None:
+    def _on_zone_static_state_changed(self, event: ZoneStaticStateChangedEvent) -> None:
         """
-        Handle zone state changes from API or hardware.
+        Handle zone static state changes from ZoneService.
 
-        When a zone's state is updated (brightness, color, is_on),
+        When a zone's static state is updated (brightness, color, is_on),
         re-submit its frame to FrameManager so hardware reflects the change.
         """
-        log.debug(
-            "Zone state changed: ", 
-            event=event
-        )
-        
         zone = self.zone_service.get_zone(event.zone_id)
         if not zone:
             log.warn(f"Zone state changed but zone not found: {event.zone_id}")
@@ -204,4 +210,4 @@ class StaticModeController:
             brightness=zone.brightness,
         )
 
-        self.submit_zone(zone)
+        self.publish_zone_frame(zone)

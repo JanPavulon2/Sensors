@@ -16,6 +16,7 @@ from api.socketio_handler import wrap_app_with_socketio
 from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
 from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
 from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
+from lifecycle.handlers.frame_manager_shutdown_handler import FrameManagerShutdownHandler
 from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
 from lifecycle.handlers.indicator_shutdown_handler import IndicatorShutdownHandler
 from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
@@ -163,12 +164,11 @@ async def main():
 
     log.info("Initializing FrameManager...")
     frame_manager = FrameManager(fps=60)
-    asyncio.create_task(frame_manager.start())
-    # frame_manager_task = create_tracked_task(
-    #     frame_manager.start(),
-    #     category=TaskCategory.RENDER,
-    #     description="Frame Manager render loop"
-    # )
+    frame_manager_task = create_tracked_task(
+        frame_manager.start(),
+        category=TaskCategory.RENDER,
+        description="Frame Manager render loop"
+    )
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.zone_strips.items():
@@ -205,7 +205,6 @@ async def main():
 
     log.info("Initializing LED controller...")
     lighting_controller = LightingController(
-        gpio_manager=gpio_manager,
         service_container=services
     )
     log.info("Finished initializing LED controller...")
@@ -291,8 +290,9 @@ async def main():
     coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
     coordinator.register(AnimationShutdownHandler(lighting_controller))
     coordinator.register(IndicatorShutdownHandler(lighting_controller.selected_zone_indicator))
+    coordinator.register(FrameManagerShutdownHandler(frame_manager))  # ← Frame manager cleanup (includes executor shutdown)
     coordinator.register(LEDShutdownHandler(hardware))
-    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Keyboard and polling tasks
+    coordinator.register(TaskCancellationHandler([frame_manager_task, keyboard_task, polling_task]))  # ← Add frame manager task
     coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 

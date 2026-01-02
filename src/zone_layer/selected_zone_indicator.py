@@ -6,7 +6,8 @@ from typing import Optional
 
 from models.enums import ZoneID, ZoneRenderMode, FramePriority, FrameSource
 from models.color import Color
-from models.events import EventType, ZoneStateChangedEvent
+from models.events import EventType
+from models.events.zone_static_events import ZoneStaticStateChangedEvent
 from models.frame import SingleZoneFrame
 from engine.frame_manager import FrameManager
 from services.event_bus import EventBus
@@ -66,7 +67,7 @@ class SelectedZoneIndicator:
         self._task: Optional[asyncio.Task] = None
 
         event_bus.subscribe(
-            EventType.ZONE_STATE_CHANGED,
+            EventType.ZONE_STATIC_STATE_CHANGED,
             self._on_zone_state_changed
         )
 
@@ -78,24 +79,24 @@ class SelectedZoneIndicator:
         if self._selected_zone_id == zone_id:
             return
         self._selected_zone_id = zone_id
-        log.debug(f"Indicator: selected zone → {zone_id.name}")
+        # log.debug(f"Indicator: selected zone → {zone_id.name}")
         self._schedule_restart()
 
     def on_zone_render_mode_changed(self, mode):
         if self._render_mode == mode:
             return
         self._render_mode = mode
-        log.debug(f"Indicator: render mode → {mode.name}")
+        # log.debug(f"Indicator: render mode → {mode.name}")
         self._schedule_restart()
 
     def on_edit_mode_changed(self, enabled):
         if self._edit_mode == enabled:
             return
         self._edit_mode = enabled
-        log.debug(f"Indicator: edit mode → {enabled}")
+        # log.debug(f"Indicator: edit mode → {enabled}")
         self._schedule_restart()
 
-    def _on_zone_state_changed(self, e: ZoneStateChangedEvent) -> None:
+    def _on_zone_state_changed(self, e: ZoneStaticStateChangedEvent) -> None:
         """Handle zone state change events from EventBus"""
         if e.zone_id != self._selected_zone_id:
             return
@@ -118,25 +119,6 @@ class SelectedZoneIndicator:
             log.debug(f"Zone {e.zone_id.name} state changed, restarting indicator")
             self._restart_if_active()
         
-    # def on_selected_zone_changed(self, zone_id: ZoneID) -> None:
-    #     self._selected_zone_id = zone_id
-    #     log.debug(f"On selected zone → {zone_id.name}")
-    #     self._restart_if_active()
-
-    # def on_zone_render_mode_changed(self, mode: ZoneRenderMode) -> None:
-    #     self._render_mode = mode
-    #     log.debug(f"On render mode changed → {mode.name}")
-    #     self._restart_if_active()
-
-    # def on_edit_mode_changed(self, enabled: bool) -> None:
-    #     self._edit_mode = enabled
-    #     log.info(f"On edit mode → {enabled}")
-
-    #     if enabled:
-    #         self._start()
-    #     else:
-    #         self._stop()
-   
     # ------------------------------------------------------------------
     # Task lifecycle
     # ------------------------------------------------------------------
@@ -160,7 +142,7 @@ class SelectedZoneIndicator:
             log.info("Indicator cant run")
             return
 
-        log.info("Indicator starting")
+        # log.info("Indicator starting")
         self._running = True
         
         self._task = asyncio.create_task(self._loop())
@@ -176,7 +158,7 @@ class SelectedZoneIndicator:
         if self._task:
             self._task.cancel()
             self._task = None
-        log.info("Indicator stopped")
+        # log.info("Indicator stopped")
 
     async def stop_async(self) -> None:
         self._running = False

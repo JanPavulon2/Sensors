@@ -7,7 +7,8 @@ from models.domain.animation import AnimationState
 from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
-from models.events import ZoneStateChangedEvent
+from models.events import ZoneStaticStateChangedEvent
+from models.events.zone_runtime_events import ZoneAnimationChangedEvent, ZoneRenderModeChangedEvent
 from services.data_assembler import DataAssembler
 from services.application_state_service import ApplicationStateService
 from services.event_bus import EventBus
@@ -81,7 +82,7 @@ class ZoneService:
         )
 
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneStaticStateChangedEvent(
                 zone_id=zone_id,
                 color=color,
             )
@@ -100,7 +101,7 @@ class ZoneService:
         )
 
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneStaticStateChangedEvent(
                 zone_id=zone_id,
                 brightness=zone.state.brightness,
             )
@@ -119,7 +120,7 @@ class ZoneService:
         )
 
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneStaticStateChangedEvent(
                 zone_id=zone_id,
                 brightness=zone.state.brightness,
             )
@@ -138,43 +139,9 @@ class ZoneService:
         )
 
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneStaticStateChangedEvent(
                 zone_id=zone_id,
                 is_on=is_on,
-            )
-        ))
-
-    def set_render_mode(
-        self, 
-        zone_id: ZoneID, 
-        render_mode: ZoneRenderMode
-    ) -> None:
-        zone = self.get_zone(zone_id)
-
-        if zone.state.mode == render_mode:
-            return
-
-        zone.state.mode = render_mode
-        # if render_mode == ZoneRenderMode.STATIC:
-        #     self.animation_service.stop(zone_id)
-        # elif render_mode == ZoneRenderMode.ANIMATION:
-        #     if zone.state.animation is None:
-        #         self.animation_service.start_default(zone_id)
-        #     else:
-        #         self.animation_service.start(zone_id, zone.state.animation.id)
-                
-        self._save_zone(zone_id)
-
-        log.info(
-            "Zone render mode changed",
-            zone=zone.config.display_name,
-            render_mode=render_mode
-        )
-
-        asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
-                zone_id=zone_id,
-                render_mode=render_mode
             )
         ))
 
@@ -183,34 +150,59 @@ class ZoneService:
         zone_id: ZoneID,
         animation_id: AnimationID
     ) -> None:
-        zone = self.get_zone(zone_id)
+        """
+        Assign a NEW animation to zone and switch render mode to ANIMATION.
 
+        Semantics:
+        - Always resets animation parameters (defaults will be used)
+        - Implicitly switches render mode to ANIMATION
+        - Persists state
+        - Emits domain events
+        """
+        
+        zone = self.get_zone(zone_id)
+        if not zone:
+            raise ValueError(f"Zone not found: {zone_id}")
+        
+        
+        old_mode = zone.state.mode
+        old_animation = zone.state.animation.id if zone.state.animation else None
+
+        # 1. Create NEW animation state (params empty → defaults later)
         zone.state.animation = AnimationState(
             id=animation_id,
             parameters={}
         )
         
+        # 2. Switch render mode implicitly
         zone.state.mode = ZoneRenderMode.ANIMATION
 
-        # start here
-        self._save_zone(zone_id)
-
+        # 3. Persist state
+        self.save_state()
+        
         log.info(
             "Zone animation changed",
             zone=zone.config.display_name,
             animation=zone.state.animation
         )
 
+        # 3. Publish domain events 
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneAnimationChangedEvent(
                 zone_id=zone_id,
-                render_mode=zone.state.mode,
-                animation=zone.state.animation
+                animation_id=animation_id,
+                params={}
             )
         ))
-
-
-
+        
+        if old_mode != ZoneRenderMode.ANIMATION:
+            asyncio.create_task(self.event_bus.publish(
+                ZoneRenderModeChangedEvent(
+                    zone_id=zone_id,
+                    old=old_mode,
+                    new=ZoneRenderMode.ANIMATION
+                )
+            ))
 
     def set_animation_param(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any) -> None:
         """
@@ -234,14 +226,41 @@ class ZoneService:
             animation=zone.state.animation
         )
 
+    
+    def set_render_mode(
+        self, 
+        zone_id: ZoneID, 
+        render_mode: ZoneRenderMode
+    ) -> None:
+        zone = self.get_zone(zone_id)
+
+        old_mode = zone.state.mode
+        if old_mode == render_mode:
+            log.info(f"Zone already in {zone.state.mode} render mode, no action needed")
+            return
+        
+        # 1. Update domain state
+        zone.state.mode = render_mode
+    
+        # 2. Persist
+        self.save_state()
+
+        log.info(
+            "Zone render mode changed",
+            zone=zone.config.display_name,
+            old_mode=old_mode.name,
+            new_mode=render_mode.name,
+        )
+
+        # 3. Publish domain event
         asyncio.create_task(self.event_bus.publish(
-            ZoneStateChangedEvent(
+            ZoneRenderModeChangedEvent(
                 zone_id=zone_id,
-                animation=zone.state.animation,
+                old=old_mode,
+                new=render_mode
             )
         ))
 
-    
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------

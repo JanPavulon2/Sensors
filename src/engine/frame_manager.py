@@ -21,6 +21,7 @@ import asyncio
 import time
 from typing import Dict, List, Optional, Deque, cast
 from collections import deque
+# from concurrent.futures import ThreadPoolExecutor  # TODO: Re-enable for async rendering
 
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
@@ -79,7 +80,7 @@ class FrameManager:
         Args:
             fps: Target render frequency (1-240, default 60)
         """
-        
+
         self.fps = max(1, min(fps, 240))
 
         # Dual queue system (separate for main strip and preview)
@@ -90,10 +91,10 @@ class FrameManager:
             for p in FramePriority
             if isinstance(p.value, int)
         }
-        
+
         # Registered render targets
         self.zone_strips: List[ZoneStrip] = []  # ZoneStrip instances
-       
+
         self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
         # Runtime state
@@ -108,13 +109,17 @@ class FrameManager:
         self.dropped_frames = 0
         self.frames_rendered = 0
         self.dma_skipped = 0  # Count of DMA transfers skipped due to frame match
-        
+
         self.last_rendered_frame: Optional[MainStripFrame] = None
 
         self.last_rendered_frame_hash = None
-        
+
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
+
+        # Note: Hardware executor commented out for now due to compatibility issues
+        # Will use loop.run_in_executor(None, ...) with default executor instead
+        # self._hw_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="FrameMgr-HW")
 
         log.info(
             "FrameManager initialized",
@@ -247,12 +252,22 @@ class FrameManager:
                 await self.render_task
             except asyncio.CancelledError:
                 pass
-            
+
         log.info(
             "FrameManager stopped",
             frames_rendered=self.frames_rendered,
             dropped_frames=self.dropped_frames,
         )
+
+    async def shutdown(self) -> None:
+        """Cleanup and shutdown FrameManager resources."""
+        await self.stop()
+
+        # TODO: Re-enable executor shutdown when executor approach is debugged
+        # Shutdown hardware executor gracefully
+        # self._hw_executor.shutdown(wait=True)
+
+        log.info("FrameManager shutdown complete")
 
     # === Metrics ===
 
@@ -302,12 +317,13 @@ class FrameManager:
             try:
                 # frame = await self._select_frame_by_priority()
                 frame = await self._drain_frames()
-                
+
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
                 if frame:
                     if frame is not self.last_rendered_frame:
                         # Frame changed (different object) → do full render with hardware DMA
+                        # TODO: Replace with async wrapper after debugging executor issues
                         self._render_atomic(frame)
                         self.last_rendered_frame = frame
                         self.frames_rendered += 1
@@ -432,6 +448,35 @@ class FrameManager:
         return None
 
     # === Rendering ===
+
+    # TODO: Uncomment and fix these when re-enabling async rendering with executor
+    # async def _render_atomic_async(self, main_frame: Optional[MainStripFrame]) -> None:
+    #     """
+    #     Async wrapper for atomic frame rendering.
+    #
+    #     Offloads blocking hardware DMA operations to thread pool executor,
+    #     preventing event loop blocking.
+    #     """
+    #     loop = asyncio.get_running_loop()
+    #
+    #     try:
+    #         await loop.run_in_executor(
+    #             self._hw_executor,
+    #             self._render_atomic_blocking,
+    #             main_frame
+    #         )
+    #     except Exception as e:
+    #         log.error(f"Hardware render error: {e}", exc_info=True)
+    #         raise
+    #
+    # def _render_atomic_blocking(self, main_frame: Optional[MainStripFrame]) -> None:
+    #     """
+    #     Blocking hardware rendering (runs in executor thread).
+    #
+    #     Safe to block here - executor thread handles DMA operations
+    #     without blocking the event loop.
+    #     """
+    #     self._render_atomic(main_frame)
 
     def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
         """

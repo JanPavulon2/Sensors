@@ -2,10 +2,10 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "HUE",
-        "hue": 63
+        "mode": "PRESET",
+        "preset_name": "blue"
       },
-      "brightness": 43,
+      "brightness": 42,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -16,9 +16,9 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "white"
+        "preset_name": "yellow"
       },
-      "brightness": 94,
+      "brightness": 10,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -28,14 +28,14 @@
     },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 175
+        "mode": "PRESET",
+        "preset_name": "red"
       },
       "brightness": 100,
-      "is_on": false,
+      "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "BREATHE",
+        "id": "SNAKE",
         "parameters": {}
       }
     },
@@ -55,26 +55,26 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "lime"
+        "preset_name": "blue"
       },
-      "brightness": 86,
+      "brightness": 52,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
+        "id": "SNAKE",
         "parameters": {}
       }
     },
     "circle": {
       "color": {
-        "mode": "HUE",
-        "hue": 102
+        "mode": "PRESET",
+        "preset_name": "green"
       },
-      "brightness": 27,
+      "brightness": 12,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
-        "id": "COLOR_SNAKE",
+        "id": "BREATHE",
         "parameters": {}
       }
     },
@@ -99,8 +99,8 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 1,
-    "selected_zone_edit_target": "COLOR_HUE",
+    "selected_zone_index": 6,
+    "selected_zone_edit_target": "COLOR_PRESET",
     "frame_by_frame_mode": false,
     "save_on_change": true
   }
