@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
+import traceback
+import sys
 from models.enums import LogLevel, LogCategory
 
 if TYPE_CHECKING:
@@ -140,12 +142,45 @@ class Logger:
         """
         self._broadcaster = broadcaster
 
+    def _format_traceback(self) -> str:
+        """
+        Format the current exception traceback for logging.
+
+        Returns:
+            Formatted traceback string with visual separation
+        """
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        if exc_type is None:
+            return ""
+
+        # Get full traceback as list of strings
+        tb_lines = traceback.format_exception(exc_type, exc_value, exc_tb)
+        tb_text = ''.join(tb_lines).rstrip()
+
+        # Add visual separation and indentation
+        indent = " " * 11
+        separator = self._colorize("┈" * 60, Colors.DIM)
+
+        formatted_lines = [
+            f"{indent}{separator}",
+            f"{indent}{self._colorize('TRACEBACK:', Colors.RED)}"
+        ]
+
+        # Add each line of traceback with indentation
+        for line in tb_text.split('\n'):
+            formatted_lines.append(f"{indent}{line}")
+
+        formatted_lines.append(f"{indent}{separator}")
+
+        return '\n'.join(formatted_lines)
+
     def log(
         self,
         category: LogCategory,
         message: str,
         level: LogLevel = LogLevel.INFO,
         details: Optional[list] = None,
+        exc_info: bool = False,
         **kwargs
     ):
         """
@@ -156,6 +191,7 @@ class Logger:
             message: Main message text
             level: Log level (DEBUG, INFO, WARN, ERROR)
             details: List of detail strings to show below message
+            exc_info: If True, print full exception traceback (requires active exception)
             **kwargs: Additional key-value pairs to show as details
 
         Example:
@@ -171,6 +207,16 @@ class Logger:
             [14:23:45] COLOR ✓ Adjusted hue
                        └─ zone: lamp
                        └─ hue: 120° → 150°
+
+            With exc_info=True:
+            [14:23:45] ERROR ✗ Handler failed
+                       └─ handler: on_rotate
+                       ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                       TRACEBACK:
+                       Traceback (most recent call last):
+                         File "...", line X, in ...
+                       Exception: error message
+                       ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         """
         if not self._should_log(level):
             return
@@ -189,7 +235,7 @@ class Logger:
             safe_sym = sym.encode("ascii", "replace").decode()
             safe_msg = msg.encode("ascii", "replace").decode()
             print(f"{timestamp} {cat} {safe_sym} {safe_msg}")
-            
+
         # Add kwargs as details
         all_details = list(details or [])
         for k, v in kwargs.items():
@@ -199,15 +245,20 @@ class Logger:
         if all_details:
             indent = " " * 11
             for i, d in enumerate(all_details):
-                # Last item gets different tree character
-                tree = "└─" if i == len(all_details) - 1 else "├─"
+                # Last item gets different tree character (unless traceback follows)
+                is_last = i == len(all_details) - 1 and not exc_info
+                tree = "└─" if is_last else "├─"
                 try:
                     print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
                 except UnicodeEncodeError:
-                    safe_tree = sym.encode("ascii", "replace").decode()
-                    #safe_msg = msg.encode("ascii", "replace").decode()
-                    #print(f"{timestamp} {cat} {safe_sym} {safe_msg}")
+                    safe_tree = tree.encode("ascii", "replace").decode()
                     print(f"{indent}{self._colorize(safe_tree, Colors.DIM)} {d}")
+
+        # Print exception traceback if requested
+        if exc_info:
+            traceback_str = self._format_traceback()
+            if traceback_str:
+                print(traceback_str)
 
         # Broadcast to WebSocket clients if broadcaster is set
         if self._broadcaster:
@@ -242,15 +293,42 @@ class BoundLogger:
         self._base = base
         self._category = category
 
-    def log(self, message: str, level: LogLevel = LogLevel.INFO, category: Optional[LogCategory] = None, **kw):
-        """Allows overriding category if necessary."""
-        self._base.log(category or self._category, message, level, **kw)
+    def log(
+        self,
+        message: str,
+        level: LogLevel = LogLevel.INFO,
+        category: Optional[LogCategory] = None,
+        details: Optional[list] = None,
+        exc_info: bool = False,
+        **kw
+    ):
+        """
+        Log a message with optional exception traceback.
+
+        Args:
+            message: Main message text
+            level: Log level (DEBUG, INFO, WARN, ERROR)
+            category: Override default category if needed
+            details: List of detail strings
+            exc_info: If True, print full exception traceback
+            **kw: Additional key-value pairs as details
+        """
+        self._base.log(category or self._category, message, level, details, exc_info, **kw)
 
     # Shortcut methods
     def debug(self, message: str, **kw): self.log(message, LogLevel.DEBUG, **kw)
     def info(self, message: str, **kw): self.log(message, LogLevel.INFO, **kw)
     def warn(self, message: str, **kw): self.log(message, LogLevel.WARN, **kw)
-    def error(self, message: str, **kw): self.log(message, LogLevel.ERROR, **kw)
+    def error(self, message: str, exc_info: bool = False, **kw):
+        """
+        Log an error message with optional exception traceback.
+
+        Args:
+            message: Error message
+            exc_info: If True, print full exception traceback (default: False)
+            **kw: Additional key-value pairs as details
+        """
+        self.log(message, LogLevel.ERROR, exc_info=exc_info, **kw)
 
     def with_category(self, category: LogCategory) -> 'BoundLogger':
         """Create another bound logger from this one."""

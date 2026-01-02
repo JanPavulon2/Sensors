@@ -186,7 +186,7 @@ class EventBus:
             log.info(
                 "No handlers for event",
                 event_type=event.type.name,
-                event_data=event.data
+                event_data=event.to_data()
             )
             return
 
@@ -205,7 +205,9 @@ class EventBus:
             except Exception as e:
                 log.error(
                     f"Event handler failed: {handler_entry.handler.__name__} for {event.type.name}",
-                    exception=e
+                    exc_info=True,
+                    handler=handler_entry.handler.__name__,
+                    event_type=event.type.name
                 )
                 # Continue to next handler (fault tolerance)
 

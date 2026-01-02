@@ -29,7 +29,7 @@ def log_middleware(event: Event) -> Event:
     else:
         data_str = str(data)
 
-    log.info(
+    log.debug(
         f"Event: {event.type.name} from {source_str} | {data_str}"
     )
     return event
