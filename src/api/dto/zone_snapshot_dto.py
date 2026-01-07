@@ -14,7 +14,7 @@ class AnimationSnapshotDTO:
         return cls(
             id=animation_state.id.name,
             parameters={
-                param_id.name: value
+                param_id.name.lower(): value
                 for param_id, value in animation_state.parameter_values.items()
             },
         )

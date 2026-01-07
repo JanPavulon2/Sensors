@@ -7,7 +7,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 from models.enums import ZoneRenderMode
-from models.events.zone_runtime_events import AnimationStartedEvent
+from models.events.types import EventType
+from models.events.zone_runtime_events import AnimationStartedEvent, ZoneAnimationParamChangedEvent
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 from services import ServiceContainer
 from animations.engine import AnimationEngine
@@ -31,6 +33,7 @@ class AnimationModeController:
 
     def __init__(
         self,
+        event_bus: EventBus,
         services: ServiceContainer,
         animation_engine: AnimationEngine
     ):
@@ -39,6 +42,7 @@ class AnimationModeController:
         for a SINGLE selected zone.
         """
         
+        self.event_bus = event_bus
         self.zone_service = services.zone_service
         self.app_state_service = services.app_state_service
         self.animation_service = services.animation_service
@@ -51,6 +55,10 @@ class AnimationModeController:
         self.selected_animation_index = 0
         self.selected_animation_param_id = 0
 
+        self.event_bus.subscribe(
+            event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
+            handler=self._on_zone_animation_param_changed  # type: ignore
+        )
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -72,7 +80,37 @@ class AnimationModeController:
         for zone in animated_zones:
             asyncio.create_task(self._start_zone_animation(zone))
             
-    def enter_zone(self, zone: ZoneCombined):
+        self.event_bus.subscribe(
+            event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
+            handler=self._on_zone_animation_param_changed  # type: ignore
+        )
+        
+    def _on_zone_animation_param_changed(self, event: ZoneAnimationParamChangedEvent) -> None:
+        zone = self.zone_service.get_zone(event.zone_id)
+        if not zone:
+            log.warn(f"Zone state changed but zone not found: {event.zone_id}")
+            return
+
+        if zone.state.mode != ZoneRenderMode.ANIMATION:
+            log.warn(f"Zone animation parameter changed but zone is not in animation mode")
+            return
+
+        anim = self.animation_engine.active_animations.get(zone.id)
+        if not anim:
+            log.warn(f"Animation for zone {event.zone_id} not found")
+            return
+        
+        log.info(
+            f"Zone parameter changed, updating animation",
+            zone=zone.config.display_name,
+            parameter=event.param_id,
+            value=event.value
+        )
+        
+        anim.set_param(event.param_id, event.value)
+
+
+    async def enter_zone(self, zone: ZoneCombined):
         """
         Called when zone enters ANIMATION render mode.
         """
@@ -94,21 +132,17 @@ class AnimationModeController:
             params=params
         )
         
-        asyncio.create_task(
-            self.animation_engine.start_for_zone(
-                zone.config.id,
-                anim_state.id,
-                params
-            )
+        await self.animation_engine.start_for_zone(
+            zone.config.id,
+            anim_state.id,
+            params
         )
             
-    def leave_zone(self, zone: ZoneCombined):
+    async def leave_zone(self, zone: ZoneCombined):
         """
         Called when zone leaves ANIMATION render mode.
         """
-        asyncio.create_task(
-            self.animation_engine.stop_for_zone(zone.config.id)
-        )
+        await self.animation_engine.stop_for_zone(zone.config.id)
         
     def cycle_animation(self, delta: int) -> None:
         zone = self.zone_service.get_selected_zone()

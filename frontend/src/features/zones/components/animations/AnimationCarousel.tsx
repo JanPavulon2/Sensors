@@ -41,13 +41,6 @@ const ANIMATIONS: Animation[] = [
     category: 'color',
   },
   {
-    id: 'COLOR_CYCLE',
-    name: 'Cycle',
-    icon: '🔄',
-    description: 'Fast hue rotation loop',
-    category: 'color',
-  },
-  {
     id: 'SNAKE',
     icon: '🐍',
     name: 'Snake',
@@ -59,13 +52,6 @@ const ANIMATIONS: Animation[] = [
     icon: '🌈',
     name: 'Color Snake',
     description: 'Rainbow chase pattern',
-    category: 'advanced',
-  },
-  {
-    id: 'MATRIX',
-    icon: '🟩',
-    name: 'Matrix',
-    description: 'Matrix rain effect',
     category: 'advanced',
   },
 ];

@@ -24,7 +24,7 @@ from models.events.zone_runtime_events import (
     ZoneAnimationChangedEvent,
     AnimationStartedEvent,
     AnimationStoppedEvent,
-    AnimationParameterChangedEvent,
+    ZoneAnimationParamChangedEvent,
 )
 
 # Snapshot events (frontend/UI)
@@ -50,7 +50,7 @@ __all__ = [
     "ZoneAnimationChangedEvent",
     "AnimationStartedEvent",
     "AnimationStoppedEvent",
-    "AnimationParameterChangedEvent",
+    "ZoneAnimationParamChangedEvent"
     # Snapshot
     # "ZoneSnapshotUpdatedEvent",
 ]

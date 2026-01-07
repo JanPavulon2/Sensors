@@ -7,20 +7,15 @@ Single or multi-pixel snake travels through all zones sequentially.
 import asyncio
 import time
 from typing import Dict, Tuple, List, AsyncIterator
-from animations.base import BaseAnimation
-from models.color import Color
-from models.frame import PixelFrame
-from utils.colors import hue_to_rgb
-from models.domain.zone import ZoneCombined
-from utils.logger import get_category_logger, LogCategory
-from models.domain import ZoneCombined
-from models.enums import FramePriority, FrameSource, ZoneID
 
 from animations.base import BaseAnimation
-from models.animation_params.animation_param_id import AnimationParamID
-from models.animation_params.speed_param import SpeedParam
-from models.animation_params.primary_color_hue_param import PrimaryColorHueParam
-from models.animation_params.int_range_param import IntRangeParam
+from models.animation_params import AnimationParamID, SpeedParam, PrimaryColorHueParam, IntRangeParam
+from models.color import Color
+from models.frame import PixelFrame
+from models.domain import ZoneCombined
+from models.enums import FramePriority, FrameSource, ZoneID
+from utils.colors import hue_to_rgb
+from utils.logger import get_category_logger, LogCategory
 
 log = get_category_logger(LogCategory.ANIMATION)
 
@@ -37,7 +32,7 @@ class SnakeAnimation(BaseAnimation):
         AnimationParamID.LENGTH: IntRangeParam(
             label="Snake Length",
             min_value=1,
-            max_value=20,
+            max_value=10,
             default=5,
             step=1,
         ),

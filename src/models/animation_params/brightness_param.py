@@ -12,6 +12,6 @@ class BrightnessParam(IntRangeParam):
             label="Brightness",
             min_value=0,
             max_value=100,
-            default=100,
-            step=1,
+            default=50,
+            step=5,
         )

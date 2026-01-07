@@ -152,8 +152,8 @@ export const useUpdateZoneAnimationParams = (zoneId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { animation_parameters: Record<string, any> }) =>
-      api.put(`/v1/zones/${zoneId}/animation-parameters`, data),
+    mutationFn: (data: { parameters: Record<string, any> }) =>
+      api.put(`/v1/zones/${zoneId}/animation/parameters`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['zones'] });
     },

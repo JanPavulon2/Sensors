@@ -6,10 +6,10 @@ All animations inherit from BaseAnimation and implement the run() method.
 
 import asyncio
 from typing import Dict, AsyncIterator, Optional, Any, TYPE_CHECKING
-from models.animation_params.animation_param_id import AnimationParamID
-from models.animation_params.animation_param import AnimationParam
+
+from models.animation_params import AnimationParamID, AnimationParam
 from models.color import Color
-from models.domain.zone import ZoneCombined
+from models.domain import ZoneCombined
 from models.enums import ZoneID
 
 if TYPE_CHECKING:

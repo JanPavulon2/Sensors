@@ -9,9 +9,7 @@ import time
 from typing import Any, Dict
 
 from animations.base import BaseAnimation
-from models.animation_params.animation_param_id import AnimationParamID
-from models.animation_params.brightness_param import BrightnessParam
-from models.animation_params.speed_param import SpeedParam
+from models.animation_params import AnimationParamID, SpeedParam, IntensityParam
 from models.domain import ZoneCombined
 from models.enums import FramePriority, FrameSource
 from models.frame import SingleZoneFrame
@@ -22,51 +20,65 @@ log = get_category_logger(LogCategory.ANIMATION)
 
 class BreatheAnimation(BaseAnimation):
     """
-    Breathe animation: Smooth sinusoidal brightness modulation using zone base color.
-
-    Supported parameters:
-    - SPEED: Animation speed (1-100, default 50)
-    - BRIGHTNESS: Max brightness scaling (0-100, default 100)
+    Smooth sinusoidal brightness breathing animation.
     """
 
+    # ---- USER PARAMETERS ----
     PARAMS = {
-        AnimationParamID.SPEED: SpeedParam(),
-        AnimationParamID.BRIGHTNESS: BrightnessParam(),
+        AnimationParamID.SPEED: SpeedParam(),        # 1–100
+        AnimationParamID.INTENSITY: IntensityParam(),  # 0–100
     }
+
+    # ---- ADMIN TUNING ----
+    #_MIN_SCALE = 0.15          # minimal brightness scale (15%)
+    _MIN_SCALE = 0.15          # minimal brightness scale (15%)
+    _MAX_SCALE = 1.0           # max brightness
+    _MIN_PERIOD = 0.8          # seconds
+    _MAX_PERIOD = 8.0          # seconds
+    _PHASE_OFFSET = -math.pi / 2
 
     def __init__(self, zone: ZoneCombined, params: Dict[AnimationParamID, Any]):
         super().__init__(zone, params)
         self._start_time = time.monotonic()
 
     async def step(self) -> SingleZoneFrame:
-        """Generate one animation frame"""
-        speed = self.get_param(AnimationParamID.SPEED, 50)
-        brightness_percent = self.get_param(AnimationParamID.BRIGHTNESS, 100)
+        # ---- USER PARAMS ----
+        speed_param = self.get_param(AnimationParamID.SPEED, 50)          # 1–100
+        intensity_param = self.get_param(AnimationParamID.INTENSITY, 0.5)  # 0.0–1.0
 
-        # Calculate breathing cycle period (inverse of speed)
-        # speed: 1-100 → period: 8.0-0.8 seconds
-        period = max(0.8, 8.0 - (speed / 100) * 7.0)
+        # ---- TIME ----
         elapsed = time.monotonic() - self._start_time
-        t = elapsed / period
 
-        # Breathing curve: sine wave that oscillates 0..1
-        # Add -π/2 phase shift so we start at minimum brightness
-        phase = (math.sin(t * 2 * math.pi - math.pi / 2) + 1) / 2
+        # speed → period
+        period = max(
+            self._MIN_PERIOD,
+            self._MAX_PERIOD - (speed_param / 100.0) * (self._MAX_PERIOD - self._MIN_PERIOD),
+        )
 
-        # Scale to 15%-100% so LED never fully turns off
-        scale = 0.15 + phase * 0.85
+        # ---- PHASE 0..1 ----
+        phase = (math.sin((elapsed / period) * 2 * math.pi + self._PHASE_OFFSET) + 1) / 2
 
-        # Calculate final brightness
-        base_brightness = self.base_brightness
-        final_brightness = int(base_brightness * (brightness_percent / 100.0) * scale)
+        # ---- SCALE ----
+        scale = self._MIN_SCALE + phase * (self._MAX_SCALE - self._MIN_SCALE)
 
-        # Apply brightness to base zone color
-        color = self.base_color.with_brightness(final_brightness)
+        # ---- FINAL COLOR ----
+        final_scale = scale * intensity_param
+        color = self.base_color.with_brightness(int(final_scale * 100))
 
+        # log.info(
+        #     f"Animation frame: ",
+        #     speed_param=speed_param,
+        #     brightness_param=intensity_param,
+        #     period=period,
+        #     scale=scale,
+        #     final_scale=final_scale,
+        #     color=color,
+        # )
+        
         return SingleZoneFrame(
             zone_id=self.zone_id,
             color=color,
             priority=FramePriority.ANIMATION,
             source=FrameSource.ANIMATION,
-            ttl=0.12,  # Frame lifetime: ~120ms at 60 FPS
+            ttl=0.2,
         )

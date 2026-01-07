@@ -20,13 +20,13 @@ Example: @app.put("/zones/{zone_id}/color")
 from fastapi import APIRouter, Depends, status
 
 from api.schemas.zone import (
-    SetZoneColorRequest,
-    SetZoneAnimationParamRequest, SetZoneAnimationParametersRequest, SetZoneAnimationRequest,
+    SetZoneColorRequest, SetZoneAnimationParamsRequest, SetZoneAnimationRequest,
     SetZoneBrightnessRequest, SetZoneIsOnRequest, SetZoneRenderModeRequest
 )
 from api.schemas.animation import (
     AnimationStartRequest, AnimationStopRequest, AnimationParameterUpdateRequest
 )
+
 from models.animation_params.animation_param_id import AnimationParamID
 from models.color import Color
 from models.domain.animation import AnimationState
@@ -205,9 +205,9 @@ async def set_zone_animation(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Update zone animation parameters"
 )
-async def set_zone_animation_parameters(
+async def set_zone_animation_params(
     zone_id: ZoneID,
-    req: SetZoneAnimationParametersRequest,
+    req: SetZoneAnimationParamsRequest,
     services: ServiceContainer = Depends(get_service_container)
 ) -> None:
     """Update one or more animation parameters.
@@ -220,10 +220,13 @@ async def set_zone_animation_parameters(
         }
     }
     """
-    # services.zone_service.set_animation_parameters(
-    #     zone_id,
-    #     req.parameters
-    # )
+    # Update each parameter in the request
+    for param_id, value in req.parameters.items():
+        services.zone_service.set_animation_param(
+            zone_id,
+            param_id,
+            value
+        )
 
 
 # ============================================================================
@@ -285,25 +288,3 @@ async def stop_zone_animation(
     services.zone_service.set_render_mode(zone_id, ZoneRenderMode.STATIC)
 
 
-# @router.put(
-#     "/{zone_id}/animation/parameters",
-#     response_model=ZoneResponse,
-#     status_code=status.HTTP_204_OK,
-#     summary="Update animation parameters",
-#     description="Update animation parameters while animation is running"
-# )
-# async def update_animation_parameters(
-#     zone_id: str,
-#     param_request: AnimationParameterUpdateRequest,
-#     zone_service: ZoneAPIService = Depends(get_zone_service)
-# ) -> ZoneResponse:
-#     """
-#     Update parameters for a running animation.
-
-#     Only works if zone is currently in ANIMATION mode. Parameters are
-#     applied immediately to the running animation without stopping it.
-#     """
-#     return zone_service.update_zone_animation_parameters(
-#         zone_id,
-#         param_request.parameters
-#     )

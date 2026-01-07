@@ -11,6 +11,12 @@ import { Label } from '@/shared/ui/label';
 import type { AnimationID } from './AnimationSelector';
 
 // Parameter specs for each animation
+// Backend ranges are documented below for reference:
+// - SPEED: 1-100 (percentage, backend dependent)
+// - INTENSITY: 0.0-1.0 (normalized float, displayed as 0-100%)
+// - PRIMARY_COLOR_HUE: 0-359 (degrees)
+// - HUE_OFFSET: 0-360 (degrees)
+// - LENGTH: per-animation (SNAKE: 1-10px, COLOR_SNAKE: 3-15px)
 const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
   STATIC: [],
   BREATHE: [
@@ -18,21 +24,21 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 500,
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: '%',
+      default: 50,
     },
     {
       id: 'intensity',
       label: 'Intensity',
       type: 'range',
-      min: 10,
+      min: 0,
       max: 100,
-      step: 5,
+      step: 10,
       unit: '%',
-      default: 75,
+      default: 50,
     },
   ],
   COLOR_FADE: [
@@ -40,21 +46,11 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 500,
-    },
-    {
-      id: 'length',
-      label: 'Length',
-      type: 'range',
       min: 1,
       max: 100,
       step: 1,
-      unit: 'px',
-      default: 20,
+      unit: '%',
+      default: 50,
     },
   ],
   COLOR_CYCLE: [
@@ -62,21 +58,11 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 1000,
-    },
-    {
-      id: 'hue_offset',
-      label: 'Hue Offset',
-      type: 'range',
-      min: 0,
-      max: 360,
-      step: 5,
-      unit: '°',
-      default: 0,
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: '%',
+      default: 50,
     },
   ],
   SNAKE: [
@@ -84,31 +70,31 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 500,
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: '%',
+      default: 50,
     },
     {
       id: 'length',
       label: 'Length',
       type: 'range',
       min: 1,
-      max: 50,
+      max: 10,
       step: 1,
       unit: 'px',
-      default: 10,
+      default: 5,
     },
     {
-      id: 'intensity',
-      label: 'Intensity',
+      id: 'primary_color_hue',
+      label: 'Color Hue',
       type: 'range',
-      min: 10,
-      max: 100,
-      step: 5,
-      unit: '%',
-      default: 75,
+      min: 0,
+      max: 359,
+      step: 10,
+      unit: '°',
+      default: 30,
     },
   ],
   COLOR_SNAKE: [
@@ -116,31 +102,31 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 500,
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: '%',
+      default: 50,
     },
     {
       id: 'length',
       label: 'Length',
       type: 'range',
-      min: 1,
-      max: 50,
+      min: 3,
+      max: 15,
       step: 1,
       unit: 'px',
-      default: 10,
+      default: 7,
     },
     {
-      id: 'hue_offset',
-      label: 'Hue Offset',
+      id: 'primary_color_hue',
+      label: 'Color Hue',
       type: 'range',
       min: 0,
-      max: 360,
-      step: 5,
+      max: 359,
+      step: 10,
       unit: '°',
-      default: 0,
+      default: 30,
     },
   ],
   MATRIX: [
@@ -148,21 +134,11 @@ const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
       id: 'speed',
       label: 'Speed',
       type: 'range',
-      min: 100,
-      max: 2000,
-      step: 100,
-      unit: 'ms',
-      default: 500,
-    },
-    {
-      id: 'intensity',
-      label: 'Intensity',
-      type: 'range',
-      min: 10,
+      min: 1,
       max: 100,
-      step: 5,
+      step: 1,
       unit: '%',
-      default: 75,
+      default: 50,
     },
   ],
 };
@@ -177,6 +153,36 @@ interface ParameterDef {
   unit?: string;
   options?: string[];
   default?: number | string | boolean;
+}
+
+/**
+ * Convert backend value to display value
+ * Handles special cases like intensity (0.0-1.0 → 0-100%)
+ */
+function toDisplayValue(parameterId: string, value: number | string | boolean): number | string | boolean {
+  if (typeof value !== 'number') return value;
+
+  if (parameterId === 'intensity') {
+    // Backend: 0.0-1.0, Display: 0-100%
+    return value * 100;
+  }
+
+  return value;
+}
+
+/**
+ * Convert display value back to backend value
+ * Handles special cases like intensity (0-100% → 0.0-1.0)
+ */
+function toBackendValue(parameterId: string, value: number | string | boolean): number | string | boolean {
+  if (typeof value !== 'number') return value;
+
+  if (parameterId === 'intensity') {
+    // Display: 0-100%, Backend: 0.0-1.0
+    return value / 100;
+  }
+
+  return value;
 }
 
 interface AnimationParametersPanelProps {
@@ -210,7 +216,8 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
   return (
     <div className="space-y-4">
       {parameterDefs.map((paramDef) => {
-        const currentValue = parameters[paramDef.id] ?? paramDef.default ?? 0;
+        const rawValue = parameters[paramDef.id] ?? paramDef.default ?? 0;
+        const displayValue = toDisplayValue(paramDef.id, rawValue);
 
         return (
           <div key={paramDef.id} className="space-y-2">
@@ -218,7 +225,7 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium text-text-primary">{paramDef.label}</Label>
               <span className="text-sm font-mono text-accent-primary">
-                {typeof currentValue === 'number' ? Math.round(currentValue * 100) / 100 : currentValue}
+                {typeof displayValue === 'number' ? Math.round(displayValue * 100) / 100 : displayValue}
                 {paramDef.unit ? ` ${paramDef.unit}` : ''}
               </span>
             </div>
@@ -227,8 +234,11 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
             {paramDef.type === 'range' && (
               <>
                 <Slider
-                  value={[typeof currentValue === 'number' ? currentValue : 0]}
-                  onValueChange={(value) => onParameterChange?.(paramDef.id, value[0])}
+                  value={[typeof displayValue === 'number' ? displayValue : 0]}
+                  onValueChange={(value) => {
+                    const backendValue = toBackendValue(paramDef.id, value[0]);
+                    onParameterChange?.(paramDef.id, backendValue);
+                  }}
                   min={paramDef.min ?? 0}
                   max={paramDef.max ?? 100}
                   step={paramDef.step ?? 1}
@@ -245,7 +255,7 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 
             {paramDef.type === 'enum' && (
               <select
-                value={String(currentValue)}
+                value={String(rawValue)}
                 onChange={(e) => onParameterChange?.(paramDef.id, e.target.value)}
                 disabled={disabled}
                 className="w-full px-2 py-2 bg-bg-elevated text-text-primary border border-border-default rounded text-sm"
@@ -260,15 +270,15 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 
             {paramDef.type === 'bool' && (
               <button
-                onClick={() => onParameterChange?.(paramDef.id, !currentValue)}
+                onClick={() => onParameterChange?.(paramDef.id, !rawValue)}
                 disabled={disabled}
                 className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${
-                  currentValue
+                  rawValue
                     ? 'bg-accent-primary text-bg-app border-accent-primary'
                     : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
                 }`}
               >
-                {currentValue ? '✓ Enabled' : '✕ Disabled'}
+                {rawValue ? '✓ Enabled' : '✕ Disabled'}
               </button>
             )}
           </div>

@@ -87,6 +87,7 @@ class LightingController:
 
         log.info("Initializing animation mode controller")
         self.animation_mode_controller = AnimationModeController(
+            event_bus=self.event_bus,
             services=self.services,
             animation_engine=self.animation_engine
         )
@@ -235,7 +236,7 @@ class LightingController:
     # Zone events (DOMAIN → RUNTIME)
     # ------------------------------------------------------------------
 
-    def _handle_zone_render_mode_changed(self, event: ZoneRenderModeChangedEvent) -> None:
+    async def _handle_zone_render_mode_changed(self, event: ZoneRenderModeChangedEvent) -> None:
         """
         Handle render mode changes for a zone.
 
@@ -265,53 +266,66 @@ class LightingController:
 
         # Exit old render mode
         if event.old == ZoneRenderMode.ANIMATION:
-            self.animation_mode_controller.leave_zone(zone)
+            await self.animation_mode_controller.leave_zone(zone)
         elif event.old == ZoneRenderMode.STATIC:
             self.static_mode_controller.leave_zone(zone)
             
         # And enter new render mode
         if event.new == ZoneRenderMode.ANIMATION:
-            self.animation_mode_controller.enter_zone(zone)
+            await self.animation_mode_controller.enter_zone(zone)
         elif event.new == ZoneRenderMode.STATIC:
             self.static_mode_controller.enter_zone(zone)
             
         self._sync_indicator(zone)
         
-    def _handle_zone_animation_changed(self, event: ZoneAnimationChangedEvent) -> None:
+    async def _handle_zone_animation_changed(self, event: ZoneAnimationChangedEvent) -> None:
         """
-        Animation change is handled by AnimationModeController via render mode logic.
-        This handler exists mainly for logging / indicator sync.
+        Handle animation changes when switching between animations in ANIMATION mode.
+        Restarts the animation (stop old, start new) when animation ID changes.
+
+        Uses async sequencing to ensure old animation fully stops before new one starts,
+        preventing race conditions where enter_zone could run before leave_zone completes.
         """
-        zone = self.zone_service.get_zone(event.zone_id)
-        if not zone:
-            log.warn(f"Animation changed event for unknown zone: {event.zone_id}")
-            return
+        try:
+            zone = self.zone_service.get_zone(event.zone_id)
+            if not zone:
+                log.warn(f"Animation changed event for unknown zone: {event.zone_id}")
+                return
 
-        # Only handle if zone is in ANIMATION mode
-        if zone.state.mode != ZoneRenderMode.ANIMATION:
-            log.debug(f"Zone {event.zone_id.name} not in ANIMATION mode, skipping animation start")
-            return
+            # Only handle if zone is in ANIMATION mode
+            if zone.state.mode != ZoneRenderMode.ANIMATION:
+                log.debug(f"Zone {event.zone_id.name} not in ANIMATION mode, skipping animation restart")
+                return
 
+            # Get current animation state
+            anim_state = zone.state.animation
+            if not anim_state:
+                log.warn("ZONE_ANIMATION_CHANGED but no animation state present")
+                return
 
-        anim_state = zone.state.animation
-        if not anim_state:
-            log.warn("ZONE_ANIMATION_CHANGED but no animation state present")
-            return
-        
-        # Build runtime params (defaults resolved here)
-        params = self.animation_service.build_params_for_zone(
-            anim_state.id,
-            anim_state.parameters,
-            zone
-        )
-        
-        log.info(
-            "Starting animation changed via event",
-            zone=zone.config.display_name,
-            animation=event.animation_id.name,
-            params = params
-        )
-        
+            # Restart animation: stop old, start new (properly sequenced)
+            # This handles the case of switching from one animation to another while already in ANIMATION mode
+            log.info(
+                "Restarting animation",
+                zone=zone.config.display_name,
+                animation=event.animation_id.name,
+            )
+
+            # Stop the old animation (await to ensure completion before starting new)
+            await self.animation_mode_controller.leave_zone(zone)
+
+            # Start the new animation (after old one fully stopped)
+            await self.animation_mode_controller.enter_zone(zone)
+
+        except Exception as e:
+            log.error(
+                f"Failed to restart animation for zone {event.zone_id.name}",
+                exc_info=True,
+                error=str(e),
+                animation=event.animation_id.name
+            )
+            # Continue gracefully instead of crashing
+
 
     
     # ------------------------------------------------------------------

@@ -10,6 +10,7 @@ class EventType(Enum):
 
     # Zone / static
     ZONE_STATIC_STATE_CHANGED = auto()
+    ZONE_ANIMATION_PARAM_CHANGED = auto()
     ZONE_RENDER_MODE_CHANGED = auto()
 
     # Animation

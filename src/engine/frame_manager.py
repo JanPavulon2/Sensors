@@ -137,7 +137,7 @@ class FrameManager:
             return
 
         self.zone_strips.append(strip)
-        
+           
         # Initialize zone render states for all zones in this strip
         strip_zone_ids = strip.mapper.all_zone_ids()
         log.info(f"Registering zone strip with {len(strip_zone_ids)} zones ({[z.name for z in strip_zone_ids]}) registered in FrameManager")
@@ -300,7 +300,7 @@ class FrameManager:
         
         log.info(f"Render loop @ {self.fps} FPS (delay={frame_delay*1000:.2f}ms)")
 
-        while self.running:
+        while self.running:                        
             # Handle pause/step
             if self.paused and not self.step_requested:
                 await asyncio.sleep(0.01)
@@ -593,12 +593,17 @@ class FrameManager:
         except Exception as ex:
             log.debug(f"hardware.get_frame() failed: {ex}", exc_info=True)
     
-    def _apply_strip_frame(self, strip: ZoneStrip, strip_frame):
+    def _apply_strip_frame(self, strip: ZoneStrip, strip_frame: Dict[ZoneID, List[Color]]):
         """Send pixel data to hardware."""
-        #log.debug(
-        #    f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "
-        #    f"{[z.name for z in strip_frame.keys()]}"
-        # )
+        
+        for zone_id, pixels in strip_frame.items():
+            if not pixels:
+                continue
+
+            # weź pierwszy pixel ze strefy
+            c = pixels[0]
+            (r, g, b) = c.to_rgb()
+            
         strip.show_full_pixel_frame(strip_frame)
         # log.debug(f"show_full_pixel_frame completed on {strip}")
     

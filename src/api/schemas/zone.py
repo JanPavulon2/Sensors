@@ -77,13 +77,13 @@ class SetZoneAnimationRequest(BaseModel):
     
 class SetZoneAnimationParamRequest(BaseModel):
     """Request to change zone animation's parameter value"""
+    param_id: AnimationParamID
     value: Any
 
-
-class SetZoneAnimationParametersRequest(BaseModel):
+class SetZoneAnimationParamsRequest(BaseModel):
     """Request to update multiple animation parameters at once"""
-    parameters: Dict[str, Any] = Field(
-        description="Dictionary of parameter_id (string key): value pairs"
+    parameters: Dict[AnimationParamID, Any] = Field(
+        description="Dictionary of parameter names and their values. Keys are parameter IDs (e.g., 'speed', 'intensity')"
     )
 
 

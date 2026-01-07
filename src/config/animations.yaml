@@ -12,6 +12,14 @@ animations:
     order: 1
     parameters: []
 
+  COLOR_FADE:
+    name: Color Fade
+    class: ColorFadeAnimation
+    description: "Rainbow hue cycling"
+    enabled: true
+    order: 2
+    parameters: []
+
   SNAKE:
     name: Snake
     class: SnakeAnimation
@@ -20,20 +28,12 @@ animations:
     order: 3
     parameters: []
 
-  COLOR_CYCLE:
-    name: Color Cycle
-    class: ColorCycleAnimation
-    description: "All zones cycle through presets"
-    enabled: true
-    order: 4
-    parameters: []
-
   COLOR_SNAKE:
     name: Color Snake
     class: ColorSnakeAnimation
     description: "Multi-pixel rainbow snake"
     enabled: true
-    order: 5
+    order: 4
     parameters: []
 
   COLOR_FADE:
@@ -41,5 +41,5 @@ animations:
     class: ColorFadeAnimation
     description: "Rainbow hue cycling"
     enabled: true
-    order: 6
+    order: 5
     parameters: []

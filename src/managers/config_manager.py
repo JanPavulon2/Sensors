@@ -315,7 +315,7 @@ class ConfigManager:
 
         for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
-            zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
+            zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "FLOOR"))
 
             # Assign GPIO from mapping (defaults to 18 if not found)
             gpio_pin = gpio_mapping.get(zone_id, 18)

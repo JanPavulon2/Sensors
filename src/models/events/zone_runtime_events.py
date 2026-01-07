@@ -76,15 +76,20 @@ class AnimationStoppedEvent(Event):
 
 
 @dataclass(init=False)
-class AnimationParameterChangedEvent(Event):
+class ZoneAnimationParamChangedEvent(Event):
     zone_id: ZoneID
     param_id: AnimationParamID
     value: Any
 
-    def __init__(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any):
+    def __init__(
+        self, 
+        zone_id: ZoneID, 
+        param_id: AnimationParamID, 
+        value: Any
+    ):
         super().__init__(
-            type=EventType.ANIMATION_PARAMETER_CHANGED,
-            source=EventSource.ANIMATION_ENGINE,
+            type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
+            source=EventSource.ZONE_SERVICE,
         )
         self.zone_id = zone_id
         self.param_id = param_id

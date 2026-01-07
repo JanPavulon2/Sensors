@@ -32,7 +32,7 @@ export function setZoneAnimationParameters(
   zoneId: string,
   parameters: Record<string, any>
 ): Promise<void> {
-  return api.put(`/v1/zones/${zoneId}/animation-parameters`, {
-    animation_parameters: parameters,
+  return api.put(`/v1/zones/${zoneId}/animation/parameters`, {
+    parameters,
   });
 }
