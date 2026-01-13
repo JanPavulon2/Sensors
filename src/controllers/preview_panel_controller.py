@@ -149,8 +149,8 @@ class PreviewPanelController:
         from animations.breathe import BreatheAnimation
         from animations.color_fade import ColorFadeAnimation
         from animations.color_snake import ColorSnakeAnimation
-        from animations.matrix import MatrixAnimation
-        from animations.color_cycle import ColorCycleAnimation
+        from animations.old.matrix import MatrixAnimation
+        from animations.old.color_cycle import ColorCycleAnimation
 
         # Create minimal empty zone list (animations need it for __init__ but won't use it in preview)
         empty_zones = []
@@ -165,28 +165,28 @@ class PreviewPanelController:
                 color=params.get('color')  # Backwards compat
             )
 
-        elif animation_id == AnimationID.BREATHE:
-            # For breathe preview, check if zone_colors provided (per-zone preview)
-            zone_colors = params.get('zone_colors')
+        # elif animation_id == AnimationID.BREATHE:
+        #     # For breathe preview, check if zone_colors provided (per-zone preview)
+        #     zone_colors = params.get('zone_colors')
 
-            # If no zone colors, convert hue to RGB for single-color preview
-            if zone_colors is None:
-                from utils.colors import hue_to_rgb
-                color = params.get('color')
-                if color is None and 'hue' in params:
-                    color = hue_to_rgb(params['hue'])
-                if color is None:
-                    color = (255, 0, 0)  # Default red
-            else:
-                color = None  # Will use zone_colors in run_preview
+        #     # If no zone colors, convert hue to RGB for single-color preview
+        #     if zone_colors is None:
+        #         from utils.colors import hue_to_rgb
+        #         color = params.get('color')
+        #         if color is None and 'hue' in params:
+        #             color = hue_to_rgb(params['hue'])
+        #         if color is None:
+        #             color = (255, 0, 0)  # Default red
+        #     else:
+        #         color = None  # Will use zone_colors in run_preview
 
-            return BreatheAnimation(
-                zones=empty_zones,
-                speed=speed,
-                color=color,
-                intensity=params.get('intensity', 100),
-                zone_colors=zone_colors  # Pass zone colors for per-zone preview
-            )
+        #     return BreatheAnimation(
+        #         zones=empty_zones,
+        #         speed=speed,
+        #         color=color,
+        #         intensity=params.get('intensity', 100),
+        #         zone_colors=zone_colors  # Pass zone colors for per-zone preview
+        #     )
 
         elif animation_id == AnimationID.COLOR_FADE:
             return ColorFadeAnimation(
@@ -288,8 +288,11 @@ class PreviewPanelController:
                     await self._crossfade_preview(from_frame, first_frame, duration_ms=200, steps=8)
                     break
         except Exception as e:
-            log.log(LogCategory.SYSTEM, "Crossfade failed, using instant switch",
-                   level=LogLevel.WARN, error=str(e))
+            log.error(
+                "Crossfade failed, using instant switch",
+                level=LogLevel.WARN, 
+                error=str(e)
+            )
 
         # Start the actual animation
         self._start_animation_preview_internal(animation_id, speed, params)
@@ -323,8 +326,11 @@ class PreviewPanelController:
             )
 
             if not self._current_animation:
-                log.log(LogCategory.ANIMATION, "Unknown animation for preview",
-                       level=LogLevel.WARN, animation_id=animation_id)
+                log.warn(
+                    "Unknown animation for preview",
+                    animation_id=animation_id
+                )
+                
                 # Fallback: show static color
                 self.show_color((50, 50, 50))
                 return
@@ -336,7 +342,7 @@ class PreviewPanelController:
             log.debug(f"Preview: {animation_id} @ {speed}")
 
         except Exception as e:
-            log.log(LogCategory.SYSTEM, "Failed to start preview animation",
+            log.error("Failed to start preview animation",
                    level=LogLevel.ERROR, error=str(e), animation_id=animation_id)
             self.preview_panel.clear()
 
@@ -432,8 +438,11 @@ class PreviewPanelController:
         """
         if self._current_animation:
             self._current_animation.update_param(param, value)
-            log.log(LogCategory.SYSTEM, "Preview animation parameter updated",
-                   param=param, value=value)
+            log.info(
+                "Preview animation parameter updated",
+                param=param, 
+                value=value
+            )
 
     async def _run_preview_loop(self) -> None:
         """
@@ -457,12 +466,19 @@ class PreviewPanelController:
                 # Display frame directly (already in correct format)
                 self.preview_panel.show_frame(frame)
 
-        except asyncio.CancelledError:
-            # Animation stopped gracefully
+        except asyncio.CancelledError as e:
+            log.warn(
+                "asyncio.CancelledError catched",
+                error=str(e)
+            )
             pass
+        
         except Exception as e:
-            log.log(LogCategory.SYSTEM, "Preview animation error",
-                   level=LogLevel.ERROR, error=str(e))
+            log.error(
+                "Preview animation error",
+                error=str(e)
+            )
+            
         finally:
             # Only clear if this is still the current animation (not replaced by new one)
             if self._current_animation is animation_instance:
@@ -508,8 +524,10 @@ class PreviewPanelController:
             log.debug("Preview panel faded out")
 
         except Exception as e:
-            log.log(LogCategory.TRANSITION, "Preview fade-out failed",
-                   level=LogLevel.WARN, error=str(e))
+            log.error(
+                "Preview fade-out failed",
+                error=str(e)
+            )
 
     async def fade_in_for_power_on(self, duration_ms: int = 500, steps: int = 20):
         """
@@ -561,5 +579,7 @@ class PreviewPanelController:
             log.debug("Preview panel faded in")
 
         except Exception as e:
-            log.log(LogCategory.TRANSITION, "Preview fade-in failed",
-                   level=LogLevel.WARN, error=str(e))
+            log.error(
+                "Preview fade-in failed",
+                error=str(e)
+            )

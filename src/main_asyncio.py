@@ -9,14 +9,25 @@ Responsible for:
 - graceful shutdown on Ctrl +C or fatal errors
 """
 
-import contextlib
 import sys
-from typing import List
+from typing import List, Optional
 
+from api.socketio_handler import wrap_app_with_socketio
+from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
+from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
+from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
+from lifecycle.handlers.frame_manager_shutdown_handler import FrameManagerShutdownHandler
+from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
+from lifecycle.handlers.indicator_shutdown_handler import IndicatorShutdownHandler
+from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
+from lifecycle.handlers.task_cancellation_handler import TaskCancellationHandler
+from lifecycle.api_server_wrapper import APIServerWrapper
+from services.port_manager import PortManager
 from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
 from services.service_container import ServiceContainer
 from models.enums import FramePriority
+from services.snapshot_publisher import SnapshotPublisher
 
 # ---------------------------------------------------------------------------
 # UTF-8 ENCODING FIX (important for Raspberry Pi)
@@ -28,160 +39,59 @@ if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
-import signal
 import asyncio
-import atexit
+
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
+from api.main import create_app
+from api.dependencies import set_service_container
 
-from models.enums import LogCategory, LogLevel, FramePriority
-from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
+from api.socketio.server import create_socketio_server
+from api.socketio.registry import register_socketio
+from services.log_broadcaster import get_broadcaster
+
+from models.enums import LogCategory, LogLevel
+from components import KeyboardInputAdapter
 from hardware.gpio.gpio_manager import GPIOManager
-from controllers.led_controller.led_controller import LEDController
-from controllers import ControlPanelController, PreviewPanelController, ZoneStripController
+from hardware.hardware_coordinator import HardwareCoordinator
+from controllers.led_controller.lighting_controller import LightingController
+from controllers import ControlPanelController
 from managers import ConfigManager
-from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService
+from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService, ServiceContainer
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
 from engine.frame_manager import FrameManager
-from zone_layer.zone_strip import ZoneStrip
-from hardware.led.ws281x_strip import WS281xStrip, WS281xConfig
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
 # ---------------------------------------------------------------------------
 
 log = get_logger().for_category(LogCategory.SYSTEM)
-
-# DEBUG MODE: Set to True to disable animations/pulse/fades for testing
-DEBUG_NOPULSE = False
-
 configure_logger(LogLevel.DEBUG)
 
-# ---------------------------------------------------------------------------
-# SHUTDOWN & CLEANUP
-# ---------------------------------------------------------------------------
-
-def emergency_gpio_cleanup():
-    """Emergency cleanup - called on any exit (crashes, seg faults)."""
-    try:
-        gpio_manager = GPIOManager()
-        gpio_manager.cleanup()
-        log.info("🚨 Emergency GPIO cleanup completed")
-    except Exception as e:
-        log.error(f"Failed to cleanup GPIO on exit: {e}")
+DEBUG_NOPULSE = False
 
 
-async def shutdown(loop: asyncio.AbstractEventLoop, signal_name: str) -> None:
-    """Gracefully shut down all tasks and hardware."""
-    if signal_name:
-        log.info(f"Received signal: {signal_name} → initiating graceful shutdown...")
+# === Infrastructure imports ===
+from hardware.gpio.gpio_manager import GPIOManager
+from managers import ConfigManager
+from services import (
+    EventBus, DataAssembler, ZoneService, AnimationService,
+    ApplicationStateService, ServiceContainer
+)
+from services.middleware import log_middleware
 
-    tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task(loop)]
-    log.debug(f"Cancelling {len(tasks)} running tasks...")
-    for task in tasks:
-        task.cancel()
+# === Hardware Layer ===
+from hardware.hardware_coordinator import HardwareCoordinator
 
-    await asyncio.gather(*tasks, return_exceptions=True)
-    await asyncio.sleep(0.05)
-    log.info("Shutdown complete. Goodbye!")
+# === Lifecycle Management ===
+from lifecycle import ShutdownCoordinator
 
-
-def _create_zone_strips(all_zones: List[ZoneCombined], hardware_manager: HardwareManager):
-    """Create and configure LED strip drivers for all GPIO pins."""
-    
-    zones_by_gpio = {}
-    for zone in all_zones:
-        gpio = zone.config.gpio
-        if gpio not in zones_by_gpio:
-            zones_by_gpio[gpio] = []
-        zones_by_gpio[gpio].append(zone.config)
-
-    hardware_mappings = hardware_manager.get_gpio_to_zones_mapping()
-    zone_strips = {}
-
-    for gpio_pin in sorted(zones_by_gpio.keys()):
-        zones_for_gpio = zones_by_gpio[gpio_pin]
-
-        hardware_config = None
-        for hw in hardware_mappings:
-            if hw["gpio"] == gpio_pin:
-                hardware_config = hw
-                break
-
-        if not hardware_config:
-            log.warn(f"No config for GPIO {gpio_pin}, skipping")
-            continue
-
-        pixel_count = sum(z.pixel_count for z in zones_for_gpio)
-
-        ws_config = WS281xConfig(
-            gpio_pin=gpio_pin,
-            led_count=pixel_count,
-            color_order=hardware_config["color_order"],
-            frequency_hz=800_000,
-            dma_channel=10,
-            brightness=255,
-            invert=False,
-            channel=0 if gpio_pin == 18 else (1 if gpio_pin == 19 else 0),
-        )
-        hardware = WS281xStrip(ws_config)
-        strip = ZoneStrip(pixel_count=pixel_count, zones=zones_for_gpio, hardware=hardware)
-        zone_strips[gpio_pin] = strip
-        log.info(f"Created ZoneStrip GPIO {gpio_pin}: {pixel_count} pixels, {len(zones_for_gpio)} zones")
-
-    return zone_strips
-
-
-async def cleanup_application(
-    led_controller,
-    gpio_manager,
-    keyboard_task,
-    polling_task,
-    zone_strips
-) -> None:
-    """Perform graceful application cleanup on shutdown."""
-    log.info("🧹 Starting cleanup...")
-
-    # Cancel polling and keyboard tasks
-    if not keyboard_task.done():
-        keyboard_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await keyboard_task
-
-    if not polling_task.done():
-        polling_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await polling_task
-
-    # Stop animations
-    log.info("Stopping animations...")
-    led_controller.animation_mode_controller.animation_service.stop_all()
-    if led_controller.animation_engine and led_controller.animation_engine.is_running():
-        await led_controller.animation_engine.stop()
-
-    # Stop pulsing
-    log.info("Stopping pulsing...")
-    # await led_controller.static_mode_controller._stop_pulse_async()
-    await asyncio.sleep(0.05)
-
-    # Fade out
-    # log.info("Performing shutdown transition...")
-    # await zone_strip_transition_service.fade_out(zone_strip_transition_service.SHUTDOWN)
-
-    # Clear LEDs (ALL strips, not just GPIO 18)
-    log.info("Clearing LEDs on all GPIO strips...")
-    led_controller.clear_all()
-    for gpio_pin, strip in zone_strips.items():
-        log.info(f"Clearing GPIO {gpio_pin}...")
-        strip.clear()
-
-    # Cleanup GPIO
-    log.info("Cleaning up GPIO...")
-    gpio_manager.cleanup()
-
-    log.info("Cleanup complete.")
-
+from lifecycle.task_registry import (
+    create_tracked_task,
+    TaskCategory,
+    TaskRegistry
+)
 
 # ---------------------------------------------------------------------------
 # Application Entry
@@ -190,10 +100,23 @@ async def cleanup_application(
 async def main():
     """Main async entry point (dependency injection and event loop startup)."""
 
-    log.info("Starting Diuna application...")
+    log.info("Initializing Diuna application...")
 
+    # Create Socket.IO server
+    log.info("Creating Socket.IO server...")
+    socketio_server = create_socketio_server(cors_origins=["*"])
+    
+    # Initialize broadcaster early so all logs can be transmitted
+    broadcaster = get_broadcaster()
+    broadcaster.set_socketio_server(socketio_server)
+    broadcaster.start()
+    
+    get_logger().set_broadcaster(broadcaster)
+    
+    log.info("Socket.IO + LogBroadcaster initialized (early)")
+    
     # ========================================================================
-    # INFRASTRUCTURE
+    # 1. INFRASTRUCTURE
     # ========================================================================
 
     log.info("Initializing GPIO manager (singleton)...")
@@ -204,13 +127,8 @@ async def main():
     config_manager.load()
 
     log.info("Initializing event bus...")
-    event_bus = EventBus()
+    event_bus = EventBus().instance()
     event_bus.add_middleware(log_middleware)
-    atexit.register(emergency_gpio_cleanup)
-
-    # ========================================================================
-    # REPOSITORY & SERVICES
-    # ========================================================================
 
     log.info("Loading application state...")
     state_file = Path(__file__).resolve().parent / "state" / "state.json"
@@ -219,109 +137,92 @@ async def main():
     log.info("Initializing services...")
     animation_service = AnimationService(assembler)
     app_state_service = ApplicationStateService(assembler)
-    zone_service = ZoneService(assembler, app_state_service)
+    zone_service = ZoneService(assembler, app_state_service, event_bus)
+
 
     # ========================================================================
-    # LAYER 1: HARDWARE
+    # 2. HARDWARE COORDINATOR
     # ========================================================================
 
-    log.info("Initializing hardware control panel...")
-    control_panel = ControlPanel(
-        config_manager.hardware_manager,
-        event_bus,
-        gpio_manager
+    hardware = HardwareCoordinator(
+        hardware_manager=config_manager.hardware_manager,
+        gpio_manager=gpio_manager
+    ).initialize(
+        all_zones = zone_service.get_all()
+    )
+    
+    # hardware.control_panel.event_bus = event_bus
+    
+    control_panel_controller = ControlPanelController(
+        control_panel=hardware.control_panel, 
+        event_bus=event_bus
     )
 
-    log.info("Initializing LED strips...")
-    zone_strips = _create_zone_strips(zone_service.get_all(), config_manager.hardware_manager)
-
-    # PREVIEW PANEL: TEMPORARILY DISABLED
-    # Treating last 8 pixels (PREVIEW zone) as normal zone for now
-
     # ========================================================================
-    # FRAME MANAGER
+    # 3. FRAME MANAGER
     # ========================================================================
 
     log.info("Initializing FrameManager...")
     frame_manager = FrameManager(fps=60)
+    frame_manager_task = create_tracked_task(
+        frame_manager.start(),
+        category=TaskCategory.RENDER,
+        description="Frame Manager render loop"
+    )
 
     # Register all LED strips with FrameManager
-    for gpio_pin, strip in zone_strips.items():
-        frame_manager.add_main_strip(strip)
-        log.info(f"Registered ZoneStrip (GPIO {gpio_pin}) with FrameManager")
-        
+    for gpio_pin, strip in hardware.zone_strips.items():
+        frame_manager.add_zone_strip(strip)
+        # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        log.info(f"Created TransitionService for GPIO {gpio_pin}")
+        log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
 
-    zone_strip_controllers = {}
-    controller = ZoneStripController(strip, transition_service, frame_manager)
-    zone_strip_controllers[gpio_pin] = controller
-    log.info(f"Created ZoneStripController for GPIO {gpio_pin}")
     
-    control_panel_controller = ControlPanelController(control_panel, event_bus)
+    # ========================================================================
+    # 4. SERVICE CONTAINER
+    # ========================================================================
 
-    # ========================================================================
-    # LAYER 3: APPLICATION
-    # ========================================================================
     services = ServiceContainer(
+        event_bus=event_bus,
         zone_service=zone_service,
         animation_service=animation_service,
         app_state_service=app_state_service,
         frame_manager=frame_manager,
-        event_bus=event_bus,
         color_manager=config_manager.color_manager,
-        config_manager=config_manager
+        config_manager=config_manager,
+        data_assembler=assembler
     )
     
-    log.info("Initializing LED controller...")
-    led_controller = LEDController(
-        config_manager=config_manager,
+    snapshot_publisher = SnapshotPublisher(
+        zone_service=zone_service,
         event_bus=event_bus,
-        gpio_manager=gpio_manager, 
-        service_container=services,
-        zone_strip_controllers=zone_strip_controllers
     )
 
-    # ========================================================================
-    # FRAME MANAGER STARTUP
-    # ========================================================================
 
-    log.info("Starting FrameManager render loop...")
-    asyncio.create_task(frame_manager.start())
-    log.info("FrameManager running.")
-        
-    # PREVIEW PANEL DISABLED
-    # Set parent controller reference for preview panel (needed for power toggle fade)
-    # if preview_panel_controller:
-    #     preview_panel_controller._parent_controller = led_controller
+    # Register service container with API for dependency injection
+    set_service_container(services)
+    log.info("Service container registered")
+
+    log.info("Initializing LED controller...")
+    lighting_controller = LightingController(
+        service_container=services
+    )
+    log.info("Finished initializing LED controller...")
+
 
     # ========================================================================
-    # ADAPTERS
+    # 6. ADAPTERS (Keyboard)
     # ========================================================================
 
     log.info("Initializing keyboard input...")
-    keyboard_adapter = KeyboardInputAdapter(event_bus)
-    keyboard_task = asyncio.create_task(keyboard_adapter.run())
+    keyboard_task = create_tracked_task(
+        KeyboardInputAdapter(event_bus).run(),
+        category=TaskCategory.INPUT,
+        description="KeyboardInputAdapter"
+    )
 
     # ========================================================================
-    # STARTUP TRANSITION
-    # ========================================================================
-    
-    log.info("Performing startup - rendering initial state...")
-    zones = zone_service.get_all()
-
-    # Render all zones with their loaded state (makes LEDs visible on startup)
-    # This submits a MANUAL priority frame with all zone colors to FrameManager
-    # Format: {ZoneID: (Color, brightness_0_to_100)}
-    zone_colors = {
-        zone.config.id: (zone.state.color, int(zone.brightness * 100))
-        for zone in zones
-    }
-    # frame_manager.submit_full_strip_frame(FullStripFrame(zone_colors, priority=FramePriority.MANUAL)
-    await asyncio.sleep(0.1)  # Give async task time to submit frame
-
-    # ========================================================================
-    # RUN LOOPS
+    # 7. HARDWARE POLLING LOOP
     # ========================================================================
 
     async def hardware_polling_loop():
@@ -334,34 +235,90 @@ async def main():
                     log.error(f"Hardware polling error: {error}", exc_info=True)
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:
-            log.debug("Hardware polling loop cancelled.")
+            log.debug("Hardware polling loop cancelled", category=LogCategory.HARDWARE)
             raise
-    
         
-    polling_task = asyncio.create_task(hardware_polling_loop(), name="HardwarePolling")
+    polling_task =  create_tracked_task(
+        hardware_polling_loop(),
+        category=TaskCategory.HARDWARE,
+        description="ControlPanel Polling Loop"
+    )
+
     
-    # Register signal handlers for graceful exit
+    log.info("Registering Socket.IO modules...")
+    await register_socketio(socketio_server, services)
+        
+    # ========================================================================
+    # 8. API SERVER
+    # ========================================================================
+
+    # Ensure port is free before starting API server
+    # (recovery from previous crashes that left port orphaned)
+    log.info("Checking API port availability...")
+    port_mgr = PortManager.instance()
+    await port_mgr.ensure_available(port=8000)
+
+    log.info("Creating FastAPI app...")
+    fastapi_app = create_app(
+        title="Diuna LED System",
+        version="1.0.0",
+        docs_enabled=True,
+        cors_origins=["*"]
+    )
+    
+    log.info("Wrapping FastAPI app with Socket.IO...")
+    app = wrap_app_with_socketio(fastapi_app, socketio_server)
+    
+    api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)
+
+    log.info("Starting FastAPI app...")
+    api_task = create_tracked_task(
+        api_wrapper.start(),
+        category=TaskCategory.API,
+        description="FastAPI/Uvicorn Server"
+    )
+    
+    log.info("FastAPI app started")
+
+    # ============================================================
+    # 10. SHUTDOWN COORDINATOR
+    # ============================================================
+
+    log.info("Initializing shutdown system...")
+
+    coordinator = ShutdownCoordinator()
+    coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
+    coordinator.register(AnimationShutdownHandler(lighting_controller))
+    coordinator.register(IndicatorShutdownHandler(lighting_controller.selected_zone_indicator))
+    coordinator.register(FrameManagerShutdownHandler(frame_manager))  # ← Frame manager cleanup (includes executor shutdown)
+    coordinator.register(LEDShutdownHandler(hardware))
+    coordinator.register(TaskCancellationHandler([frame_manager_task, keyboard_task, polling_task]))  # ← Add frame manager task
+    coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
+    coordinator.register(GPIOShutdownHandler(gpio_manager))
+
+    # Setup signal handlers via coordinator
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(loop, s.name)))
+    coordinator.setup_signal_handlers(loop)
 
-    try:
-        await asyncio.gather(keyboard_task, polling_task)
-    except asyncio.CancelledError:
-        log.debug("Main loop cancelled.")
-    finally:
-        await cleanup_application(
-            led_controller,
-            gpio_manager,
-            keyboard_task,
-            polling_task,
-            zone_strips
-        )
+    log.info("🏁 Application initialized. Waiting for exit signal...")
 
+    # Wait for shutdown signal (Ctrl+C, SIGTERM, etc.)
+    await coordinator.wait_for_shutdown()
 
+    # Execute shutdown sequence in priority order
+    await coordinator.shutdown_all()
+    log.info("👋 Diuna shut down cleanly.")
 
+    
+# ---------------------------------------------------------------------------
+# ENTRY POINT
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass  # Handled in main()'s finally block
+        log.info("Keyboard interrupt received")
+    except Exception as e:
+        log.error(f"Fatal error: {e}", exc_info=True)
+    finally:
+        sys.exit(0)

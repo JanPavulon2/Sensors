@@ -1,0 +1,272 @@
+/**
+ * Cyber Theme - Matrix Circuit
+ * Dark, futuristic aesthetic with Matrix-style green
+ */
+
+.cyber-theme {
+  /* ============ Primary Colors ============ */
+  --theme-background: #0a0e14;
+  --theme-surface: rgba(20, 25, 35, 0.6);
+  --theme-surface-light: rgba(30, 40, 50, 0.8);
+  --theme-surface-dark: rgba(10, 15, 20, 0.8);
+
+  /* ============ Accent Colors ============ */
+  --theme-accent-primary: #00ff00; /* Matrix bright green */
+  --theme-accent-secondary: #00aa00; /* Dark matrix green */
+  --theme-accent-tertiary: #00ff88; /* Neon green glow */
+
+  /* ============ Text Colors ============ */
+  --theme-text: #e8eaed; /* Soft white */
+  --theme-text-dim: #8894a8; /* Muted gray */
+  --theme-text-muted: #5a6572; /* Very dim gray */
+
+  /* ============ Status Colors ============ */
+  --theme-success: #00ff00;
+  --theme-warning: #ffff00;
+  --theme-error: #ff0000;
+  --theme-info: #00ff00;
+
+  /* ============ LED Glow Effects ============ */
+  --theme-glow-0: rgba(0, 255, 0, 0.6); /* Inner glow */
+  --theme-glow-1: rgba(0, 255, 0, 0.3); /* Mid glow */
+  --theme-glow-2: rgba(0, 255, 0, 0.15); /* Outer glow */
+
+  /* ============ Borders ============ */
+  --theme-border: rgba(0, 255, 0, 0.2);
+  --theme-border-light: rgba(0, 255, 0, 0.1);
+  --theme-border-dark: rgba(0, 255, 0, 0.3);
+
+  /* ============ Shadows with Glow ============ */
+  --theme-shadow-glow: 0 0 8px rgba(0, 255, 0, 0.4), 0 0 16px rgba(0, 255, 0, 0.2);
+
+  /* ============ Special Effects ============ */
+  --theme-circuit-trace: linear-gradient(
+    90deg,
+    rgba(0, 255, 0, 0.1) 0%,
+    rgba(0, 170, 0, 0.1) 50%,
+    rgba(0, 255, 0, 0.1) 100%
+  );
+}
+
+/* ============ Background ============ */
+.cyber-theme body,
+.cyber-theme .design-container {
+  background-color: var(--theme-background);
+  color: var(--theme-text);
+  font-family: var(--font-sans);
+  position: relative;
+}
+
+/* ============ Surface Styles with Circuit Accents ============ */
+.cyber-theme .surface,
+.cyber-theme [role='dialog'],
+.cyber-theme .panel,
+.cyber-theme .card {
+  background-color: var(--theme-surface);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  color: var(--theme-text);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Add circuit corner dots */
+.cyber-theme .surface::before,
+.cyber-theme .card::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  background: var(--theme-accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--theme-accent-primary), 0 0 20px var(--theme-accent-primary);
+  opacity: 0.8;
+}
+
+.cyber-theme .surface::after,
+.cyber-theme .card::after {
+  content: '';
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  background: var(--theme-accent-secondary);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--theme-accent-secondary), 0 0 20px var(--theme-accent-secondary);
+  opacity: 0.8;
+}
+
+/* ============ Interactive Elements ============ */
+.cyber-theme button,
+.cyber-theme [role='button'],
+.cyber-theme input[type='button'],
+.cyber-theme input[type='submit'] {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.cyber-theme button:hover {
+  background-color: #00e8f0;
+  box-shadow: var(--theme-shadow-glow);
+}
+
+.cyber-theme button:active {
+  transform: scale(0.98);
+  box-shadow: 0 0 16px rgba(0, 245, 255, 0.6);
+}
+
+.cyber-theme button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============ Inputs ============ */
+.cyber-theme input,
+.cyber-theme textarea,
+.cyber-theme select {
+  background-color: var(--theme-surface-dark);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  transition: all var(--transition-base);
+}
+
+.cyber-theme input:focus,
+.cyber-theme textarea:focus,
+.cyber-theme select:focus {
+  outline: none;
+  border-color: var(--theme-accent-primary);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.3);
+  background-color: rgba(20, 25, 35, 0.9);
+}
+
+/* ============ Sliders ============ */
+.cyber-theme input[type='range'] {
+  accent-color: var(--theme-accent-primary);
+}
+
+.cyber-theme input[type='range']::-webkit-slider-thumb {
+  background-color: var(--theme-accent-primary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+.cyber-theme input[type='range']::-moz-range-thumb {
+  background-color: var(--theme-accent-primary);
+  border: none;
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Links ============ */
+.cyber-theme a {
+  color: var(--theme-accent-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all var(--transition-base);
+}
+
+.cyber-theme a:hover {
+  border-bottom-color: var(--theme-accent-primary);
+}
+
+.cyber-theme a:active {
+  color: var(--theme-accent-secondary);
+}
+
+/* ============ LED Pixel ============ */
+.cyber-theme .led-pixel {
+  background: var(--led-color, #fff);
+  box-shadow: 0 0 8px var(--led-color, #fff), 0 0 16px var(--led-color, #fff),
+    0 0 24px var(--led-color, #fff);
+  border-radius: 50%;
+  transition: box-shadow var(--transition-fast);
+  filter: brightness(var(--brightness-factor, 1));
+}
+
+.cyber-theme .led-pixel:hover {
+  box-shadow: 0 0 12px var(--led-color, #fff), 0 0 20px var(--led-color, #fff),
+    0 0 32px var(--led-color, #fff);
+}
+
+/* ============ Scrollbar (Webkit) ============ */
+.cyber-theme ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cyber-theme ::-webkit-scrollbar-track {
+  background: var(--theme-surface);
+}
+
+.cyber-theme ::-webkit-scrollbar-thumb {
+  background: var(--theme-accent-primary);
+  border-radius: var(--radius-full);
+}
+
+.cyber-theme ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent-secondary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Selection ============ */
+.cyber-theme ::selection {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+}
+
+.cyber-theme ::-moz-selection {
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-background);
+}
+
+/* ============ Tooltips ============ */
+.cyber-theme [data-tooltip]::after {
+  background-color: var(--theme-surface-light);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-accent-primary);
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ============ Disabled Elements ============ */
+.cyber-theme :disabled,
+.cyber-theme [aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: var(--theme-text-muted);
+}
+
+/* ============ Focus Visible (accessibility) ============ */
+.cyber-theme *:focus-visible {
+  outline: 2px solid var(--theme-accent-primary);
+  outline-offset: 2px;
+}
+
+/* ============ Placeholder ============ */
+.cyber-theme ::placeholder {
+  color: var(--theme-text-muted);
+}
+
+.cyber-theme ::-webkit-input-placeholder {
+  color: var(--theme-text-muted);
+}
+
+.cyber-theme :-moz-placeholder {
+  color: var(--theme-text-muted);
+  opacity: 1;
+}
+
+.cyber-theme ::-moz-placeholder {
+  color: var(--theme-text-muted);
+  opacity: 1;
+}

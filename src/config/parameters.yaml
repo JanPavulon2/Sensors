@@ -4,38 +4,38 @@
 
 # ===== ZONE PARAMETERS (STATIC mode) =====
 # Parameters for zone editing
-zone_parameters:
-  ZONE_COLOR_HUE:
-    type: COLOR
-    color_modes: [HUE]
-    default: 0
-    min: 0
-    max: 360
-    step: 10
-    wraps: true
-    unit: "°"
-    description: "Zone color adjustment via HUE (0-360°)"
+# zone_parameters:
+#   ZONE_COLOR_HUE:
+#     type: COLOR
+#     color_modes: [HUE]
+#     default: 0
+#     min: 0
+#     max: 360
+#     step: 10
+#     wraps: true
+#     unit: "°"
+#     description: "Zone color adjustment via HUE (0-360°)"
 
-  ZONE_COLOR_PRESET:
-    type: COLOR
-    color_modes: [PRESET]
-    default: 0
-    description: "Zone color selection via named presets"
+#   ZONE_COLOR_PRESET:
+#     type: COLOR
+#     color_modes: [PRESET]
+#     default: 0
+#     description: "Zone color selection via named presets"
 
-  ZONE_BRIGHTNESS:
-    type: PERCENTAGE
-    default: 100
-    min: 0
-    max: 100
-    step: 12.5
-    wraps: false
-    unit: "%"
-    description: "Zone brightness (0-100%)"
+#   ZONE_BRIGHTNESS:
+#     type: PERCENTAGE
+#     default: 100
+#     min: 0
+#     max: 100
+#     step: 12.5
+#     wraps: false
+#     unit: "%"
+#     description: "Zone brightness (0-100%)"
 
-  ZONE_REVERSED:
-    type: BOOLEAN
-    default: false
-    description: "Reverse pixel order in zone (for future use)"
+#   ZONE_REVERSED:
+#     type: BOOLEAN
+#     default: false
+#     description: "Reverse pixel order in zone (for future use)"
 
 # ===== ANIMATION BASE PARAMETERS =====
 # Parameters shared by all animations

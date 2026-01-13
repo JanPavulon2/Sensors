@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 from typing import Optional
-from models.enums import ParamID
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import ZoneEditTarget
 
 
 @dataclass
@@ -26,13 +27,12 @@ class ApplicationState:
 
     # === Mode State ===
     edit_mode: bool = True  # Enable/disable editing
-    lamp_white_mode: bool = False  # Desk lamp mode (locks lamp to warm white)
-    lamp_white_saved_state: Optional[dict] = None  # Saved state for lamp mode restore
 
     # === Selection State ===
-    current_zone_index: int = 0  # Currently selected zone (for STATIC mode)
-    current_param: ParamID = ParamID.ZONE_COLOR_HUE  # Currently active parameter
-
+    selected_zone_index: int = 0  
+    selected_zone_edit_target: ZoneEditTarget = ZoneEditTarget.COLOR_HUE
+    selected_animation_param_id: AnimationParamID = AnimationParamID.HUE
+    
     # === Debugging Features ===
     frame_by_frame_mode: bool = False  # Frame-by-frame animation debugging
 

@@ -435,8 +435,8 @@ class ApplicationState:
     edit_mode: bool = True
     lamp_white_mode: bool = False
     lamp_white_saved_state: Optional[dict] = None
-    current_zone_index: int = 0
-    current_param: ParamID = ParamID.ZONE_COLOR_HUE
+    selected_zone_index: int = 0
+    selected_param_id: ParamID = ParamID.ZONE_COLOR_HUE
     frame_by_frame_mode: bool = False  # Debugging
     save_on_change: bool = True  # System config
 ```
@@ -465,9 +465,9 @@ class ZoneService:
         self.save()  # Auto-save via DataAssembler
 
 class ApplicationStateService:
-    def set_current_zone_index(self, index: int):
+    def set_selected_zone_index(self, index: int):
         """Update current zone index"""
-        self.state.current_zone_index = index
+        self.state.selected_zone_index = index
         self._save()  # Auto-save via DataAssembler
 ```
 
@@ -516,8 +516,8 @@ class LEDController:
     main_mode: MainMode              # STATIC or ANIMATION
     edit_mode: bool                  # Enable/disable editing
     lamp_white_mode: bool            # Desk lamp mode
-    current_zone_index: int          # Selected zone (STATIC mode)
-    current_param: ParamID           # Active parameter
+    selected_zone_index: int          # Selected zone (STATIC mode)
+    selected_param_id: ParamID           # Selected parameter
     lamp_white_saved_state: Optional[dict]  # Saved lamp state
 
     # Update pattern: modify local → call service.set_xxx() to persist
@@ -606,7 +606,6 @@ src/
 │   ├── hardware_manager.py
 │   ├── animation_manager.py
 │   ├── color_manager.py
-│   └── parameter_manager.py
 │
 ├── models/                      # Data models
 │   ├── color.py                # Color class (HUE/PRESET/RGB)
@@ -851,7 +850,6 @@ class DataAssembler:
         self.config_manager = config_manager
         self.state_path = state_path
         self.color_manager = config_manager.color_manager
-        self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
 ```
 
@@ -1134,7 +1132,7 @@ ZoneService.get_zone(new_zone_id)
     ↓
 Update preview panel
     ↓
-UISessionService.save(current_zone_index=...)
+UISessionService.save(selected_zone_index=...)
     ↓
 DataAssembler.save_partial_state({"selected_zone_index": ...})
 ```
@@ -1145,7 +1143,7 @@ User Rotates Modulator (delta=10)
     ↓
 LEDController.handle_modulator_rotation(10)
     ↓
-[current_param = ZONE_COLOR_HUE]
+[selected_param_id = ZONE_COLOR_HUE]
     ↓
 _adjust_zone_parameter(zone_id, 10)
     ↓

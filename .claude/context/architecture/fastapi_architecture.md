@@ -334,7 +334,7 @@ GET /api/system/state
       "current_animation": null,
       "edit_mode": false,
       "lamp_white_mode": false,
-      "current_zone_index": 0,
+      "selected_zone_index": 0,
       "frame_by_frame": false
     }
   }

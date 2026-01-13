@@ -1,0 +1,319 @@
+/**
+ * Control Panel Page Styles
+ * Layout and styling for the live LED control interface
+ */
+
+.container {
+  min-height: 100vh;
+  background-color: var(--theme-background);
+  color: var(--theme-text);
+  padding: var(--space-6);
+  font-family: var(--font-sans);
+}
+
+.header {
+  margin-bottom: var(--space-8);
+
+  h1 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-3xl);
+    font-weight: var(--font-weight-bold);
+    background: linear-gradient(135deg, var(--theme-accent-primary), var(--theme-accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  p {
+    margin: 0;
+    color: var(--theme-text-dim);
+    font-size: var(--text-lg);
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: var(--space-6);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ============ Canvas Section ============ */
+
+.canvasSection {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 500px;
+
+  h2 {
+    margin: 0;
+    font-size: var(--text-2xl);
+    color: var(--theme-text);
+  }
+}
+
+/* ============ Control Section ============ */
+
+.controlSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.panel {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+
+  h3 {
+    margin: 0 0 var(--space-3) 0;
+    font-size: var(--text-lg);
+    color: var(--theme-text);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  h4 {
+    margin: var(--space-4) 0 var(--space-2) 0;
+    font-size: var(--text-sm);
+    color: var(--theme-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: var(--font-weight-medium);
+  }
+}
+
+/* ============ Zone List ============ */
+
+.zoneList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.zoneButton {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--theme-surface-dark);
+  border: 2px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-dim);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+
+  &:hover {
+    border-color: var(--theme-accent-primary);
+    color: var(--theme-text);
+    background: rgba(0, 245, 255, 0.05);
+  }
+
+  &.active {
+    background: transparent;
+    border-color: var(--theme-accent-primary);
+    color: var(--theme-text);
+    box-shadow: none;
+  }
+}
+
+.zoneName {
+  flex: 1;
+  text-align: left;
+}
+
+.zonePixels {
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  margin-left: var(--space-2);
+}
+
+/* ============ Color Controls ============ */
+
+.hueControl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.slider {
+  flex: 1;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--theme-border);
+  cursor: pointer;
+  accent-color: var(--theme-accent-primary);
+  background: linear-gradient(90deg, red, yellow, lime, cyan, blue, magenta, red);
+  padding: 2px;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--theme-accent-primary);
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--theme-accent-primary);
+    border: 2px solid var(--theme-background);
+  }
+
+  &::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--theme-accent-primary);
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--theme-accent-primary);
+    border: 2px solid var(--theme-background);
+  }
+}
+
+.hueValue {
+  min-width: 40px;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--theme-accent-primary);
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.presetButton {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--theme-border);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+
+  &:hover {
+    transform: scale(1.1);
+    border-color: var(--theme-accent-primary);
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+/* ============ Brightness Control ============ */
+
+.brightnessControl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brightnessValue {
+  min-width: 35px;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--theme-text);
+}
+
+/* ============ Info Panel ============ */
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--theme-text-dim);
+
+    strong {
+      color: var(--theme-text);
+      font-weight: var(--font-weight-semibold);
+    }
+  }
+}
+
+/* ============ Responsive ============ */
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .controlSection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: var(--space-3);
+  }
+
+  .header {
+    margin-bottom: var(--space-6);
+
+    h1 {
+      font-size: var(--text-2xl);
+    }
+
+    p {
+      font-size: var(--text-base);
+    }
+  }
+
+  .canvasSection {
+    padding: var(--space-4);
+    min-height: 300px;
+
+    h2 {
+      font-size: var(--text-xl);
+    }
+  }
+
+  .controlSection {
+    grid-template-columns: 1fr;
+  }
+
+  .presetGrid {
+    grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: var(--space-2);
+  }
+
+  .header {
+    h1 {
+      font-size: var(--text-xl);
+    }
+
+    p {
+      font-size: var(--text-sm);
+    }
+  }
+
+  .panel {
+    padding: var(--space-3);
+  }
+
+  .zoneButton {
+    padding: var(--space-2);
+    font-size: var(--text-xs);
+  }
+}

@@ -67,8 +67,12 @@ class WS281xStrip(IPhysicalStrip):
         self._order_map = COLOR_ORDER_MAP[config.color_order.upper()]
         strip_type_const = self._decode_color_order(config.color_order)
 
+        log.debug(f"WS281xStrip init: color_order={config.color_order}, strip_type_const={hex(strip_type_const) if strip_type_const else None}, order_map={self._order_map}")
+
         # Create PixelStrip (try full signature, fallback if binding differs)
+        self._strip_type_handled_by_library = False
         try:
+            log.debug(f"Creating PixelStrip with strip_type_const={hex(strip_type_const) if strip_type_const else None}")
             self._pixel_strip = PixelStrip(
                 config.led_count,
                 config.gpio_pin,
@@ -79,8 +83,11 @@ class WS281xStrip(IPhysicalStrip):
                 config.channel,
                 strip_type_const,
             )
-        except TypeError:
+            log.debug("PixelStrip created with strip_type parameter - library will handle color order")
+            self._strip_type_handled_by_library = True
+        except TypeError as e:
             # Older rpi_ws281x version without strip_type param
+            log.warn(f"PixelStrip failed with strip_type, falling back to old API: {e}")
             self._pixel_strip = PixelStrip(
                 config.led_count,
                 config.gpio_pin,
@@ -90,6 +97,8 @@ class WS281xStrip(IPhysicalStrip):
                 config.brightness,
                 config.channel,
             )
+            log.warn("Using old PixelStrip API - apply_frame() will handle color order remapping")
+            self._strip_type_handled_by_library = False
 
         # Initialize hardware
         self._pixel_strip.begin()
@@ -137,7 +146,7 @@ class WS281xStrip(IPhysicalStrip):
         Atomic push of full frame to hardware (single DMA transfer).
 
         - Updates _buffer and hardware buffer in single loop
-        - Handles color order remapping
+        - Handles color order remapping (only if library doesn't handle it)
         - Clears remaining pixels if frame shorter than led_count
         - Calls show() once at end (fast path)
         """
@@ -160,18 +169,26 @@ class WS281xStrip(IPhysicalStrip):
                 log.warn("apply_frame: invalid pixel type", index=i, type=type(col))
                 continue
 
-            # Reorder channels according to color_order
-            ordered = [0, 0, 0]
-            ordered[r_i] = max(0, min(255, int(r)))
-            ordered[g_i] = max(0, min(255, int(g)))
-            ordered[b_i] = max(0, min(255, int(b)))
+            # Reorder channels according to color_order ONLY if library doesn't handle it
+            if self._strip_type_handled_by_library:
+                # Library handles color order, send RGB as-is
+                r_final = max(0, min(255, int(r)))
+                g_final = max(0, min(255, int(g)))
+                b_final = max(0, min(255, int(b)))
+            else:
+                # Library doesn't handle color order, we must remap
+                ordered = [0, 0, 0]
+                ordered[r_i] = max(0, min(255, int(r)))
+                ordered[g_i] = max(0, min(255, int(g)))
+                ordered[b_i] = max(0, min(255, int(b)))
+                r_final, g_final, b_final = ordered[0], ordered[1], ordered[2]
 
             # Push to hardware buffer
             try:
                 if use_rgb_helper:
-                    self._pixel_strip.setPixelColorRGB(i, ordered[0], ordered[1], ordered[2])
+                    self._pixel_strip.setPixelColorRGB(i, r_final, g_final, b_final)
                 else:
-                    self._pixel_strip.setPixelColor(i, WS281xColor(ordered[0], ordered[1], ordered[2]))
+                    self._pixel_strip.setPixelColor(i, WS281xColor(r_final, g_final, b_final))
             except Exception as ex:
                 log.error("apply_frame: setPixel failed", index=i, error=str(ex))
 

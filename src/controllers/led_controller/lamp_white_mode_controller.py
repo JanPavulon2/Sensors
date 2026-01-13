@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 from models.enums import ZoneID
 from models.color import Color
 from utils.logger import get_logger, LogCategory
 from services import ServiceContainer
-
-if TYPE_CHECKING:
-    from controllers.zone_strip_controller import ZoneStripController
 
 log = get_logger().for_category(LogCategory.GENERAL)
 
@@ -25,18 +21,16 @@ class LampWhiteModeController:
     - Exclude lamp from zone selector when active
     """
 
-    def __init__(self, services: ServiceContainer, strip_controller: ZoneStripController):
+    def __init__(self, services: ServiceContainer):
         """
         Initialize lamp white mode controller with dependency injection.
 
         Args:
             services: ServiceContainer with all core services and managers
-            strip_controller: ZoneStripController for rendering
         """
         self.zone_service = services.zone_service
         self.app_state = services.app_state_service
         self.color_manager = services.color_manager
-        self.strip_controller = strip_controller
 
         self.lamp_white_mode = self.app_state.get_state().lamp_white_mode
         self.lamp_white_saved_state = self.app_state.get_state().lamp_white_saved_state
@@ -59,7 +53,8 @@ class LampWhiteModeController:
 
             # Refresh lamp after service changes and render
             lamp = self.zone_service.get_zone(ZoneID.LAMP)
-            self.strip_controller.render_zone_combined(lamp)
+            # TODO: self.strip_controller.render_zone_combined(lamp)  # Controller disabled
+            # TODO: Direct FrameManager submission needed here
 
             log.info("Lamp white mode ON")
         else:
@@ -74,7 +69,8 @@ class LampWhiteModeController:
                 self.zone_service.set_brightness(ZoneID.LAMP, brightness)
 
                 lamp = self.zone_service.get_zone(ZoneID.LAMP)
-                self.strip_controller.render_zone_combined(lamp)
+                # TODO: self.strip_controller.render_zone_combined(lamp)  # Controller disabled
+                # TODO: Direct FrameManager submission needed here
 
             self.lamp_white_saved_state = None
             self.lamp_white_mode = False

@@ -33,7 +33,7 @@ class ZoneRenderState:
         zone_id: Which zone this render state belongs to
         pixels: Currently rendered pixel colors (List[Color])
         brightness: Applied brightness level (0-100)
-        mode: Current render mode (STATIC, ANIMATION, OFF)
+        mode: Current render mode (STATIC, ANIMATION)
         source: Which FrameSource last updated this zone
         last_update_ts: When this zone was last rendered
         dirty: Whether zone changed since last hardware push (for optimization)
@@ -42,7 +42,7 @@ class ZoneRenderState:
     zone_id: ZoneID
     pixels: List[Color] = field(default_factory=list)
     brightness: int = 100
-    mode: ZoneRenderMode = ZoneRenderMode.OFF
+    mode: ZoneRenderMode = ZoneRenderMode.STATIC
     source: Optional[FrameSource] = None
     last_update_ts: float = field(default_factory=time.time)
     dirty: bool = True

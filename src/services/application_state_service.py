@@ -2,7 +2,8 @@
 
 import asyncio
 from typing import Optional
-from models.enums import ParamID, LogCategory
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import LogCategory, ZoneEditTarget
 from models.domain.application import ApplicationState
 from services.data_assembler import DataAssembler
 from utils.logger import get_logger
@@ -25,7 +26,7 @@ class ApplicationStateService:
 
     State categories:
     - Mode state: edit_mode, lamp_white_mode
-    - Selection state: current_zone_index, current_param
+    - Selection state: selected_zone_index, selected_param_id
     - Debugging: frame_by_frame_mode
     - System config: save_on_change
     """
@@ -44,7 +45,7 @@ class ApplicationStateService:
         self._save_task: Optional[asyncio.Task] = None
         self._save_delay = 0.5  # 500ms debounce window
 
-        # log.info(f"ApplicationStateService initialized: {self.state.main_mode.name} mode")
+        # log.info(f"ApplicationStateService initialized: {self.state.edit_mode} mode")
 
     # === Internal Methods ===
 
@@ -54,16 +55,15 @@ class ApplicationStateService:
 
         Waits for debounce delay, then saves to disk.
         Called by _queue_save() after cancelling previous pending save.
+
+        NOTE: Application state is ALWAYS saved, regardless of save_on_change setting.
+        The save_on_change setting only applies to zone state changes.
+        Application state changes are critical and must persist across restarts.
         """
         await asyncio.sleep(self._save_delay)
 
-        if not self.state.save_on_change:
-            log.debug("Auto-save disabled, skipping state save")
-            return
-
         try:
             self.assembler.save_application_state(self.state)
-            log.debug("State saved to disk (debounced)")
         except Exception as e:
             log.error(f"Failed to save application state: {e}")
 
@@ -107,7 +107,7 @@ class ApplicationStateService:
         Debounced: Rapid calls are batched and saved 500ms after the last call.
 
         Example:
-            service.save(current_zone_index=2, edit_mode=False)
+            service.save(selected_zone_index=2, edit_mode=False)
 
         Args:
             **updates: Field name/value pairs to update
@@ -127,30 +127,31 @@ class ApplicationStateService:
         self._queue_save()
         log.info(f"Edit mode set to: {self.state.edit_mode}")
 
-    def set_lamp_white_mode(self, enabled: bool) -> None:
-        """Set lamp white mode ON/OFF (debounced save)"""
-        self.state.lamp_white_mode = enabled
-        self._queue_save()
-        log.info(f"Lamp white mode set to: {self.state.lamp_white_mode}")
-
-
     # === Selection Management ===
+    def set_selected_animation_param_id(self, param: AnimationParamID) -> None:
+        """
+        Set currently selected animation parameter
+        """
+        self.state.selected_animation_param_id = param
+        self._queue_save()
+        log.info(f"Selected parameter id changed: {self.state.selected_animation_param_id.name}")
 
-    def set_current_param(self, param: ParamID) -> None:
+    def set_selected_param_id(self, param: AnimationParamID) -> None:
         """
         Set currently active parameter (debounced save)
 
         Args:
             param: Parameter ID enum value
         """
-        if not isinstance(param, ParamID):
-            log.error(f"Invalid current_param type: {type(param)}")
+        if not isinstance(param, AnimationParamID):
+            log.error(f"Invalid selected_param_id type: {type(param)}")
             return
-        self.state.current_param = param
+        
+        self.state.selected_animation_param_id = param
         self._queue_save()
-        log.info(f"Active parameter changed: {self.state.current_param.name}")
+        log.info(f"Selected parameter id changed: {self.state.selected_animation_param_id.name}")
 
-    def set_current_zone_index(self, index: int) -> None:
+    def set_selected_zone_index(self, index: int) -> None:
         """
         Set currently selected zone index (debounced save)
 
@@ -158,24 +159,18 @@ class ApplicationStateService:
             index: Zone index (0-based)
         """
         if not isinstance(index, int) or index < 0:
-            log.error(f"Invalid current_zone_index: {index}")
+            log.error(f"Invalid selected_zone_index: {index}")
             return
-        self.state.current_zone_index = index
+        self.state.selected_zone_index = index
         self._queue_save()
         log.info(f"Zone index changed: {index}")
 
-    # === Lamp White Mode State ===
-
-    def set_lamp_white_saved_state(self, saved: Optional[dict]) -> None:
-        """
-        Save/restore lamp state for lamp white mode (debounced save)
-
-        Args:
-            saved: Dictionary with saved lamp state or None to clear
-        """
-        self.state.lamp_white_saved_state = saved
+    
+    def set_selected_zone_edit_target(self, zone_edit_target: ZoneEditTarget) -> None:
+        self.state.selected_zone_edit_target = zone_edit_target
         self._queue_save()
-        log.info(f"Lamp white saved state updated: {'saved' if saved else 'cleared'}")
+        log.info(f"Selected zone edit target changed: {self.state.selected_zone_edit_target.name}")
+
 
     # === Debugging Features ===
 
@@ -197,6 +192,7 @@ class ApplicationStateService:
         Args:
             enabled: True to auto-save, False to disable
         """
+        
         # Special case: always save this setting change immediately
         old_save_on_change = self.state.save_on_change
         self.state.save_on_change = True

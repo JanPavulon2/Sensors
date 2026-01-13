@@ -518,7 +518,7 @@ for handler_entry in handlers:
             handler_entry.handler(event)
     except Exception as e:
         log.error(
-            f"Event handler failed: {handler_entry.handler.__name__} for {event.type.name}",
+            f"Event handler failed: {handler_entry.handler.__name__} for event{event.type.name}",
             exception=e
         )
         # ✓ CORRECT: Continue to next handler (one handler error doesn't stop others)

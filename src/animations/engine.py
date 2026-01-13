@@ -7,39 +7,28 @@ Uses TransitionService for smooth transitions between animation states.
 
 import asyncio
 import time
-from typing import Optional, Dict, List, Tuple, Any, Type
-
-from animations.base import BaseAnimation  # ✅ direct import — breaks circular import safely
-
-# Import animation classes here (NOT in __init__ to avoid circular imports)
+from typing import Dict, Optional, Type
+from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
-from animations.snake import SnakeAnimation
 from animations.color_snake import ColorSnakeAnimation
-from animations.color_cycle import ColorCycleAnimation
+from animations.snake import SnakeAnimation
+from engine.frame_manager import FrameManager
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID, ZoneID
+from services.zone_service import ZoneService
+from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import TaskCategory, create_tracked_task
 
-from models.domain.zone import ZoneCombined
-from models.color import Color
-from services.transition_service import TransitionService
-from services import AnimationService
-from engine import FrameManager
-from models.transition import TransitionConfig, TransitionType
-from models.enums import ParamID, LogCategory, ZoneID, AnimationID, FramePriority, FrameSource, ZoneRenderMode
-from models.frame import ZoneFrame, PixelFrame
-from utils.logger import get_category_logger
-from zone_layer.zone_strip import ZoneStrip
-
-log = get_category_logger(LogCategory.ANIMATION)
+log = get_logger().for_category(LogCategory.ANIMATION)
 
 def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
     """Build animation registry dynamically from AnimationID enum"""
     class_map = {
-        AnimationID.COLOR_CYCLE: ColorCycleAnimation,
         AnimationID.BREATHE: BreatheAnimation,
-        AnimationID.COLOR_FADE: ColorFadeAnimation,
         AnimationID.SNAKE: SnakeAnimation,
         AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
-        # AnimationID.MATRIX: MatrixAnimation,  # TEMPORARY: Disabled
+        AnimationID.COLOR_FADE: ColorFadeAnimation
     }
 
     # Convert enum to string keys using .name
@@ -47,521 +36,526 @@ def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
 
 class AnimationEngine:
     """
-    Animation engine that manages running animations
-
-    Handles:
-    - Starting/stopping animations
-    - Switching between animations
-    - Updating LED strip with animation frames
-    - Parameter updates
-
-    Example:
-        engine = AnimationEngine(strip, zones)
-        await engine.start('BREATHE', speed=50, color=(255, 0, 0))
-        await asyncio.sleep(5)
-        await engine.stop()
+    NEW AnimationEngine V3 (per-zone)
+    
+    • Each zone gets its own animation task
+    • Tasks yield SingleZoneFrame(partial=True)
+    • Engine forwards frames to FrameManager
     """
 
     # Registry of available animations - built dynamically from enum
     ANIMATIONS: Dict[AnimationID, Type[BaseAnimation]] = _build_animation_registry()
 
-    def __init__(self, strip: ZoneStrip, zones: List[ZoneCombined], frame_manager: FrameManager):
+    def __init__(self, frame_manager: FrameManager, zone_service: ZoneService):
         """
         Initialize animation engine
-
-        Args:
-            strip: ZoneStrip instance
-            zones: List of Zone objects
         """
-        self.strip: ZoneStrip = strip
-        self.zones = zones
-        self.current_animation: Optional[BaseAnimation] = None
-        self.animation_task: Optional[asyncio.Task] = None
-        self.current_id: Optional[AnimationID] = None
-
-        # Transition service for smooth animation switches
         self.frame_manager = frame_manager
-        self.transition_service = TransitionService(strip, frame_manager)
+        self.zone_service = zone_service
 
-        # Pixel buffer: zone_id -> pixel_index -> (r, g, b) for pixel-level animations
-        self.zone_pixel_buffers: dict[ZoneID, dict[int, tuple[int, int, int]]] = {}
-        # Zone color buffer: zone_id -> (r, g, b) for zone-level animations
-        self.zone_color_buffers: dict[ZoneID, tuple[int, int, int]] = {}
-        self.zone_lengths: dict[ZoneID, int] = {
-            z.config.id: z.config.pixel_count for z in zones
-        }
+        # active tasks: zone_id → asyncio.Task
+        self.tasks: Dict[ZoneID, asyncio.Task] = {}
+        self.active_animations: Dict[ZoneID, BaseAnimation] = {}
+        self.active_anim_ids: Dict[ZoneID, AnimationID] = {}
 
-        # Frame-by-frame debugging: when frozen, animation continues running but doesn't submit frames
-        self._frozen: bool = False
+        self._lock = asyncio.Lock()
 
-        log.info("AnimationEngine initialized", animations=list(self.ANIMATIONS.keys()))
-
+        # Frame submission control for frame-by-frame debugging
+        self._frozen = False
     
     # ============================================================
     # Core control methods
     # ============================================================
 
-    async def start(
+    async def start_for_zone(
         self,
-        animation_id: AnimationID,
-        excluded_zones: Optional[List] = None,
-        transition: Optional[TransitionConfig] = None,
-        from_frame: Optional[List] = None,
-        **params
+        zone_id: ZoneID,
+        anim_id: AnimationID,
+        params: dict
     ):
         """
         Start an animation by animation ID with optional transition
-
-        Args:
-            animation_id: Animation ID (AnimationID.BREATHE, AnimationID.SNAKE, etc.)
-            excluded_zones: List of zone names to exclude from animation (e.g., ["lamp"])
-            transition: Transition configuration for switching (defaults to ANIMATION_SWITCH)
-            from_frame: Optional starting frame for crossfade (if None, captures current strip state)
-            **params: Animation-specific parameters (speed, color, etc.)
-
-        Raises:
-            ValueError: If animation name is not recognized
-
-        Example:
-            # Start with default fade transition
-            await engine.start(AnimationID.BREATHE, speed=50)
-
-            # Start with crossfade from specific frame
-            await engine.start(AnimationID.SNAKE, from_frame=old_frame)
         """
-        # DEBUG: Skip animations if testing static mode only
-        try:
-            from main_asyncio import DEBUG_NOPULSE
-            if DEBUG_NOPULSE:
-                log.info("DEBUG_STATIC_ONLY: Skipping animation start")
+        # Stop previous if exists
+        if zone_id in self.tasks:
+                log.warn(f"Zone {zone_id.name} already has animation, stopping old one")
+                await self.stop_for_zone(zone_id)
+
+        async with self._lock:
+            # Resolve zone model
+            zone = self.zone_service.get_zone(zone_id)
+            if not zone:
+                log.error(f"No such zone: {zone_id}")
                 return
-        except ImportError:
-            pass
-        transition = transition or self.transition_service.ANIMATION_SWITCH
-        log.info(f"AnimEngine.start(): {animation_id}")
 
-        # Step 1: Wait for any active transitions to complete
-        await self.transition_service.wait_for_idle()
+            # Build animation instance
+            AnimClass = self.ANIMATIONS.get(anim_id)
+            if AnimClass is None:
+                log.error(f"Animation {anim_id} not registered")
+                return
 
-        # Step 2: Determine old frame for crossfade
-        old_frame = from_frame if from_frame is not None else []
-
-        # Step 3: Stop old animation if running (capture frame if not provided)
-        if self.is_running():
-            if not old_frame and hasattr(self.strip, "get_frame"):
-                old_frame = self.strip.get_frame() or []
-
-            # Stop old animation WITHOUT fade (we'll crossfade instead)
-            if self.current_animation:
-                self.current_animation.stop()
-
-            if self.animation_task:
-                self.animation_task.cancel()
-                try:
-                    await self.animation_task
-                except asyncio.CancelledError:
-                    pass
-                self.animation_task = None
-
-            # Clear buffers from old animation before starting new one
-            self.zone_pixel_buffers.clear()
-            self.zone_color_buffers.clear()
-
-            self.current_animation = None
-            self.current_id = None
-            log.debug("AnimEngine: Stopped old animation (no fade, preparing for crossfade)")
-
-        # Step 3: Create animation instance
-        if animation_id not in self.ANIMATIONS:
-            raise ValueError(f"Unknown animation: {animation_id}")
-
-        animation_class = self.ANIMATIONS[animation_id]
-        self.current_animation = animation_class(self.zones, excluded_zones=excluded_zones or [], **params)
-        self.current_id = animation_id
-
-        log.info(f"AnimEngine: Created instance: {animation_id}")
-
-        # Step 4: Cache current zone colors
-        for zone in self.zones:
-            color = self.strip.get_zone_color(zone.config.id)
-            if color:
-                self.current_animation.set_zone_color_cache(zone.config.id, color)
-
-        # Step 5: Keep old frame visible while building first frame
-        # Submit old frame with low priority to prevent black flash during _get_first_frame()
-        if old_frame:
-            zone_pixels_dict_old = self.transition_service._get_zone_pixels_dict(old_frame)
-            pixel_frame_old = PixelFrame(
-                zone_pixels=zone_pixels_dict_old,
-                priority=FramePriority.MANUAL,
-                source=FrameSource.ANIMATION,
-                ttl=5.0  # High TTL to persist while first frame builds (~250ms)
+            # Parameters already in Dict[AnimationParamID, Any] format from DataAssembler
+            # No conversion needed - pass directly to animation
+            anim = AnimClass(
+                zone=zone,
+                params=params
             )
-            await self.frame_manager.submit_pixel_frame(pixel_frame_old)
+            
+            # Store meta
+            self.active_anim_ids[zone_id] = anim_id
+            self.active_animations[zone_id] = anim
+            
+            # Spawn task
+            # task = asyncio.create_task(self._run_loop(zone_id, anim))
+            task = create_tracked_task(
+                self._run_loop(zone_id, anim),
+                category=TaskCategory.ANIMATION,
+                description=f"Animation loop for zone {zone_id} ({anim})"
+            )
+            
+            self.tasks[zone_id] = task
 
-        # Step 6: Build first frame in memory (WITHOUT touching strip buffer)
-        log.debug("AnimEngine: Building first frame...")
-        zone_pixels_dict = await self._get_first_frame()
+            log.info(
+                f"Started animation {anim_id.name} on zone {zone_id.name}"
+            )
+            
+    async def stop_for_zone(self, zone_id: ZoneID):
+        """Stop animation for a single zone."""
 
-        # Step 7: Convert zone_pixels dict to absolute frame for transitions
-        # (strip knows how to map zone pixels to physical indices)
-        # Build as Color objects (transitions expect List[Color])
-        first_frame = []
-        if zone_pixels_dict:
-            # Build full frame from zone pixels using Color objects
-            first_frame = [Color.black()] * self.strip.pixel_count
-            for zone_id, pixels in zone_pixels_dict.items():
-                indices = self.strip.mapper.get_indices(zone_id)
-                for logical_idx, (r, g, b) in enumerate(pixels):
-                    if logical_idx < len(indices):
-                        phys_idx = indices[logical_idx]
-                        if 0 <= phys_idx < self.strip.pixel_count:
-                            first_frame[phys_idx] = Color.from_rgb(r, g, b)
+        log.info(f"Stopping animation on zone {zone_id.name}")
 
-        # Step 8: CROSSFADE from old to new (or fade_in if no old frame)
-        if first_frame:
-            if old_frame and len(old_frame) == len(first_frame):
-                log.debug("AnimEngine: Crossfading from old to new animation...")
-                await self.transition_service.crossfade(old_frame, first_frame, transition)
-            else:
-                # No old frame or size mismatch - just fade in from black
-                log.debug("AnimEngine: Fading in from black...")
-                await self.transition_service.fade_in(first_frame, transition)
+        # Extract task without holding lock during await
+        task = None
+        async with self._lock:
+            task = self.tasks.pop(zone_id, None)
+            self.active_anim_ids.pop(zone_id, None)
+            self.active_animations.pop(zone_id, None)
 
-        # Step 9: Clear all buffers before starting loop (prevents stale frame glitch)
-        self.zone_pixel_buffers.clear()
-        self.zone_color_buffers.clear()
-
-        # Step 10: NOW start animation loop (transition complete - no race condition)
-        log.info(f"AnimEngine: Starting loop for {animation_id}")
-        self.animation_task = asyncio.create_task(self._run_loop())
-        log.info(f"AnimEngine: Started {animation_id} | params:{params}")
-
-        
-    async def stop(self, transition: Optional[TransitionConfig] = None, skip_fade: bool = False):
-        """
-        Stop animation with optional fade out.
-
-        Args:
-            transition: Transition config for fade out
-            skip_fade: If True, skip fade out (used when caller already faded out)
-        """
-        if not self.is_running() or not self.current_animation:
+        if not task:
             return
-
-        transition = transition or self.transition_service.ANIMATION_SWITCH
-        log.info(f"AnimEngine: Stopping animation {self.current_id} (skip_fade={skip_fade})")
-
-        # Fade out (fade_out handles its own locking)
-        # if not skip_fade:
-        #    await self.transition_service.fade_out(transition)
-
-        # Stop animation task
-        self.current_animation.stop()
-
-        if self.animation_task:
-            self.animation_task.cancel()
-            try:
-                await self.animation_task
-            except asyncio.CancelledError:
-                pass
-            self.animation_task = None
-
-        # Clear buffers after stopping animation (prevents stale pixels)
-        self.zone_pixel_buffers.clear()
-        self.zone_color_buffers.clear()
-
-        log.debug(f"AnimEngine: stopped {self.current_id.name if self.current_id else '?'}")
-        self.current_animation = None
-        self.current_id = None
         
-    
+        task.cancel()
+        
+        try:
+            await asyncio.wait_for(task, timeout=1.0)
+        except asyncio.CancelledError:
+            pass
+        except asyncio.TimeoutError:
+            log.warn(f"Animation task for {zone_id.name} did not respond to cancellation")
+
+        # Clean up state
+        async with self._lock:
+            self.active_anim_ids.pop(zone_id, None)
+            self.active_animations.pop(zone_id, None)
+
+        log.info(f"Stopped animation on zone {zone_id.name}")
+            
+
+    async def stop_all(self):
+        """Stop all animations safely."""
+        zones = list(self.tasks.keys())
+        for zid in zones:
+            await self.stop_for_zone(zid)
+        
+    # ------------------------------------------------------------
+    # Parameter update (live)
+    # ------------------------------------------------------------
+
+    def update_param(self, zone_id: ZoneID, param_id: AnimationParamID, value):
+        """Update a running animation's parameter live."""
+        anim = self.active_animations.get(zone_id)
+        if not anim:
+            return
+        
+        anim.set_param(param_id, value)
+        
+        log.info(
+            f"Live param update on {zone_id.name}: {param_id.name} → {value}"
+        )
+
+
+    # ------------------------------------------------------------
+    # Internal animation loop
+    # ------------------------------------------------------------
+
+    async def _run_loop(self, zone_id: ZoneID, animation: BaseAnimation):
+        """Run an animation until stopped.
+
+        Animation loop:
+        - animation.step() decides WHEN a frame exists
+        - engine forwards frames immediately
+        - renderer (FrameManager) controls FPS
+        """
+        
+        log.info(f"_run_loop started for {zone_id.name}")
+        
+        frames_sent = 0
+        last_log = time.monotonic()
+            
+        try:
+            while True:
+                frame = await animation.step()
+                
+                now = time.monotonic()
+                if now - last_log >= 1.0:
+                    # log.warn(
+                    #     "ANIM FPS",
+                    #     zone=zone_id.name,
+                    #     fps=frames_sent 
+                    # )
+                    frames_sent = 0
+                    last_log = now
+                
+                if frame is not None:
+                    await self.frame_manager.push_frame(frame)
+                    frames_sent += 1
+                
+                await asyncio.sleep(1 / self.frame_manager.fps)
+        except asyncio.CancelledError:
+            log.debug(f"Animation task for {zone_id.name} canceled")
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+        except Exception as e:
+            log.error(
+                f"Animation error on {zone_id.name}: {e}",
+                exc_info=True
+            )
+        
+        finally:
+            # async with self._lock:
+            #     self.tasks.pop(zone_id, None)
+            #     self.active_animations.pop(zone_id, None)
+            # NOTE: Do NOT acquire lock here - would cause deadlock with stop_for_zone()
+            # The caller is responsible for cleaning up task dictionaries
+            
+            log.info(
+                f"Animation task for {zone_id.name} finished, "
+                f"frames sent: {frames_sent}"
+            )
+            
     # ------------------------------------------------------------------
     # RUNTIME HELPERS
     # ------------------------------------------------------------------
 
-    def update_param(self, param: str, value):
+    def create_animation_instance(self, anim_id: AnimationID, zone_id: Optional[ZoneID] = None, **params):
         """
-        Update parameter of running animation
+        Create an animation instance for offline use (frame-by-frame debugging).
+
+        Does not start the animation - just creates the instance.
+        Used by FramePlaybackController for preloading animation frames.
 
         Args:
-            param: Parameter name ('speed', 'color', etc.)
-            value: New value
-        """
-        if self.current_animation:
-            self.current_animation.update_param(param, value)
-
-    def is_running(self) -> bool:
-        """Check if animation is currently running"""
-        return self.animation_task is not None and not self.animation_task.done()
-
-    def get_current_animation_id(self) -> Optional[AnimationID]:
-        """Get name of currently running animation"""
-        return self.current_id if self.is_running() else None
-
-    def get_current_animation(self) -> Optional['BaseAnimation']:
-        """Get name of currently running animation"""
-        return self.current_animation if self.is_running() else None
-
-    def freeze(self) -> None:
-        """
-        Freeze animation frame submission for frame-by-frame debugging.
-
-        Animation loop continues running internally, but frames are not
-        submitted to FrameManager. This allows manual frame stepping without
-        animation flicker.
-
-        Used by FramePlaybackController when entering frame-by-frame mode.
-        """
-        self._frozen = True
-        log.info(f"AnimationEngine: Froze animation {self.current_id.name if self.current_id else '?'}")
-
-    def unfreeze(self) -> None:
-        """
-        Unfreeze animation frame submission after frame-by-frame debugging.
-
-        Resumes normal frame submission to FrameManager.
-        """
-        self._frozen = False
-        log.info(f"AnimationEngine: Unfroze animation {self.current_id.name if self.current_id else '?'}")
-
-    # ------------------------------------------------------------------
-    # INTERNAL LOOP
-    # ------------------------------------------------------------------
-
-    async def _get_first_frame(self) -> Optional[Dict]:
-        """
-        Build first frame of animation in memory without touching strip buffer.
-
-        This allows fade_in to work on a complete first frame before animation starts,
-        eliminating race condition between fade and animation loop.
+            anim_id: Animation ID to instantiate
+            zone_id: Zone to attach animation to (uses first available if not provided)
+            **params: Animation parameters (speed, etc.)
 
         Returns:
-            Dict mapping ZoneID to list of (r, g, b) tuples (zone_pixels format)
-            or empty dict if failed
+            Animation instance or None if animation type not found
         """
-        if not self.current_animation:
-            return {}
+        AnimClass = self.ANIMATIONS.get(anim_id)
+        if AnimClass is None:
+            log.error(f"Animation {anim_id} not registered")
+            return None
 
+        # Get zone (use first available if not specified)
+        if zone_id is None:
+            all_zones = self.zone_service.get_all()
+            if not all_zones:
+                log.error("No zones available for animation instance")
+                return None
+            zone = all_zones[0]
+        else:
+            zone = self.zone_service.get_zone(zone_id)
+            if not zone:
+                log.error(f"Zone {zone_id} not found")
+                return None
+
+        # Convert string params to AnimationParamID enum format
+        # Expected format: {"speed": 50, "brightness": 100} → {AnimationParamID.SPEED: 50, ...}
+        from utils.serialization import Serializer
         try:
-            # Create async generator
-            gen = self.current_animation.run()
-
-            # Collect yields for first frame (animations yield multiple times per frame)
-            # For zone-based animations: ~10 yields (one per zone)
-            # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
-            zone_pixels_buffer: Dict[ZoneID, Dict[int, Tuple[int, int, int]]] = {}
-            zone_colors_buffer: Dict[ZoneID, Tuple[int, int, int]] = {}
-
-            yields_collected = 0
-            max_yields = 100
-            start_time = time.perf_counter()
-
-            async for frame in gen:
-                if len(frame) == 5:
-                    # Pixel-level: (zone_id, pixel_index, r, g, b)
-                    zone_id, pixel_index, r, g, b = frame
-                    zone_pixels_buffer.setdefault(zone_id, {})[pixel_index] = (r, g, b)
-                elif len(frame) == 4:
-                    # Zone-level: (zone_id, r, g, b)
-                    zone_id, r, g, b = frame
-                    zone_colors_buffer[zone_id] = (r, g, b)
-
-                yields_collected += 1
-
-                # Small delay to collect batch of yields for first frame
-                await asyncio.sleep(0.005)
-
-                # Break after collecting adequate yields
-                if yields_collected >= 15:
-                    break
-
-                if yields_collected >= max_yields:
-                    log.warn(f"First frame collection exceeded {max_yields} yields")
-                    break
-
-            # Stop the generator
-            await gen.aclose()
-
-            # Convert to PixelFrame format
-            zone_pixels_dict: Dict[ZoneID, List[Tuple[int, int, int]]] = {}
-
-            # Process zone-level updates
-            for zone_id, color in zone_colors_buffer.items():
-                zone_length = self.zone_lengths.get(zone_id, 0)
-                zone_pixels_dict[zone_id] = [color] * zone_length
-
-            # Process pixel-level updates (overwrites zone colors if present)
-            for zone_id, pixels_dict in zone_pixels_buffer.items():
-                zone_length = self.zone_lengths.get(zone_id, 0)
-                # Start with zone color if present, else black
-                if zone_id in zone_pixels_dict:
-                    pixels_list = zone_pixels_dict[zone_id].copy()
-                else:
-                    pixels_list = [(0, 0, 0)] * zone_length
-
-                # Overlay pixel updates
-                for pixel_idx, color in pixels_dict.items():
-                    if 0 <= pixel_idx < zone_length:
-                        pixels_list[pixel_idx] = color
-
-                zone_pixels_dict[zone_id] = pixels_list
-
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
-            log.debug(f"First frame built: {yields_collected} yields in {elapsed_ms:.1f}ms")
-            return zone_pixels_dict
-
+            enum_params = Serializer.animation_params_str_to_enum(params)
         except Exception as e:
-            log.error(f"Failed to build first frame: {e}")
-            return {}
+            log.warn(f"Failed to convert params for {anim_id.name}: {e}, using empty params")
+            enum_params = {}
 
-    async def _run_loop(self):
-        """Main loop — consumes frames from the running animation"""
-
-        assert self.current_animation is not None
-
-        frame_count = 0
-        log.info("AnimationEngine: run_loop started", animation=self.current_id)
-
+        # Create instance
         try:
+            anim = AnimClass(zone=zone, params=enum_params)
+            return anim
+        except Exception as e:
+            log.error(f"Failed to create animation instance: {e}")
+            return None
+    
+    # def freeze(self) -> None:
+    #     """
+    #     Freeze animation frame submission for frame-by-frame debugging.
 
-            async for frame in self.current_animation.run(): # type: ignore
-                frame_count += 1
+    #     Animation loop continues running internally, but frames are not
+    #     submitted to FrameManager. This allows manual frame stepping without
+    #     animation flicker.
 
-                if not frame:
-                    log.warn(f"[Frame {frame_count}] Empty frame received.")
-                    continue
+    #     Used by FramePlaybackController when entering frame-by-frame mode.
+    #     """
+    #     self._frozen = True
+    #     log.info(f"AnimationEngine: Froze animation {self.current_id.name if self.current_id else '?'}")
 
-                # Collect pixel/zone updates for this frame
-                if len(frame) == 5:
-                    # Pixel-level update: (zone_id, pixel_index, r, g, b)
-                    zone_id, pixel_index, r, g, b = frame
-                    zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
-                    zone_pixels[pixel_index] = (r, g, b)
+    # def unfreeze(self) -> None:
+    #     """
+    #     Unfreeze animation frame submission after frame-by-frame debugging.
 
-                    log.debug(
-                        f"[Frame {frame_count}] Pixel update: {zone_id.name}[{pixel_index}] = ({r},{g},{b})"
-                    )
+    #     Resumes normal frame submission to FrameManager.
+    #     """
+    #     self._frozen = False
+    #     log.info(f"AnimationEngine: Unfroze animation {self.current_id.name if self.current_id else '?'}")
 
-                elif len(frame) == 4:
-                    # Zone-level update: (zone_id, r, g, b) - entire zone gets one color
-                    zone_id, r, g, b = frame
-                    # Store in zone color buffer (for zone-level animations like Breathe)
-                    self.zone_color_buffers[zone_id] = (r, g, b)
+    # # ------------------------------------------------------------------
+    # # INTERNAL LOOP
+    # # ------------------------------------------------------------------
 
-                    log.debug(
-                        f"[Frame {frame_count}] Zone update: {zone_id.name} color=({r},{g},{b})"
-                    )
+    # async def _get_first_frame(self) -> Optional[Dict]:
+    #     """
+    #     Build first frame of animation in memory without touching strip buffer.
 
-                else:
-                    log.warn(f"[Frame {frame_count}] Unexpected frame format: {frame}")
-                    continue
+    #     This allows fade_in to work on a complete first frame before animation starts,
+    #     eliminating race condition between fade and animation loop.
 
-                # === Push collected frame to FrameManager ===
-                if not hasattr(self, "frame_manager") or self.frame_manager is None:
-                    log.error("[FrameManager] Missing reference — frame ignored!")
-                    continue
+    #     Returns:
+    #         Dict mapping ZoneID to list of (r, g, b) tuples (zone_pixels format)
+    #         or empty dict if failed
+    #     """
+    #     if not self.current_animation:
+    #         return {}
 
-                # Build frame from both buffers
-                zone_pixels_dict = {}
+    #     try:
+    #         # Create async generator
+    #         gen = self.current_animation.run()
 
-                # Process zone-level updates (like Breathe animation)
-                for zone_id, color in self.zone_color_buffers.items():
-                    zone_length = self.zone_lengths.get(zone_id, 0)
-                    # Create pixel list with all pixels set to the zone color (convert RGB tuple to Color)
-                    color_obj = Color.from_rgb(*color)
-                    pixels_list = [color_obj] * zone_length
-                    zone_pixels_dict[zone_id] = pixels_list
+    #         # Collect yields for first frame (animations yield multiple times per frame)
+    #         # For zone-based animations: ~10 yields (one per zone)
+    #         # For pixel-based animations: varies by animation (Snake=5-10, Breathe=10)
+    #         zone_pixels_buffer: Dict[ZoneID, Dict[int, Color]] = {}
+    #         zone_colors_buffer: Dict[ZoneID, Color] = {}
 
-                # Process pixel-level updates (like Snake animation) - overwrites zone colors if present
-                for zone_id, pix_dict in self.zone_pixel_buffers.items():
-                    if pix_dict:  # Only include zones with pixels
-                        # Build complete pixel list for this zone (all pixels, default to black for unset)
-                        zone_length = self.zone_lengths.get(zone_id, 0)
-                        # If this zone was in zone_color_buffers, start with those colors
-                        if zone_id in zone_pixels_dict:
-                            pixels_list = zone_pixels_dict[zone_id].copy()
-                        else:
-                            # Otherwise start with black (as Color objects)
-                            pixels_list = [Color.black()] * zone_length
+    #         yields_collected = 0
+    #         max_yields = 100
+    #         start_time = time.perf_counter()
 
-                        # Overlay pixel updates (convert RGB tuples to Color objects)
-                        for i in range(zone_length):
-                            if i in pix_dict:
-                                pixels_list[i] = Color.from_rgb(*pix_dict[i])
-                        zone_pixels_dict[zone_id] = pixels_list
+    #         async for frame in gen:
+    #             if len(frame) == 5:
+    #                 # Pixel-level: (zone_id, pixel_index, r, g, b)
+    #                 zone_id, pixel_index, r, g, b = frame
+    #                 zone_pixels_buffer.setdefault(zone_id, {})[pixel_index] = Color.from_rgb(r, g, b)
+    #             elif len(frame) == 4:
+    #                 # Zone-level: (zone_id, r, g, b)
+    #                 zone_id, r, g, b = frame
+    #                 zone_colors_buffer[zone_id] = Color.from_rgb(r, g, b)
 
-                if zone_pixels_dict:
-                    # Skip frame submission if frozen (frame-by-frame debugging)
-                    if not self._frozen:
-                        try:
-                            frame = PixelFrame(
-                                priority=FramePriority.ANIMATION,
-                                source=FrameSource.ANIMATION,
-                                zone_pixels=zone_pixels_dict
-                            )
-                            await self.frame_manager.submit_pixel_frame(frame)
-                            if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
-                                log.debug(
-                                    f"[FrameManager] PixelFrame submitted #{frame_count}"
-                                )
-                        except Exception as e:
-                            log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
+    #             yields_collected += 1
 
-                # Yield to event loop
-                await asyncio.sleep(0)
+    #             # Small delay to collect batch of yields for first frame
+    #             await asyncio.sleep(0.005)
+
+    #             # Break after collecting adequate yields
+    #             if yields_collected >= 15:
+    #                 break
+
+    #             if yields_collected >= max_yields:
+    #                 log.warn(f"First frame collection exceeded {max_yields} yields")
+    #                 break
+
+    #         # Stop the generator
+    #         await gen.aclose()
+
+    #         # Convert to PixelFrame format
+    #         zone_pixels_dict: Dict[ZoneID, List[Color]] = {}
+
+    #         # Process zone-level updates
+    #         for zone_id, color in zone_colors_buffer.items():
+    #             zone_length = self.zone_lengths.get(zone_id, 0)
+    #             zone_pixels_dict[zone_id] = [color] * zone_length
+
+    #         # Process pixel-level updates (overwrites zone colors if present)
+    #         for zone_id, pixels_dict in zone_pixels_buffer.items():
+    #             zone_length = self.zone_lengths.get(zone_id, 0)
+    #             # Start with zone color if present, else black
+    #             if zone_id in zone_pixels_dict:
+    #                 pixels_list = zone_pixels_dict[zone_id].copy()
+    #             # else:
+    #                 # pixels_list = Color.black().to_rgb() * zone_length
+
+    #             # Overlay pixel updates
+    #             for pixel_idx, color in pixels_dict.items():
+    #                 if 0 <= pixel_idx < zone_length:
+    #                     pixels_list[pixel_idx] = color
+
+    #             zone_pixels_dict[zone_id] = pixels_list
+
+    #         elapsed_ms = (time.perf_counter() - start_time) * 1000
+    #         log.debug(f"First frame built: {yields_collected} yields in {elapsed_ms:.1f}ms")
+    #         return zone_pixels_dict
+
+    #     except Exception as e:
+    #         log.error(f"Failed to build first frame: {e}")
+    #         return {}
+
+    # async def _run_loop(self):
+    #     """Main loop — consumes frames from the running animation"""
+
+    #     assert self.current_animation is not None
+
+    #     frame_count = 0
+    #     log.info("AnimationEngine: run_loop started", animation=self.current_id)
+
+    #     try:
+
+    #         async for frame in self.current_animation.run(): # type: ignore
+    #             frame_count += 1
+
+    #             if not frame:
+    #                 log.warn(f"[Frame {frame_count}] Empty frame received.")
+    #                 continue
+
+    #             # Collect pixel/zone updates for this frame
+    #             if len(frame) == 5:
+    #                 # Pixel-level update: (zone_id, pixel_index, r, g, b)
+    #                 zone_id, pixel_index, r, g, b = frame
+    #                 zone_pixels = self.zone_pixel_buffers.setdefault(zone_id, {})
+    #                 zone_pixels[pixel_index] = Color.from_rgb(r, g, b)
+
+    #                 log.debug(
+    #                     f"[Frame {frame_count}] Pixel update: {zone_id.name}[{pixel_index}] = ({r},{g},{b})"
+    #                 )
+
+    #             elif len(frame) == 4:
+    #                 # Zone-level update: (zone_id, r, g, b) - entire zone gets one color
+    #                 zone_id, r, g, b = frame
+    #                 # Store in zone color buffer (for zone-level animations like Breathe)
+    #                 self.zone_color_buffers[zone_id] = Color.from_rgb(r, g, b)
+
+    #                 log.debug(
+    #                     f"[Frame {frame_count}] Zone update: {zone_id.name} color=({r},{g},{b})"
+    #                 )
+                    
+    #             elif len(frame) == 2:
+    #                 # Zone-level update: (zone_id, Color) - entire zone gets one color
+    #                 zone_id, color = frame
+    #                 # Store in zone color buffer (for zone-level animations like Breathe)
+    #                 self.zone_color_buffers[zone_id] = color
+
+    #                 log.debug(
+    #                     f"[Frame {frame_count}] Zone update: {zone_id.name} color=({color})"
+    #                 )
+
+    #             else:
+    #                 log.warn(f"[Frame {frame_count}] Unexpected frame format: {frame}")
+    #                 continue
+
+    #             # === Push collected frame to FrameManager ===
+    #             if not hasattr(self, "frame_manager") or self.frame_manager is None:
+    #                 log.error("[FrameManager] Missing reference — frame ignored!")
+    #                 continue
+
+    #             # Build frame from both buffers
+    #             zone_pixels_dict = {}
+
+    #             # Process zone-level updates (like Breathe animation)
+    #             for zone_id, color in self.zone_color_buffers.items():
+    #                 zone_length = self.zone_lengths.get(zone_id, 0)
+    #                 # Create pixel list with all pixels set to the zone color (convert RGB tuple to Color)
+    #                 color_obj = color
+    #                 pixels_list = [color_obj] * zone_length
+    #                 zone_pixels_dict[zone_id] = pixels_list
+
+    #             # Process pixel-level updates (like Snake animation) - overwrites zone colors if present
+    #             for zone_id, pix_dict in self.zone_pixel_buffers.items():
+    #                 if pix_dict:  # Only include zones with pixels
+    #                     # Build complete pixel list for this zone (all pixels, default to black for unset)
+    #                     zone_length = self.zone_lengths.get(zone_id, 0)
+    #                     # If this zone was in zone_color_buffers, start with those colors
+    #                     if zone_id in zone_pixels_dict:
+    #                         pixels_list = zone_pixels_dict[zone_id].copy()
+    #                     else:
+    #                         # Otherwise start with black (as Color objects)
+    #                         pixels_list = [Color.black()] * zone_length
+
+    #                     # Overlay pixel updates (convert RGB tuples to Color objects)
+    #                     for i in range(zone_length):
+    #                         if i in pix_dict:
+    #                             pixels_list[i] = pix_dict[i]
+    #                     zone_pixels_dict[zone_id] = pixels_list
+
+    #             if zone_pixels_dict:
+    #                 # Skip frame submission if frozen (frame-by-frame debugging)
+    #                 if not self._frozen:
+    #                     try:
+    #                         frame = PixelFrame(
+    #                             priority=FramePriority.ANIMATION,
+    #                             source=FrameSource.ANIMATION,
+    #                             zone_pixels=zone_pixels_dict,
+    #                             partial=True
+    #                         )
+    #                         await self.frame_manager.submit_pixel_frame(frame)
+    #                         if frame_count % 60 == 0:  # Log every 60 frames (~1 second at 60fps)
+    #                             log.debug(
+    #                                 f"[FrameManager] PixelFrame submitted #{frame_count}"
+    #                             )
+    #                     except Exception as e:
+    #                         log.error(f"[FrameManager] Failed to submit PixelFrame: {e}")
+
+    #             # Yield to event loop
+    #             await asyncio.sleep(0)
                 
-                # log.debug(f"Yielded frame from {self.current_id.name} for {frame.zone_id}: {frame_data}")
-        except asyncio.CancelledError:
-            log.debug("Animation loop cancelled gracefully")
-        except Exception as e:
-            log.error(f"Animation error: {e}", animation=self.current_id)
-            raise
-        finally:
-            log.info(
-                f"AnimationEngine: run_loop stopped after {frame_count} frames ({self.current_id})"
-            )
+    #             # log.debug(f"Yielded frame from {self.current_id.name} for {frame.zone_id}: {frame_data}")
+    #     except asyncio.CancelledError:
+    #         log.debug("Animation loop cancelled gracefully")
+    #     except Exception as e:
+    #         log.error(f"Animation error: {e}", animation=self.current_id)
+    #         raise
+    #     finally:
+    #         log.info(
+    #             f"AnimationEngine: run_loop stopped after {frame_count} frames ({self.current_id})"
+    #         )
 
-    def create_animation_instance(self, animation_id: AnimationID, **params):
-        """
-        Create (but do not start) an animation instance.
-        Used for offline preview or frame-by-frame playback.
-        """
-        if animation_id not in self.ANIMATIONS:
-            raise ValueError(f"Unknown animation ID: {animation_id}")
+    # def create_animation_instance(self, animation_id: AnimationID, **params):
+    #     """
+    #     Create (but do not start) an animation instance.
+    #     Used for offline preview or frame-by-frame playback.
+    #     """
+    #     if animation_id not in self.ANIMATIONS:
+    #         raise ValueError(f"Unknown animation ID: {animation_id}")
 
-        anim_class = self.ANIMATIONS[animation_id]
+    #     anim_class = self.ANIMATIONS[animation_id]
 
-        # Convert enum keys to str if needed
-        safe_params = self.convert_params(params)
+    #     # Convert enum keys to str if needed
+    #     safe_params = self.convert_params(params)
 
-        anim = anim_class(
-            zones=self.zones,
-            excluded_zones=[],
-            **safe_params
-        )
-        return anim
+    #     anim = anim_class(
+    #         zones=self.zones,
+    #         excluded_zones=[],
+    #         **safe_params
+    #     )
+    #     return anim
         
-    def convert_params(self, params: dict) -> dict:
-        """
-        Convert parameter dictionary keys (possibly enums) to string names.
+    # def convert_params(self, params: dict) -> dict:
+    #     """
+    #     Convert parameter dictionary keys (possibly enums) to string names.
 
-        Ensures **kwargs passed into animation constructors use string keys,
-        since Python requires keyword argument names to be str.
+    #     Ensures **kwargs passed into animation constructors use string keys,
+    #     since Python requires keyword argument names to be str.
 
-        Example:
-            {ParamID.ANIM_SPEED: 50, ParamID.ANIM_INTENSITY: 80}
-            → {"ANIM_SPEED": 50, "ANIM_INTENSITY": 80}
-        """
-        if not params:
-            return {}
+    #     Example:
+    #         {ParamID.ANIM_SPEED: 50, ParamID.ANIM_INTENSITY: 80}
+    #         → {"ANIM_SPEED": 50, "ANIM_INTENSITY": 80}
+    #     """
+    #     if not params:
+    #         return {}
 
-        safe_params = {}
-        for k, v in params.items():
-            if hasattr(k, "name"):
-                safe_params[k.name] = v
-            elif isinstance(k, str):
-                safe_params[k] = v
-            else:
-                safe_params[str(k)] = v
-        return safe_params
+    #     safe_params = {}
+    #     for k, v in params.items():
+    #         if hasattr(k, "name"):
+    #             safe_params[k.name] = v
+    #         elif isinstance(k, str):
+    #             safe_params[k] = v
+    #         else:
+    #             safe_params[str(k)] = v
+    #     return safe_params

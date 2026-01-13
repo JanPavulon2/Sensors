@@ -19,9 +19,10 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from utils.logger import get_category_logger
 from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, ZoneID
 from models.events import KeyboardKeyPressEvent, EventType
-from models.frame import FullStripFrame, ZoneFrame, PixelFrame
+from models.frame import PixelFrame
 from models.color import Color
 from zone_layer.zone_strip import ZoneStrip
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 if TYPE_CHECKING:
     from engine.frame_manager import FrameManager
@@ -229,7 +230,7 @@ class FramePlaybackController:
 
         # Find first ZoneStrip (skip PreviewPanel and other strip types)
         strip = None
-        for s in self.frame_manager.main_strips:
+        for s in self.frame_manager.zone_strips:
             if isinstance(s, ZoneStrip):
                 strip = s
                 break
@@ -285,68 +286,68 @@ class FramePlaybackController:
     # Frame Navigation
     # ============================================================
 
-    def _convert_tuple_to_frame(self, frame_data: Any) -> Optional[FullStripFrame | ZoneFrame | PixelFrame]:
-        """
-        Convert raw animation tuple to appropriate Frame object.
+    # def _convert_tuple_to_frame(self, frame_data: Any) -> Optional[FullStripFrame | ZoneFrame | PixelFrame]:
+    #     """
+    #     Convert raw animation tuple to appropriate Frame object.
 
-        Preserves full animation detail (pixel-level or zone-level):
-        - (r, g, b) → FullStripFrame (all zones same color)
-        - (zone_id, r, g, b) → ZoneFrame (single zone colored)
-        - (zone_id, pixel_idx, r, g, b) → PixelFrame (single pixel in zone)
+    #     Preserves full animation detail (pixel-level or zone-level):
+    #     - (r, g, b) → FullStripFrame (all zones same color)
+    #     - (zone_id, r, g, b) → ZoneFrame (single zone colored)
+    #     - (zone_id, pixel_idx, r, g, b) → PixelFrame (single pixel in zone)
 
-        Args:
-            frame_data: Tuple from animation.run()
+    #     Args:
+    #         frame_data: Tuple from animation.run()
 
-        Returns:
-            Appropriate frame type (FullStripFrame, ZoneFrame, or PixelFrame), or None if format unknown
-        """
-        if not isinstance(frame_data, tuple):
-            return None
+    #     Returns:
+    #         Appropriate frame type (FullStripFrame, ZoneFrame, or PixelFrame), or None if format unknown
+    #     """
+    #     if not isinstance(frame_data, tuple):
+    #         return None
 
-        try:
-            if len(frame_data) == 3 and isinstance(frame_data[0], int):
-                # Full strip: (r, g, b)
-                r, g, b = frame_data
-                return FullStripFrame(
-                    color=(r, g, b),
-                    priority=FramePriority.DEBUG,
-                    source=FrameSource.DEBUG,
-                    ttl=10.0
-                )
+    #     try:
+    #         if len(frame_data) == 3 and isinstance(frame_data[0], int):
+    #             # Full strip: (r, g, b)
+    #             r, g, b = frame_data
+    #             return FullStripFrame(
+    #                 color=(r, g, b),
+    #                 priority=FramePriority.DEBUG,
+    #                 source=FrameSource.DEBUG,
+    #                 ttl=10.0
+    #             )
 
-            elif len(frame_data) == 4:
-                # Zone-based: (zone_id, r, g, b)
-                # Create ZoneFrame preserving zone-level structure with Color objects
-                zone_id, r, g, b = frame_data
-                return ZoneFrame(
-                    zone_colors={zone_id: Color.from_rgb(r, g, b)},
-                    priority=FramePriority.DEBUG,
-                    source=FrameSource.DEBUG,
-                    ttl=10.0
-                )
+    #         elif len(frame_data) == 4:
+    #             # Zone-based: (zone_id, r, g, b)
+    #             # Create ZoneFrame preserving zone-level structure with Color objects
+    #             zone_id, r, g, b = frame_data
+    #             return ZoneFrame(
+    #                 zone_colors={zone_id: Color.from_rgb(r, g, b)},
+    #                 priority=FramePriority.DEBUG,
+    #                 source=FrameSource.DEBUG,
+    #                 ttl=10.0
+    #             )
 
-            elif len(frame_data) == 5:
-                # Pixel-based: (zone_id, pixel_idx, r, g, b)
-                # Create PixelFrame preserving pixel-level structure with Color objects
-                zone_id, pixel_idx, r, g, b = frame_data
-                # Build pixel array for this zone with only this pixel lit
-                # Note: We don't know exact zone pixel count here, so we build
-                # a list large enough to contain this pixel
-                pixels = [Color.black()] * (pixel_idx + 1)
-                pixels[pixel_idx] = Color.from_rgb(r, g, b)
+    #         elif len(frame_data) == 5:
+    #             # Pixel-based: (zone_id, pixel_idx, r, g, b)
+    #             # Create PixelFrame preserving pixel-level structure with Color objects
+    #             zone_id, pixel_idx, r, g, b = frame_data
+    #             # Build pixel array for this zone with only this pixel lit
+    #             # Note: We don't know exact zone pixel count here, so we build
+    #             # a list large enough to contain this pixel
+    #             pixels = [Color.black()] * (pixel_idx + 1)
+    #             pixels[pixel_idx] = Color.from_rgb(r, g, b)
 
-                return PixelFrame(
-                    zone_pixels={zone_id: pixels},
-                    priority=FramePriority.DEBUG,
-                    source=FrameSource.DEBUG,
-                    ttl=10.0
-                )
+    #             return PixelFrame(
+    #                 zone_pixels={zone_id: pixels},
+    #                 priority=FramePriority.DEBUG,
+    #                 source=FrameSource.DEBUG,
+    #                 ttl=10.0
+    #             )
 
-        except Exception as e:
-            log.error(f"Error converting frame: {e}")
-            return None
+    #     except Exception as e:
+    #         log.error(f"Error converting frame: {e}")
+    #         return None
 
-        return None
+    #     return None
 
     async def show_current_frame(self) -> bool:
         """
@@ -378,7 +379,7 @@ class FramePlaybackController:
             ttl=10.0
         )
 
-        await self.frame_manager.submit_pixel_frame(frame)
+        await self.frame_manager.push_frame(frame)
 
         # Step when paused
         if self.frame_manager.paused:
@@ -436,7 +437,11 @@ class FramePlaybackController:
         self._playing = True
         log.info(f"Starting playback: {fps} FPS")
 
-        self._play_task = asyncio.create_task(self._playback_loop(fps))
+        self._play_task = create_tracked_task(
+            self._playback_loop(fps),
+            category=TaskCategory.BACKGROUND,
+            description=f"FramePlayback: {fps} FPS playback loop"
+        )
 
     async def stop(self) -> None:
         """Stop automatic playback."""
@@ -512,7 +517,7 @@ class FramePlaybackController:
         try:
             
             # KILL CURRENT RUNNING ANIMATION
-            await self.animation_engine.stop()
+            await self.animation_engine.stop_all()
             await asyncio.sleep(0)
             
             # Load animation frames
@@ -561,7 +566,7 @@ class FramePlaybackController:
             log.debug("Animation rendering resumed")
 
             
-            await self.animation_engine.start(self._animation_id, **self._animation_params)
+            # await self.animation_engine.start(self._animation_id, **self._animation_params)
 
             self.frame_manager.resume()
             

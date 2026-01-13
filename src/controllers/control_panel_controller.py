@@ -1,6 +1,7 @@
 import asyncio
 from models.events import EncoderRotateEvent, EncoderClickEvent, ButtonPressEvent
-from models.enums import EncoderSource, ButtonID, LogCategory
+from models.enums import ButtonID, LogCategory
+from models.events.sources import EncoderSource
 from components.control_panel import ControlPanel
 from services.event_bus import EventBus
 from utils.logger import get_logger

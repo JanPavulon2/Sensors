@@ -8,8 +8,9 @@ Implements pub-sub pattern:
 """
 
 import asyncio
-from typing import Callable, List, Dict, Optional, TypeVar, Any
+from typing import Callable, List, Dict, Optional, TypeVar, Any, Deque
 from dataclasses import dataclass
+from collections import deque
 from models.events import Event, EventType
 from utils.logger import get_logger, LogCategory
 
@@ -53,6 +54,14 @@ class EventBus:
         await bus.publish(event)
     """
 
+    _instance: Optional["EventBus"] = None
+
+    @classmethod
+    def instance(cls) -> "EventBus":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
     def __init__(self):
         # Handlers organized by event type
         self._handlers: Dict[EventType, List[EventHandler]] = {}
@@ -61,8 +70,8 @@ class EventBus:
         self._middleware: List[Callable[[Event], Optional[Event]]] = []
 
         # Event history (circular buffer for debugging/undo)
-        self._event_history: List[Event] = []
-        self._history_limit = 100
+        # Using deque with maxlen for O(1) auto-eviction of old events
+        self._event_history: Deque[Event] = deque(maxlen=100)
 
     def subscribe(
         self,
@@ -167,10 +176,8 @@ class EventBus:
                 return
             event = processed_event
 
-        # Save to history
+        # Save to history (auto-evicts oldest event when full via deque maxlen)
         self._event_history.append(event)
-        if len(self._event_history) > self._history_limit:
-            self._event_history.pop(0)
 
         # Get handlers for this event type
         handlers = self._handlers.get(event.type, [])
@@ -178,7 +185,7 @@ class EventBus:
             log.info(
                 "No handlers for event",
                 event_type=event.type.name,
-                event_data=event.data
+                event_data=event.to_data()
             )
             return
 
@@ -197,7 +204,9 @@ class EventBus:
             except Exception as e:
                 log.error(
                     f"Event handler failed: {handler_entry.handler.__name__} for {event.type.name}",
-                    exception=e
+                    exc_info=True,
+                    handler=handler_entry.handler.__name__,
+                    event_type=event.type.name
                 )
                 # Continue to next handler (fault tolerance)
 
@@ -211,7 +220,7 @@ class EventBus:
         Returns:
             List of recent events (newest last)
         """
-        return self._event_history[-limit:]
+        return list(self._event_history)[-limit:]
 
     def clear_history(self) -> None:
         """Clear event history"""

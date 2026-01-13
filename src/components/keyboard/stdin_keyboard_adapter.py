@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import select
 import termios
 import tty
 from typing import Optional, List
@@ -36,21 +37,15 @@ class StdinKeyboardAdapter:
 
     async def run(self) -> None:
         """
-        Main async event loop reading from stdin
+        Main async event loop reading from stdin (non-blocking with select.select())
 
         Terminal is set to cbreak mode (character-at-a-time input).
         Original settings are restored when loop exits.
 
-        Note: Requires 2x Ctrl+C to exit cleanly:
-        - First Ctrl+C: Interrupts hardware_loop, triggers shutdown
-        - Second Ctrl+C: Unblocks stdin.read() (which runs in executor thread)
-
-        This is a limitation of blocking stdin.read() in executor.
-        Use evdev mode (physical keyboard) for instant shutdown.
+        FIXED: Uses select.select() instead of blocking executor, allowing Ctrl+C
+        to work immediately without requiring 2x press.
         """
         log.info("Using STDIN keyboard input (SSH/VSCode terminal)")
-
-        loop = asyncio.get_running_loop()
 
         # Save terminal settings and set to cbreak mode
         self._old_settings = termios.tcgetattr(sys.stdin)
@@ -58,16 +53,28 @@ class StdinKeyboardAdapter:
 
         try:
             while True:
-                # Read one character (non-blocking via executor)
-                # Note: This will block until char available, making cancellation require 2x Ctrl+C
-                char = await loop.run_in_executor(None, sys.stdin.read, 1)
+                # Use select to check if stdin has data (non-blocking, responsive to signals)
+                ready, _, _ = select.select([sys.stdin], [], [], 0.01)
+
+                if not ready:
+                    # No data available, yield control briefly for other tasks/signals
+                    await asyncio.sleep(0)
+                    continue
+
+                # Data is available - read one character
+                try:
+                    char = sys.stdin.read(1)
+                except (IOError, OSError):
+                    # Terminal error (e.g., connection closed)
+                    log.warn("Terminal read error, stopping stdin adapter")
+                    break
 
                 if not char:
                     continue
 
                 # Handle escape sequences (arrow keys, function keys, etc.)
                 if char == '\x1b':  # ESC character
-                    await self._handle_escape_sequence(loop)
+                    await self._handle_escape_sequence()
 
                 # Handle Ctrl+Key combinations (0x01-0x1a = Ctrl+A to Ctrl+Z)
                 # EXCEPT: Enter (0x0a) and Tab (0x09) which are NOT Ctrl+J/Ctrl+I
@@ -128,29 +135,38 @@ class StdinKeyboardAdapter:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old_settings)
                 log.debug("Terminal settings restored")
 
-    async def _handle_escape_sequence(self, loop) -> None:
+    async def _handle_escape_sequence(self) -> None:
         """
         Handle escape sequences (arrow keys, function keys)
 
         Arrow keys send: ESC [ {A|B|C|D}
         Function keys send: ESC [ {1-9} ~
 
-        Args:
-            loop: asyncio event loop for executor
+        Uses select.select() with timeout for non-blocking peek (responsive to signals).
         """
         try:
             # Peek next character with timeout (50ms)
             # If timeout, it's a standalone ESC key
-            next_char = await asyncio.wait_for(
-                loop.run_in_executor(None, sys.stdin.read, 1),
-                timeout=0.05
-            )
+            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+
+            if not ready:
+                # Timeout - standalone ESC key
+                await self._publish_key('ESCAPE')
+                return
+
+            next_char = sys.stdin.read(1)
 
             if next_char == '[':  # CSI sequence (arrow keys, etc.)
-                direction = await asyncio.wait_for(
-                    loop.run_in_executor(None, sys.stdin.read, 1),
-                    timeout=0.05
-                )
+                # Peek for direction character
+                ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+
+                if not ready:
+                    # Timeout - just ESC[
+                    await self._publish_key('ESCAPE')
+                    await self._publish_key('[')
+                    return
+
+                direction = sys.stdin.read(1)
 
                 # Map arrow key codes
                 arrow_keys = {
@@ -169,8 +185,9 @@ class StdinKeyboardAdapter:
                 # Standalone ESC or unknown sequence
                 await self._publish_key('ESCAPE')
 
-        except asyncio.TimeoutError:
-            # Timeout on peek - standalone ESC key
+        except (IOError, OSError):
+            # Terminal error
+            log.warn("Terminal error during escape sequence handling")
             await self._publish_key('ESCAPE')
 
     async def _publish_key(self, key: str, modifiers: Optional[List[str]] = None) -> None:

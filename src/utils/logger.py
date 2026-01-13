@@ -1,7 +1,11 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+import traceback
+import sys
 from models.enums import LogLevel, LogCategory
 
+if TYPE_CHECKING:
+    from services.log_broadcaster import LogBroadcaster
 
 # === ANSI COLORS ===
 class Colors:
@@ -30,6 +34,13 @@ class Colors:
     BRIGHT_CYAN = '\033[96m'
     BRIGHT_WHITE = '\033[97m'
 
+    # Extended 256-color palette (for unique category colors)
+    ORANGE = '\033[38;5;208m'           # Orange
+    LIGHT_PURPLE = '\033[38;5;141m'     # Light purple
+    LIGHT_GRAY = '\033[38;5;245m'       # Light gray
+    DARK_CYAN = '\033[38;5;30m'         # Dark cyan
+    PINK = '\033[38;5;219m'             # Pink
+
 
 CATEGORY_COLORS = {
     LogCategory.CONFIG: Colors.CYAN,
@@ -42,6 +53,12 @@ CATEGORY_COLORS = {
     LogCategory.TRANSITION: Colors.MAGENTA,
     LogCategory.EVENT: Colors.BRIGHT_MAGENTA,
     LogCategory.RENDER_ENGINE: Colors.MAGENTA,
+    LogCategory.SHUTDOWN: Colors.DARK_CYAN,       # Shutdown operations (normal lifecycle event)
+    LogCategory.LIFECYCLE: Colors.ORANGE,         # Important lifecycle events
+    LogCategory.TASK: Colors.LIGHT_PURPLE,        # Task tracking and management
+    LogCategory.API: Colors.PINK,                 # API operations
+    LogCategory.WEBSOCKET: Colors.LIGHT_GRAY,     # WebSocket connections
+    LogCategory.GENERAL: Colors.WHITE,            # Fallback for general category
 }
 
 LEVEL_SYMBOLS = {
@@ -90,6 +107,7 @@ class Logger:
             LogLevel.WARN: 2,
             LogLevel.ERROR: 3,
         }
+        self._broadcaster: Optional['LogBroadcaster'] = None
 
     def _should_log(self, level: LogLevel) -> bool:
         """Check if message should be logged based on level"""
@@ -115,12 +133,54 @@ class Logger:
         symbol = LEVEL_SYMBOLS.get(level, '·')
         return self._colorize(symbol, LEVEL_COLORS.get(level, Colors.WHITE))
 
+    def set_broadcaster(self, broadcaster: 'LogBroadcaster') -> None:
+        """
+        Set the log broadcaster for WebSocket streaming.
+
+        Args:
+            broadcaster: LogBroadcaster instance for streaming logs
+        """
+        self._broadcaster = broadcaster
+
+    def _format_traceback(self) -> str:
+        """
+        Format the current exception traceback for logging.
+
+        Returns:
+            Formatted traceback string with visual separation
+        """
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        if exc_type is None:
+            return ""
+
+        # Get full traceback as list of strings
+        tb_lines = traceback.format_exception(exc_type, exc_value, exc_tb)
+        tb_text = ''.join(tb_lines).rstrip()
+
+        # Add visual separation and indentation
+        indent = " " * 11
+        separator = self._colorize("┈" * 60, Colors.DIM)
+
+        formatted_lines = [
+            f"{indent}{separator}",
+            f"{indent}{self._colorize('TRACEBACK:', Colors.RED)}"
+        ]
+
+        # Add each line of traceback with indentation
+        for line in tb_text.split('\n'):
+            formatted_lines.append(f"{indent}{line}")
+
+        formatted_lines.append(f"{indent}{separator}")
+
+        return '\n'.join(formatted_lines)
+
     def log(
         self,
         category: LogCategory,
         message: str,
         level: LogLevel = LogLevel.INFO,
         details: Optional[list] = None,
+        exc_info: bool = False,
         **kwargs
     ):
         """
@@ -131,6 +191,7 @@ class Logger:
             message: Main message text
             level: Log level (DEBUG, INFO, WARN, ERROR)
             details: List of detail strings to show below message
+            exc_info: If True, print full exception traceback (requires active exception)
             **kwargs: Additional key-value pairs to show as details
 
         Example:
@@ -146,18 +207,34 @@ class Logger:
             [14:23:45] COLOR ✓ Adjusted hue
                        └─ zone: lamp
                        └─ hue: 120° → 150°
+
+            With exc_info=True:
+            [14:23:45] ERROR ✗ Handler failed
+                       └─ handler: on_rotate
+                       ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                       TRACEBACK:
+                       Traceback (most recent call last):
+                         File "...", line X, in ...
+                       Exception: error message
+                       ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         """
         if not self._should_log(level):
             return
 
         # Build main line
         timestamp = self._format_timestamp()
+        timestamp_str = timestamp[1:-1]  # Remove brackets for ISO format
         cat = self._format_category(category)
         sym = self._format_level_symbol(level)
         msg = self._colorize(message, LEVEL_COLORS.get(level, Colors.WHITE))
-        
+
         # Print main line
-        print(f"{timestamp} {cat} {sym} {msg}")
+        try:
+            print(f"{timestamp} {cat} {sym} {msg}")
+        except UnicodeEncodeError:
+            safe_sym = sym.encode("ascii", "replace").decode()
+            safe_msg = msg.encode("ascii", "replace").decode()
+            print(f"{timestamp} {cat} {safe_sym} {safe_msg}")
 
         # Add kwargs as details
         all_details = list(details or [])
@@ -168,9 +245,34 @@ class Logger:
         if all_details:
             indent = " " * 11
             for i, d in enumerate(all_details):
-                # Last item gets different tree character
-                tree = "└─" if i == len(all_details) - 1 else "├─"
-                print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
+                # Last item gets different tree character (unless traceback follows)
+                is_last = i == len(all_details) - 1 and not exc_info
+                tree = "└─" if is_last else "├─"
+                try:
+                    print(f"{indent}{self._colorize(tree, Colors.DIM)} {d}")
+                except UnicodeEncodeError:
+                    safe_tree = tree.encode("ascii", "replace").decode()
+                    print(f"{indent}{self._colorize(safe_tree, Colors.DIM)} {d}")
+
+        # Print exception traceback if requested
+        if exc_info:
+            traceback_str = self._format_traceback()
+            if traceback_str:
+                print(traceback_str)
+
+        # Broadcast to WebSocket clients if broadcaster is set
+        if self._broadcaster:
+            # Use ISO 8601 format for WebSocket, include details in message
+            full_message = message
+            if all_details:
+                full_message = f"{message} ({', '.join(all_details)})"
+
+            self._broadcaster.log(
+                timestamp=datetime.now().isoformat(),
+                level=level.name,
+                category=category.name,
+                message=full_message
+            )
 
     # === Level helpers (backward-compatible) ===
     def debug(self, category: LogCategory, message: str, **kw): self.log(category, message, LogLevel.DEBUG, **kw)
@@ -191,15 +293,42 @@ class BoundLogger:
         self._base = base
         self._category = category
 
-    def log(self, message: str, level: LogLevel = LogLevel.INFO, category: Optional[LogCategory] = None, **kw):
-        """Allows overriding category if necessary."""
-        self._base.log(category or self._category, message, level, **kw)
+    def log(
+        self,
+        message: str,
+        level: LogLevel = LogLevel.INFO,
+        category: Optional[LogCategory] = None,
+        details: Optional[list] = None,
+        exc_info: bool = False,
+        **kw
+    ):
+        """
+        Log a message with optional exception traceback.
+
+        Args:
+            message: Main message text
+            level: Log level (DEBUG, INFO, WARN, ERROR)
+            category: Override default category if needed
+            details: List of detail strings
+            exc_info: If True, print full exception traceback
+            **kw: Additional key-value pairs as details
+        """
+        self._base.log(category or self._category, message, level, details, exc_info, **kw)
 
     # Shortcut methods
     def debug(self, message: str, **kw): self.log(message, LogLevel.DEBUG, **kw)
     def info(self, message: str, **kw): self.log(message, LogLevel.INFO, **kw)
     def warn(self, message: str, **kw): self.log(message, LogLevel.WARN, **kw)
-    def error(self, message: str, **kw): self.log(message, LogLevel.ERROR, **kw)
+    def error(self, message: str, exc_info: bool = False, **kw):
+        """
+        Log an error message with optional exception traceback.
+
+        Args:
+            message: Error message
+            exc_info: If True, print full exception traceback (default: False)
+            **kw: Additional key-value pairs as details
+        """
+        self.log(message, LogLevel.ERROR, exc_info=exc_info, **kw)
 
     def with_category(self, category: LogCategory) -> 'BoundLogger':
         """Create another bound logger from this one."""
@@ -217,5 +346,13 @@ def get_category_logger(category: LogCategory) -> BoundLogger:
     return _logger.for_category(category)
 
 def configure_logger(min_level: LogLevel = LogLevel.INFO, use_colors: bool = True):
+    """
+    Configure the logger singleton (modify in-place, don't create new instance).
+
+    This respects the singleton pattern - updates properties on the existing instance
+    rather than replacing it. This ensures any broadcasters or references remain valid.
+    """
     global _logger
-    _logger = Logger(min_level=min_level, use_colors=use_colors)
+    # Modify existing logger instead of creating new one (preserves singleton + broadcaster)
+    _logger.min_level = min_level
+    _logger.use_colors = use_colors

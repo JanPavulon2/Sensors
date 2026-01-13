@@ -11,47 +11,33 @@ zones:
     order: 1 
     reversed: false
 
-  - id: LEFT
-    name: Left
-    tag: left
-    pixel_count: 4       # 9 physical LEDs (3 * 3)
+  - id: CIRCLE
+    name: Circle
+    tag: circle
+    pixel_count: 14       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 2
-
-  - id: TOP
-    name: Top
-    tag: top
-    pixel_count: 3       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 3
-
-  - id: RIGHT
-    name: Right
-    tag: right
-    pixel_count: 4       # 9 physical LEDs (3 * 3)
-    enabled: true
-    order: 4
-
-  - id: BOTTOM
-    name: Bottom
-    tag: bottom
-    pixel_count: 3       # 12 physical LEDs (4 * 3)
-    enabled: true
-    order: 5
 
   - id: LAMP
     name: Lamp
     tag: lamp
     pixel_count: 19      # 57 physical LEDs (19 * 3)
     enabled: true
-    order: 6
+    order: 3
+
+  - id: GATE
+    name: Gate
+    tag: gate
+    pixel_count: 3      
+    enabled: true
+    order: 4
 
   - id: PIXEL
     name: Pixel
     tag: pixel
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 7
+    order: 5
     reversed: false
 
   - id: PIXEL2
@@ -59,7 +45,7 @@ zones:
     tag: pixel2
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 8
+    order: 6
     reversed: false
 
   - id: PREVIEW
@@ -67,48 +53,8 @@ zones:
     tag: preview
     pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
     enabled: true
-    order: 9
+    order: 7
     reversed: true
-
-  # - id: DESK
-  #   name: Desk
-  #   tag: desk
-  #   pixel_count: 9      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-  #   enabled: true
-  #   order: 9
-  #   reversed: false
-
-  # - id: DESK2
-  #   name: desk2
-  #   tag: desk2
-  #   pixel_count: 10      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-  #   enabled: true
-  #   order: 8
-  #   reversed: false
-
-  # - id: DESK3
-  #   name: desk3
-  #   tag: desk3
-  #   pixel_count: 10      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-  #   enabled: true
-  #   order: 9
-  #   reversed: false
-
-  # - id: DESK4
-  #   name: desk4
-  #   tag: desk4
-  #   pixel_count: 7      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-  #   enabled: true
-  #   order: 10
-  #   reversed: false
-
-  # - id: DESK5
-  #   name: desk5
-  #   tag: desk5
-  #   pixel_count: 7      # 54 physical LEDs (18 * 3) - back wall (was "strip")
-  #   enabled: true
-  #   order: 11
-  #   reversed: false
 
   # - id: DESK
   #   name: Desk

@@ -4,18 +4,19 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from models.enums import ParamID, AnimationID, ZoneID, ZoneRenderMode
+from models.animation_params.animation_param_id import AnimationParamID
+from models.enums import AnimationID, ZoneEditTarget, ZoneID, ZoneRenderMode
 from models.domain import (
-    ParameterConfig, ParameterState, ParameterCombined,
-    AnimationConfig, AnimationState, AnimationCombined,
+    AnimationConfig, AnimationState,
     ZoneConfig, ZoneState, ZoneCombined,
     ApplicationState
 )
 from models.color import Color
 from managers import ConfigManager
-from utils.enum_helper import EnumHelper
+from utils.serialization import Serializer
 from models.enums import LogLevel
 from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 log = get_logger().for_category(LogCategory.CONFIG)
 
@@ -27,7 +28,6 @@ class DataAssembler:
         self.config_manager = config_manager
         self.state_path = state_path
         self.color_manager = config_manager.color_manager
-        self.parameter_manager = config_manager.parameter_manager
         self.animation_manager = config_manager.animation_manager
 
         # Debouncing: prevent IO thrashing on rapid state changes (all saves go through here)
@@ -42,7 +42,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "r") as f:
                 state = json.load(f)
-                log.debug(f"Loaded state from {self.state_path}")
+                # log.debug(f"Loaded state from {self.state_path}")
                 return state
         except FileNotFoundError:
             log.error(f"State file not found: {self.state_path}")
@@ -61,7 +61,7 @@ class DataAssembler:
         try:
             with open(self.state_path, "w") as f:
                 json.dump(state, f, indent=2)
-                log.debug(f"Saved state to {self.state_path}")
+                log.debug(f"State saved {self.state_path}")
         except Exception as e:
             log.error(f"Failed to save state: {e}")
             raise
@@ -106,147 +106,99 @@ class DataAssembler:
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
 
-        # Schedule new save with debounce delay
+        # Schedule new save with debounce delay using normal asyncio task
         self._save_task = asyncio.create_task(self._debounced_save())
 
-    def build_animations(self) -> List[AnimationCombined]:
-        """Build animation domain objects from config + state"""
+    def build_animations(self) -> List[AnimationConfig]:
+        """Build animation config objects from YAML"""
         try:
-            state_json = self.load_state()
-            animations = []
-
-            param_configs = self.parameter_manager.get_all_parameters()
             available_animations = self.animation_manager.get_all_animations()
-
-            log.info(f"Building {len(available_animations)} animation objects...")
-
-            current_anim_id = state_json.get("current_animation", {}).get("id")
-            current_anim_params = state_json.get("current_animation", {}).get("parameters", {})
-
-            for anim_info in available_animations:
-                animation_id = anim_info.id  # Already AnimationID enum
-                parameter_ids = anim_info.get_all_parameters()
-
-                animation_config = AnimationConfig(
-                    id=animation_id,
-                    tag=anim_info.tag,  # String tag for file/class lookup
-                    display_name=anim_info.display_name,
-                    description=anim_info.description,
-                    parameters=parameter_ids
-                )
-
-                # Compare uppercase enum names (state.json now stores "SNAKE" not "snake")
-                is_current = (current_anim_id == animation_id.name)
-
-                # Extract parameter values from state
-                param_values = {}
-                if is_current:
-                    for param_id in parameter_ids:
-                        param_name = param_id.name
-                        if param_name in current_anim_params:
-                            param_values[param_id] = current_anim_params[param_name]
-
-                animation_state = AnimationState(
-                    id=animation_id,
-                    enabled=is_current,
-                    parameter_values=param_values
-                )
-
-                # Build parameter combined objects
-                params_combined = {}
-                for param_id in parameter_ids:
-                    param_config = param_configs.get(param_id)
-                    if not param_config:
-                        log.warn(f"Parameter {param_id.name} not found in config, skipping")
-                        continue
-
-                    value = param_values.get(param_id, param_config.default)
-                    param_state = ParameterState(id=param_id, value=value)
-                    params_combined[param_id] = ParameterCombined(config=param_config, state=param_state)
-
-                animation_combined = AnimationCombined(
-                    config=animation_config,
-                    state=animation_state,
-                    parameters=params_combined
-                )
-
-                animations.append(animation_combined)
-                log.info(f"  ✓ {animation_config.display_name} (current={is_current})")
-
-            log.info(f"Successfully built {len(animations)} animations")
-            return animations
+            log.info(f"Loaded {len(available_animations)} animation definitions")
+            return available_animations
 
         except Exception as e:
             log.error(f"Failed to build animations: {e}")
             raise
 
     def build_zones(self) -> List[ZoneCombined]:
-        """Build zone domain objects from config + state"""
+        """
+        Build zone domain objects from config + state.
+
+        Preserves complete zone state including animation parameters
+        for proper mode switching (STATIC ↔ ANIMATION) on app restart.
+        """
         try:
             state_json = self.load_state()
             zones = []
 
-            param_configs = self.parameter_manager.get_all_parameters()
             # IMPORTANT: Use get_all_zones() to preserve pixel indices for disabled zones
             zone_configs = self.config_manager.get_all_zones()  # Returns List[ZoneConfig] with indices calculated
 
             log.info(f"Building {len(zone_configs)} zone objects...")
 
             for zone_config in zone_configs:
-                # Get state data using zone tag (lowercase, e.g., "lamp")
-                zone_state_data = state_json.get("zones", {}).get(zone_config.tag, {})
+                # Get state data using zone id (lowercase, e.g., "lamp" from ZoneID.LAMP)
+                zone_name = zone_config.id.name 
+                zone_key = zone_name.lower()
+                zone_state_data = state_json.get("zones", {}).get(zone_key, {})
 
                 if not zone_state_data:
-                    log.warn(f"No state found for zone {zone_config.tag}, using defaults")
+                    log.warn(f"No state found for zone {zone_name}, using defaults")
                     color = Color.from_hue(0)
                     brightness = 100
                     mode = ZoneRenderMode.STATIC
-                    animation_id = None
+                    animation_state = None
                 else:
                     color_dict = zone_state_data.get("color", {"mode": "HUE", "hue": 0})
                     color = Color.from_dict(color_dict, self.color_manager)
-                    brightness = zone_state_data.get("brightness", 100)
+                    brightness = int(zone_state_data.get("brightness", 100))
+                    is_on = zone_state_data.get("is_on", True)
 
-                    # Load zone mode using EnumHelper with fallback to STATIC
+                    # Load zone mode with fallback to STATIC
                     try:
-                        mode = EnumHelper.to_enum(ZoneRenderMode, zone_state_data.get("mode", "STATIC"))
-                    except (ValueError, TypeError):
+                        mode = Serializer.str_to_zone_render_mode(zone_state_data.get("mode", "STATIC"))
+                    except ValueError:
+                        log.warn(f"Invalid mode for zone {zone_name}, using STATIC")
                         mode = ZoneRenderMode.STATIC
 
-                    # Load animation_id if zone is in ANIMATION mode
-                    animation_id = None
-                    if mode == ZoneRenderMode.ANIMATION:
-                        anim_id_str = zone_state_data.get("animation_id")
+                    # Load animation state (preserved for mode switching)
+                    animation_state = None
+                    anim_data = zone_state_data.get("animation")
+                    if anim_data:
+                        anim_id_str = anim_data.get("id")
+                        
                         if anim_id_str:
                             try:
-                                animation_id = EnumHelper.to_enum(AnimationID, anim_id_str)
-                            except (ValueError, TypeError):
-                                log.warn(f"Invalid animation_id for zone {zone_config.tag}: {anim_id_str}")
+                                animation_id = Serializer.str_to_enum(anim_id_str, AnimationID)
+
+                                # Load animation parameters
+                                params_dict = anim_data.get("parameters", {})
+                                animation_parameters = Serializer.animation_params_str_to_enum(params_dict) if params_dict else {}
+
+                                # Create AnimationState object
+                                animation_state = AnimationState(
+                                    id=animation_id,
+                                    parameters=animation_parameters
+                                )
+                            except ValueError:
+                                log.warn(f"Invalid animation_id for zone {zone_config.id.name}: {anim_id_str}")
 
                 zone_state = ZoneState(
                     id=zone_config.id,
                     color=color,
+                    brightness=brightness,
+                    is_on=is_on,
                     mode=mode,
-                    animation_id=animation_id
+                    animation=animation_state
                 )
-
-                params_combined = {}
-                brightness_config = param_configs.get(ParamID.ZONE_BRIGHTNESS)
-                if brightness_config:
-                    brightness_state = ParameterState(id=ParamID.ZONE_BRIGHTNESS, value=brightness)
-                    params_combined[ParamID.ZONE_BRIGHTNESS] = ParameterCombined(
-                        config=brightness_config,
-                        state=brightness_state
-                    )
 
                 zone_combined = ZoneCombined(
                     config=zone_config,
-                    state=zone_state,
-                    parameters=params_combined
+                    state=zone_state
                 )
 
                 zones.append(zone_combined)
-                log.info(f"  ✓ {zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
+                log.info(f"{zone_config.display_name} @ [{zone_config.start_index}-{zone_config.end_index}]")
 
             log.info(f"Successfully built {len(zones)} zones")
             return zones
@@ -255,35 +207,13 @@ class DataAssembler:
             log.error(f"Failed to build zones: {e}")
             raise
 
-    def save_animation_state(self, animations: List[AnimationCombined]) -> None:
-        """Save current animation state to state.json"""
-        try:
-            state_json = self.load_state()
-
-            current_anim = next((anim for anim in animations if anim.state.enabled), None)
-
-            if current_anim:
-                params_dict = {}
-                for param_id, param_combined in current_anim.parameters.items():
-                    params_dict[param_id.name] = param_combined.state.value
-
-                state_json["current_animation"] = {
-                    "id": current_anim.config.id.name,  # Keep enum name uppercase (e.g., "SNAKE")
-                    "parameters": params_dict
-                }
-                log.debug(f"Saved anim state: {current_anim.config.display_name}")
-            else:
-                state_json["current_animation"] = {"id": None, "parameters": {}}
-                log.debug("Saved anim state: none")
-
-            self.save_state(state_json)
-
-        except Exception as e:
-            log.error(f"Failed to save animation state: {e}")
-            raise
-
     def save_zone_state(self, zones: List[ZoneCombined]) -> None:
-        """Save zone state to state.json"""
+        """
+        Save zone state to state.json.
+
+        Preserves complete zone state including color and animation parameters
+        for proper mode switching (STATIC ↔ ANIMATION) on app restart.
+        """
         try:
             state_json = self.load_state()
 
@@ -291,18 +221,23 @@ class DataAssembler:
                 state_json["zones"] = {}
 
             for zone in zones:
-                tag = zone.config.id.name.lower()
+                zone_key = zone.config.id.name.lower()
                 zone_data = {
                     "color": zone.state.color.to_dict(),
-                    "brightness": zone.brightness,  # Read from property (gets from parameters)
-                    "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION, OFF)
+                    "brightness": zone.state.brightness,
+                    "is_on": zone.state.is_on,
+                    "mode": zone.state.mode.name  # Save zone mode (STATIC, ANIMATION)
                 }
 
-                # Save animation_id if zone is in ANIMATION mode
-                if zone.state.animation_id:
-                    zone_data["animation_id"] = zone.state.animation_id.name
+                # Save animation state if zone has animation settings
+                # (even if mode=STATIC, for preservation when switching back to ANIMATION)
+                if zone.state.animation:
+                    zone_data["animation"] = {
+                        "id": zone.state.animation.id,
+                        "parameters": Serializer.animation_params_enum_to_str(zone.state.animation.parameters)
+                    }
 
-                state_json["zones"][tag] = zone_data
+                state_json["zones"][zone_key] = zone_data
 
             self.save_state(state_json)
             log.info(f"Successfully saved {len(zones)} zone states")
@@ -328,23 +263,30 @@ class DataAssembler:
                 log.warn("No application state found, using defaults")
                 return ApplicationState()  # Use dataclass defaults
 
-            # Parse enums using EnumHelper with fallback to dataclass defaults
+            # Parse enums with fallback to dataclass defaults
             try:
-                current_param = EnumHelper.to_enum(ParamID, app_data.get("active_parameter"))
-            except (ValueError, TypeError):
-                current_param = ApplicationState.current_param  # Dataclass default
+                param_str = app_data.get("selected_animation_parameter_id")
+                selected_animation_param_id = Serializer.str_to_enum(param_str, AnimationParamID) if param_str else ApplicationState.selected_animation_param_id
+            except ValueError:
+                selected_animation_param_id = ApplicationState.selected_animation_param_id  # Dataclass default
+
+            # Parse enums with fallback to dataclass defaults
+            try:
+                param_str = app_data.get("selected_zone_edit_target")
+                selected_zone_edit_target = Serializer.str_to_enum(param_str, ZoneEditTarget) if param_str else ApplicationState.selected_zone_edit_target
+            except ValueError:
+                selected_zone_edit_target = ApplicationState.selected_zone_edit_target 
 
             state = ApplicationState(
                 edit_mode=app_data.get("edit_mode_on", ApplicationState.edit_mode),
-                lamp_white_mode=app_data.get("lamp_white_mode_on", ApplicationState.lamp_white_mode),
-                lamp_white_saved_state=app_data.get("lamp_white_saved_state", ApplicationState.lamp_white_saved_state),
-                current_zone_index=int(app_data.get("selected_zone_index", ApplicationState.current_zone_index)),
-                current_param=current_param,
+                selected_zone_index=int(app_data.get("selected_zone_index", ApplicationState.selected_zone_index)),
+                selected_zone_edit_target=selected_zone_edit_target,
+                selected_animation_param_id=selected_animation_param_id,
                 frame_by_frame_mode=app_data.get("frame_by_frame_mode", ApplicationState.frame_by_frame_mode),
                 save_on_change=app_data.get("save_on_change", ApplicationState.save_on_change),
             )
 
-            log.info(f"Built application state: zone_idx={state.current_zone_index}")
+            log.info(f"Built application state: zone_idx={state.selected_zone_index}")
             return state
 
         except Exception as e:
@@ -363,16 +305,15 @@ class DataAssembler:
 
             state_json["application"] = {
                 "edit_mode_on": app_state.edit_mode,
-                "lamp_white_mode_on": app_state.lamp_white_mode,
-                "lamp_white_saved_state": app_state.lamp_white_saved_state,
-                "active_parameter": EnumHelper.to_string(app_state.current_param),
-                "selected_zone_index": app_state.current_zone_index,
+                "selected_animation_param_id": Serializer.enum_to_str(app_state.selected_animation_param_id),
+                "selected_zone_index": app_state.selected_zone_index,
+                "selected_zone_edit_target": Serializer.enum_to_str(app_state.selected_zone_edit_target),
                 "frame_by_frame_mode": app_state.frame_by_frame_mode,
                 "save_on_change": app_state.save_on_change,
             }
 
             self.save_state(state_json)
-            log.debug(f"Saved application state")
+            log.debug(f"Application state saved")
 
         except Exception as e:
             log.error(f"Failed to save application state: {e}")

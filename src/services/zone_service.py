@@ -1,11 +1,17 @@
 """Zone service - Business logic for zones"""
 
-from typing import List, Optional, Any
-from models.enums import ZoneID, ParamID, ZoneRenderMode
+import asyncio
+from typing import Any, Dict, List, Optional
+from models.animation_params.animation_param_id import AnimationParamID
+from models.domain.animation import AnimationState
+from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
+from models.events import ZoneStaticStateChangedEvent
+from models.events.zone_runtime_events import ZoneAnimationChangedEvent, ZoneRenderModeChangedEvent
 from services.data_assembler import DataAssembler
 from services.application_state_service import ApplicationStateService
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.ZONE)
@@ -13,11 +19,15 @@ log = get_logger().for_category(LogCategory.ZONE)
 class ZoneService:
     """High-level zone operations"""
 
-    def __init__(self, assembler: DataAssembler, app_state_service: ApplicationStateService):
+    def __init__(self, assembler: DataAssembler, app_state_service: ApplicationStateService, event_bus: EventBus):
         self.assembler = assembler
         self.zones = assembler.build_zones()
         self._by_id = {zone.config.id: zone for zone in self.zones}
         self.app_state_service = app_state_service
+        self.event_bus = event_bus
+        
+        # Track which zone was last modified to enable selective saves
+        self._last_modified_zone_id: Optional[ZoneID] = None
 
         log.info(f"ZoneService initialized with {len(self.zones)} zones")
 
@@ -31,27 +41,20 @@ class ZoneService:
 
     def get_selected_zone(self) -> Optional[ZoneCombined]:
         """
-        Get currently selected zone based on ApplicationState.current_zone_index
-
-        Per-zone mode: The selected zone determines which zone's mode and parameters
-        are being edited. A zone is always selected (even if not visible due to lack
-        of pulse), allowing per-zone mode toggling via BTN4.
-
-        Returns:
-            Selected ZoneCombined object or None if app_state_service not available
+        Get currently selected zone based on ApplicationState.selected_zone_index
         """
         if not self.app_state_service:
             log.warn("Cannot get selected zone: app_state_service not configured")
             return None
 
         app_state = self.app_state_service.get_state()
-        zone_index = app_state.current_zone_index
+        zone_index = app_state.selected_zone_index
 
         if 0 <= zone_index < len(self.zones):
             return self.zones[zone_index]
-        else:
-            log.warn(f"Invalid zone index: {zone_index}, clamping to 0")
-            return self.zones[0] if self.zones else None
+        
+        log.warn(f"Invalid zone index: {zone_index}, clamping to 0")
+        return self.zones[0] if self.zones else None
 
     def get_enabled(self) -> List[ZoneCombined]:
         """Get only enabled zones"""
@@ -61,97 +64,223 @@ class ZoneService:
         """Get zones filtered by render mode"""
         return [zone for zone in self.zones if zone.state.mode == mode]
 
-    def get_total_pixel_count(self) -> int:
-        """Get total pixel count from all enabled zones"""
-        return sum(zone.config.pixel_count for zone in self.get_all())
+
+    # ------------------------------------------------------------------
+    # Zone state mutation
+    # ------------------------------------------------------------------
 
     def set_color(self, zone_id: ZoneID, color: Color) -> None:
-        """Set zone color"""
         zone = self.get_zone(zone_id)
         zone.state.color = color
-        log.info(f"Set {zone.config.display_name} color: {color.mode.name}")
-        self.save()
+
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone color set",
+            zone=zone.config.display_name,
+            color=color
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStaticStateChangedEvent(
+                zone_id=zone_id,
+                color=color,
+            )
+        ))
 
     def set_brightness(self, zone_id: ZoneID, brightness: int) -> None:
-        """Set zone brightness"""
         zone = self.get_zone(zone_id)
-        zone.set_param_value(ParamID.ZONE_BRIGHTNESS, brightness)
-        log.info(f"Set {zone.config.display_name} brightness: {brightness}%")
-        self.save()
+        zone.state.brightness = max(0, min(100, brightness))
 
-    def adjust_parameter(self, zone_id: ZoneID, param_id: ParamID, delta: int) -> None:
-        """Adjust zone parameter by delta steps"""
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone brightness set",
+            zone=zone.config.display_name,
+            brightness=zone.state.brightness,
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStaticStateChangedEvent(
+                zone_id=zone_id,
+                brightness=zone.state.brightness,
+            )
+        ))
+
+    def adjust_brightness(self, zone_id: ZoneID, delta: int) -> None:
         zone = self.get_zone(zone_id)
-        zone.adjust_param(param_id, delta)
-        log.info(f"Adjusted {zone.config.display_name}.{param_id.name}: {zone.get_param_value(param_id)}")
-        self.save()
+        zone.state.brightness = max(0, min(100, zone.state.brightness + delta))
 
-    def set_parameter(self, zone_id: ZoneID, param_id: ParamID, value: Any) -> None:
-        """Set zone parameter value directly"""
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone brightness adjusted",
+            zone=zone.config.display_name,
+            brightness=zone.state.brightness,
+        )
+
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStaticStateChangedEvent(
+                zone_id=zone_id,
+                brightness=zone.state.brightness,
+            )
+        ))
+        
+    def set_is_on(self, zone_id: ZoneID, is_on: bool) -> None:
         zone = self.get_zone(zone_id)
-        zone.set_param_value(param_id, value)
-        log.info(f"Set {zone.config.display_name}.{param_id.name} = {value}")
-        self.save()
+        zone.state.is_on = is_on
 
-    def get_rgb(self, zone_id: ZoneID) -> tuple[int, int, int]:
-        """Get zone RGB color with brightness applied"""
-        zone = self.get_zone(zone_id)
-        return zone.get_rgb()
+        self._save_zone(zone_id)
 
-    def get_zones_states(self) -> dict[ZoneID, tuple[Color, int]]:
-        """Get current zone states as dict of (Color, brightness)"""
-        return {
-            zone.config.id: (zone.state.color, zone.brightness)
-            for zone in self.get_all()
-        }
+        log.info(
+            "Zone power state changed",
+            zone=zone.config.display_name,
+            is_on=is_on,
+        )
 
-    def get_zones_by_gpio(self, gpio_pin: int) -> List[ZoneCombined]:
+        asyncio.create_task(self.event_bus.publish(
+            ZoneStaticStateChangedEvent(
+                zone_id=zone_id,
+                is_on=is_on,
+            )
+        ))
+
+    def set_animation(
+        self,
+        zone_id: ZoneID,
+        animation_id: AnimationID
+    ) -> None:
         """
-        Get all zones assigned to a specific GPIO pin
+        Assign a NEW animation to zone and switch render mode to ANIMATION.
 
-        Useful for:
-        - Debugging multi-GPIO setups
-        - Verifying zone→GPIO mappings
-        - Per-GPIO strip operations
+        Semantics:
+        - Always resets animation parameters (defaults will be used)
+        - Implicitly switches render mode to ANIMATION
+        - Persists state
+        - Emits domain events
+        """
+        
+        zone = self.get_zone(zone_id)
+        if not zone:
+            raise ValueError(f"Zone not found: {zone_id}")
+        
+        
+        old_mode = zone.state.mode
+        old_animation = zone.state.animation.id if zone.state.animation else None
+
+        # 1. Create NEW animation state (params empty → defaults later)
+        zone.state.animation = AnimationState(
+            id=animation_id,
+            parameters={}
+        )
+        
+        # 2. Switch render mode implicitly
+        zone.state.mode = ZoneRenderMode.ANIMATION
+
+        # 3. Persist state
+        self.save_state()
+        
+        log.info(
+            "Zone animation changed",
+            zone=zone.config.display_name,
+            animation=zone.state.animation
+        )
+
+        # 3. Publish domain events 
+        asyncio.create_task(self.event_bus.publish(
+            ZoneAnimationChangedEvent(
+                zone_id=zone_id,
+                animation_id=animation_id,
+                params={}
+            )
+        ))
+        
+        if old_mode != ZoneRenderMode.ANIMATION:
+            asyncio.create_task(self.event_bus.publish(
+                ZoneRenderModeChangedEvent(
+                    zone_id=zone_id,
+                    old=old_mode,
+                    new=ZoneRenderMode.ANIMATION
+                )
+            ))
+
+    def set_animation_param(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any) -> None:
+        """
+        Set zone animation parameter value
+        """
+        zone = self.get_zone(zone_id)
+
+        if zone.state.mode == ZoneRenderMode.STATIC:
+            raise ValueError("Zone is in static mode")
+
+        if zone.state.animation is None:
+            raise ValueError("Zone has no active animation")
+
+        zone.state.animation.parameters[param_id] = value
+
+        self._save_zone(zone_id)
+
+        log.info(
+            "Zone animation parameter changed",
+            zone=zone_id,
+            animation=zone.state.animation
+        )
+
+    
+    def set_render_mode(
+        self, 
+        zone_id: ZoneID, 
+        render_mode: ZoneRenderMode
+    ) -> None:
+        zone = self.get_zone(zone_id)
+
+        old_mode = zone.state.mode
+        if old_mode == render_mode:
+            log.info(f"Zone already in {zone.state.mode} render mode, no action needed")
+            return
+        
+        # 1. Update domain state
+        zone.state.mode = render_mode
+    
+        # 2. Persist
+        self.save_state()
+
+        log.info(
+            "Zone render mode changed",
+            zone=zone.config.display_name,
+            old_mode=old_mode.name,
+            new_mode=render_mode.name,
+        )
+
+        # 3. Publish domain event
+        asyncio.create_task(self.event_bus.publish(
+            ZoneRenderModeChangedEvent(
+                zone_id=zone_id,
+                old=old_mode,
+                new=render_mode
+            )
+        ))
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+    
+    def _save_zone(self, zone_id: ZoneID) -> None:
+        """
+        Save only the specified zone to state.json (non-blocking).
+
+        This is more efficient than saving all zones when only one was modified.
+        The assembler's debouncing will batch rapid saves within 500ms window.
 
         Args:
-            gpio_pin: GPIO pin number (18, 19, etc.)
-
-        Returns:
-            List of zones on this GPIO (may be empty)
-
-        Example:
-            gpio_18_zones = zone_service.get_zones_by_gpio(18)
-            # Returns: [FLOOR, LEFT, TOP, RIGHT, BOTTOM, LAMP]
+            zone_id: ID of the zone to save
         """
-        return [zone for zone in self.zones if zone.config.gpio == gpio_pin]
+        self._last_modified_zone_id = zone_id
+        zone = self.get_zone(zone_id)
 
-    def get_all_gpios(self) -> List[int]:
-        """
-        Get sorted list of all GPIO pins in use
-
-        Useful for:
-        - Iterating over all GPIO pins
-        - Discovering which GPIOs are configured
-        - Multi-GPIO hardware operations
-
-        Returns:
-            Sorted list of unique GPIO pin numbers
-
-        Example:
-            gpios = zone_service.get_all_gpios()
-            # Returns: [18, 19]
-
-            for gpio in gpios:
-                zones = zone_service.get_zones_by_gpio(gpio)
-                print(f"GPIO {gpio}: {len(zones)} zones")
-        """
-        return sorted(set(zone.config.gpio for zone in self.zones))
-
-    def save(self) -> None:
-        """Persist current state"""
-        self.assembler.save_zone_state(self.zones)
+        # Pass only the modified zone to reduce I/O (assembler handles debouncing)
+        self.assembler.save_zone_state([zone])
 
     def save_state(self) -> None:
-        """Persist current state (alias for save)"""
-        self.save()
+        """Persist current state"""
+        self.assembler.save_zone_state(self.zones)

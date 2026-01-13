@@ -1,159 +1,106 @@
 {
-  "animations": {
-    "SNAKE": {
-      "enabled": false,
-      "parameters": {
-        "ANIM_SPEED": 80,
-        "ANIM_PRIMARY_COLOR_HUE": 0,
-        "ANIM_LENGTH": 5
-      }
-    },
-    "BREATHE": {
-      "enabled": false,
-      "parameters": {
-        "ANIM_SPEED": 50,
-        "ANIM_INTENSITY": 100
-      }
-    }
-  },
   "zones": {
     "floor": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cyan"
+        "preset_name": "blue"
       },
-      "brightness": 100,
-      "mode": "STATIC"
+      "brightness": 42,
+      "is_on": true,
+      "mode": "STATIC",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {}
+      }
     },
-    "left": {
+    "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cool_white"
+        "preset_name": "yellow"
       },
-      "brightness": 100,
-      "mode": "STATIC"
+      "brightness": 10,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {}
+      }
     },
-    "top": {
-      "color": {
-        "mode": "HUE",
-        "hue": 319
-      },
-      "brightness": 87.5,
-      "mode": "STATIC"
-    },
-    "right": {
+    "pixel": {
       "color": {
         "mode": "PRESET",
         "preset_name": "red"
       },
       "brightness": 100,
-      "mode": "STATIC"
-    },
-    "bottom": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "orange"
-      },
-      "brightness": 100,
-      "mode": "STATIC"
-    },
-    "lamp": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "violet"
-      },
-      "brightness": 100,
-      "mode": "STATIC"
-    },
-    "back": {
-      "color": {
-        "mode": "HUE",
-        "hue": 264
-      },
-      "brightness": 0
-    },
-    "desk": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "pink"
-      },
-      "brightness": 62.5,
-      "mode": "STATIC"
-    },
-    "desk2": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "hot_pink"
-      },
-      "brightness": 100
-    },
-    "desk3": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "violet"
-      },
-      "brightness": 100
-    },
-    "desk4": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "yellow"
-      },
-      "brightness": 100
-    },
-    "desk5": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "purple"
-      },
-      "brightness": 100
-    },
-    "pixel": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "cool_white"
-      },
-      "brightness": 100,
-      "mode": "STATIC"
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "SNAKE",
+        "parameters": {}
+      }
     },
     "preview": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "blue"
+        "mode": "HUE",
+        "hue": 170
       },
       "brightness": 100,
-      "mode": "STATIC"
+      "is_on": false,
+      "mode": "STATIC",
+      "animation": {
+        "id": "COLOR_SNAKE",
+        "parameters": {}
+      }
     },
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "blue"
       },
-      "brightness": 100,
-      "mode": "ANIMATION"
+      "brightness": 52,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "SNAKE",
+        "parameters": {}
+      }
+    },
+    "circle": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "green"
+      },
+      "brightness": 12,
+      "is_on": true,
+      "mode": "STATIC",
+      "animation": {
+        "id": "BREATHE",
+        "parameters": {}
+      }
+    },
+    "gate": {
+      "color": {
+        "mode": "HUE",
+        "hue": 240
+      },
+      "brightness": 83,
+      "is_on": false,
+      "mode": "STATIC"
     }
   },
   "current_animation": {
-    "id": "COLOR_SNAKE",
+    "id": "BREATHE",
     "parameters": {
-      "ANIM_SPEED": 50,
-      "ANIM_PRIMARY_COLOR_HUE": 0,
-      "ANIM_LENGTH": 5,
-      "ANIM_HUE_OFFSET": 30
+      "speed": 40,
+      "primary_color_hue": 0,
+      "intensity": 100
     }
   },
   "application": {
-    "edit_mode_on": true,
-    "lamp_white_mode_on": true,
-    "lamp_white_saved_state": {
-      "color": {
-        "mode": "HUE",
-        "hue": 319
-      },
-      "brightness": 0
-    },
-    "active_parameter": "ANIM_SPEED",
-    "selected_zone_index": 7,
+    "edit_mode_on": false,
+    "selected_animation_param_id": "HUE",
+    "selected_zone_index": 6,
+    "selected_zone_edit_target": "COLOR_PRESET",
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

@@ -13,11 +13,9 @@ class ZoneRenderMode(Enum):
 
     STATIC: Zone displays static color (zone editing mode)
     ANIMATION: Zone displays animation
-    OFF: Zone is powered off (disabled)
     """
     STATIC = auto()
     ANIMATION = auto()
-    OFF = auto()
 
 
 class PreviewMode(Enum):
@@ -33,15 +31,6 @@ class ColorMode(Enum):
     RGB = auto()       # Direct RGB (for future custom colors)
 
 
-class EncoderSource(Enum):
-    """Encoder identifiers for event sources"""
-    SELECTOR = auto()   # Multi-purpose selector encoder (zones, animations, etc.)
-    MODULATOR = auto()  # Parameter value modulator encoder
-
-class KeyboardSource(Enum):
-    EVDEV = auto(),
-    STDIN = auto()
-    
 class BuzzerID(Enum):
     """Buzzer identifiers"""
     ACTIVE = auto()   # 
@@ -60,19 +49,21 @@ class ButtonID(Enum):
     BTN4 = auto()  # Toggle STATIC/ANIMATION mode
 
 
-class ZoneID(Enum):
+class ZoneID(str, Enum):
     """Zone identifiers"""
-    FLOOR = auto()
-    LEFT = auto()
-    TOP = auto()
-    RIGHT = auto()
-    BOTTOM = auto()
-    LAMP = auto()
-    PIXEL = auto()        # 30-pixel custom LED strip on GPIO 19
-    PIXEL2 = auto()        # 30-pixel custom LED strip on GPIO 19
-    PREVIEW = auto()      # 8-pixel preview panel on GPIO 19
-    BACK = auto()
-    DESK = auto()
+    FLOOR = "FLOOR"
+    CIRCLE = "CIRCLE"
+    # LEFT = auto()
+    # TOP = auto()
+    # RIGHT = auto()
+    # BOTTOM = auto()
+    LAMP = "LAMP"
+    GATE = "GATE"
+    PIXEL = "PIXEL"        # 30-pixel custom LED strip on GPIO 19
+    PIXEL2 = "PIXEL2"        # 30-pixel custom LED strip on GPIO 19
+    PREVIEW = "PREVIEW"      # 8-pixel preview panel on GPIO 19
+    # BACK = auto()
+    # DESK = auto()
 
 
 class LEDStripID(Enum):
@@ -89,14 +80,14 @@ class LEDStripType(Enum):
     APA102 = "APA102"
     SK6812 = "SK6812"
 
-class AnimationID(Enum):
+class AnimationID(str, Enum):
     """Animation identifiers"""
-    BREATHE = auto()
-    COLOR_FADE = auto()
-    SNAKE = auto()
-    COLOR_SNAKE = auto()
-    COLOR_CYCLE = auto()
-    MATRIX = auto()
+    BREATHE = "BREATHE"
+    COLOR_FADE = "COLOR_FADE"
+    SNAKE = "SNAKE"
+    COLOR_SNAKE = "COLOR_SNAKE"
+    COLOR_CYCLE = "COLOR_CYCLE"
+    MATRIX = "MATRIX"
 
 class ParameterType(Enum):
     """Parameter value types with validation rules"""
@@ -106,35 +97,10 @@ class ParameterType(Enum):
     RANGE_CUSTOM = auto()
     BOOLEAN = auto()
 
-class ParamID(Enum):
-    """
-    Parameter identifiers (unique across system)
-
-    Naming convention: SCOPE_NAME
-    - ZONE_* : Zone parameters (STATIC mode)
-    - ANIM_* : Animation parameters (ANIMATION mode)
-    - Generic : Reusable parameters (LENGTH, HUE_OFFSET, etc.)
-    """
-
-    # === ZONE PARAMETERS (STATIC mode) ===
-    ZONE_COLOR_HUE = auto()    # Zone color adjustment via HUE (0-360°)
-    ZONE_COLOR_PRESET = auto() # Zone color selection via named presets
-    ZONE_BRIGHTNESS = auto()   # Zone brightness (0-100%)
-    ZONE_REVERSED = auto()     # Reverse pixel order (bool) - for future
-
-    # === ANIMATION PARAMETERS (ANIMATION mode) ===
-    # Base parameters (shared by all animations)
-    ANIM_SPEED = auto()                 # Animation speed (1-100%)
-    ANIM_PRIMARY_COLOR_HUE = auto()     # Primary animation color hue (0-360°)
-
-    # Additional parameters (optional, used by specific animations)
-    ANIM_SECONDARY_COLOR_HUE = auto()   # Secondary animation color hue (0-360°)
-    ANIM_TERTIARY_COLOR_HUE = auto()    # Tertiary animation color hue (0-360°)
-    ANIM_INTENSITY = auto()             # Animation intensity (1-100%, for breathe/pulse)
-    ANIM_LENGTH = auto()                # Animation length in pixels (e.g., snake length)
-    ANIM_HUE_OFFSET = auto()            # Hue offset in degrees (e.g., rainbow spacing)
-
-
+class ZoneEditTarget(Enum):
+    COLOR_HUE = auto()
+    COLOR_PRESET = auto()
+    BRIGHTNESS = auto()
 
 class LogLevel(Enum):
     """Log severity levels"""
@@ -168,11 +134,27 @@ class LogCategory(Enum):
     SYSTEM = auto()      # Startup, shutdown, errors
     TRANSITION = auto()  # LED state transitions
     EVENT = auto()       # Event bus events and handling
-
+    
     RENDER_ENGINE = auto()
+    FRAME_MANAGER = auto()
+    
+    INDICATOR = auto()
+    ANIM_CONTROLLER = auto()
+    STATIC_CONTROLLER = auto()
+    LIGHTING_CONTROLLER = auto()
+    
+    API = auto()
+    WEBSOCKET = auto()
+    SOCKETIO = auto()
+    
+    SHUTDOWN = auto()
+    LIFECYCLE = auto()
+    TASK = auto()
 
+    SNAPSHOT = auto()
+    
     GENERAL = auto()    # Default general category
-
+    
 class FramePriority(Enum):
     """
     Frame priority levels (higher value = higher priority)
@@ -182,8 +164,8 @@ class FramePriority(Enum):
     """
     IDLE = 0           # No active source (black screen fallback)
     MANUAL = 10        # Manual static color settings
-    PULSE = 20         # Edit mode pulsing indicator
-    ANIMATION = 30     # Running animations
+    PULSE = 30         # Edit mode pulsing indicator
+    ANIMATION = 20     # Running animations
     TRANSITION = 40    # Crossfades, mode switches (highest)
     DEBUG = 50         # Debug overlays (for future use)
 
@@ -196,6 +178,7 @@ class FrameSource(Enum):
     """
     IDLE = auto()           # No source (idle state)
     STATIC = auto()         # Static color controller
+    MANUAL = auto()
     PULSE = auto()          # Pulsing animation (edit mode)
     ANIMATION = auto()      # AnimationEngine
     TRANSITION = auto()     # TransitionService

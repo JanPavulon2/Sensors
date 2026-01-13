@@ -267,7 +267,7 @@ def change_zone(self, delta: int):
     current_index = self.app_state_service.state.selected_zone_index
     new_index = (current_index + delta) % len(zones)
 
-    self.app_state_service.set_current_zone_index(new_index)
+    self.app_state_service.set_selected_zone_index(new_index)
     await self._sync_preview()
 ```
 

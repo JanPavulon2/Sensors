@@ -226,7 +226,7 @@ class TransitionService:
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit transition frame to FrameManager: {e}")
                     # No fallback to direct show() - prevents race condition with FrameManager
@@ -288,7 +288,7 @@ class TransitionService:
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit instant transition frame: {e}")
             else:
@@ -338,7 +338,7 @@ class TransitionService:
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
                         )
-                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                        await self.frame_manager.push_frame(pixel_frame)
                     except Exception as e:
                         log.error(f"Failed to submit fade in step {step}: {e}")
                 else:
@@ -386,7 +386,7 @@ class TransitionService:
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict
                 )
-                await self.frame_manager.submit_pixel_frame(pixel_frame)
+                await self.frame_manager.push_frame(pixel_frame)
             self.last_show_time = time.perf_counter()
 
         # Fade in to target
@@ -434,7 +434,7 @@ class TransitionService:
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 await self.fade_in(new_frame, config)
 
     async def crossfade(
@@ -473,7 +473,7 @@ class TransitionService:
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit instant crossfade frame: {e}")
             else:
@@ -491,7 +491,7 @@ class TransitionService:
                         source=FrameSource.TRANSITION,
                         zone_pixels=zone_pixels_dict
                     )
-                    await self.frame_manager.submit_pixel_frame(pixel_frame)
+                    await self.frame_manager.push_frame(pixel_frame)
                 except Exception as e:
                     log.error(f"Failed to submit size-mismatch frame: {e}")
             return
@@ -529,7 +529,7 @@ class TransitionService:
                             source=FrameSource.TRANSITION,
                             zone_pixels=zone_pixels_dict
                         )
-                        await self.frame_manager.submit_pixel_frame(pixel_frame)
+                        await self.frame_manager.push_frame(pixel_frame)
                     except Exception as e:
                         log.error(f"Failed to submit crossfade step {step}: {e}")
                 else:
@@ -567,6 +567,6 @@ class TransitionService:
                     source=FrameSource.TRANSITION,
                     zone_pixels=zone_pixels_dict
                 )
-                await self.frame_manager.submit_pixel_frame(pixel_frame)
+                await self.frame_manager.push_frame(pixel_frame)
             await asyncio.sleep(config.duration_ms / 1000)
 

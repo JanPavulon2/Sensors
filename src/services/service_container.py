@@ -8,7 +8,7 @@ from services.application_state_service import ApplicationStateService
 from services.event_bus import EventBus
 from engine.frame_manager import FrameManager
 from managers.color_manager import ColorManager
-
+from services.data_assembler import DataAssembler
 
 @dataclass
 class ServiceContainer:
@@ -37,14 +37,16 @@ class ServiceContainer:
             app_state_service=app_state_service,
             frame_manager=frame_manager,
             event_bus=event_bus,
-            color_manager=color_manager
+            color_manager=color_manager,
+            config_manager=config_manager
         )
 
         # Pass to controllers
-        controller = StaticModeController(
+        controller = StaticModeController(services=services)
+        controller2 = PowerToggleController(
             services=services,
-            strip_controller=zone_strip_controller,
-            preview_panel=preview_panel_controller
+            animation_engine=animation_engine,
+            static_mode_controller=static_mode_controller
         )
 
         # API endpoints can use services directly
@@ -52,11 +54,14 @@ class ServiceContainer:
         async def get_zones(services: ServiceContainer):
             return services.zone_service.get_all()
     """
-
+    event_bus: EventBus
+    
     zone_service: ZoneService
     animation_service: AnimationService
     app_state_service: ApplicationStateService
+    
     frame_manager: FrameManager
-    event_bus: EventBus
     color_manager: ColorManager
     config_manager: ConfigManager
+    
+    data_assembler: DataAssembler

@@ -2,53 +2,44 @@
 # Animation metadata and parameter assignments
 # (Parameter definitions are in parameters.yaml)
 
-# Animation definitions (list format for consistency with zones)
+# Animation definitions (map format indexed by animation ID)
 animations:
-  - id: BREATHE
+  BREATHE:
     name: Breathe
-    tag: breathe
+    class: BreatheAnimation
     description: "Smooth breathing effect"
     enabled: true
     order: 1
-    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    parameters: []
 
-  - id: SNAKE
-    name: Snake
-    tag: snake
-    description: "Sequential zone chase"
+  COLOR_FADE:
+    name: Color Fade
+    class: ColorFadeAnimation
+    description: "Rainbow hue cycling"
     enabled: true
     order: 2
-    parameters: [ANIM_LENGTH]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    parameters: []
 
-  - id: COLOR_CYCLE
-    name: Color Cycle
-    tag: color_cycle
-    description: "All zones cycle through presets"
+  SNAKE:
+    name: Snake
+    class: SnakeAnimation
+    description: "Sequential zone chase"
     enabled: true
     order: 3
-    parameters: []  # Only SPEED (PRIMARY_COLOR_HUE unused)
+    parameters: []
 
-  - id: COLOR_SNAKE
+  COLOR_SNAKE:
     name: Color Snake
-    tag: color_snake
+    class: ColorSnakeAnimation
     description: "Multi-pixel rainbow snake"
     enabled: true
     order: 4
-    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
+    parameters: []
 
-  - id: COLOR_FADE
+  COLOR_FADE:
     name: Color Fade
-    tag: color_fade
+    class: ColorFadeAnimation
     description: "Rainbow hue cycling"
     enabled: true
     order: 5
-    parameters: [ANIM_INTENSITY]  # Base params (SPEED, PRIMARY_COLOR_HUE) added automatically
-
-  # TEMPORARY: Matrix disabled for testing
-  # - id: MATRIX
-  #   name: Matrix
-  #   tag: matrix
-  #   description: "Digital rain effect (Matrix)"
-  #   enabled: false
-  #   order: 6
-  #   parameters: [ANIM_LENGTH, ANIM_INTENSITY]
+    parameters: []

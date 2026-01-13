@@ -1,125 +1,56 @@
 """
-Event system for LED Control Station
+Event system - re-export from models.events folder for backward compatibility.
 
-Event-driven architecture replacing callback pattern.
-All hardware inputs (encoders, buttons) are published as events.
+All events are defined in models/events/ folder:
+- models/events/types.py - EventType enum
+- models/events/base.py - Event base class
+- models/events/sources.py - EventSource enums
+- models/events/hardware.py - Hardware events (encoder, button, keyboard)
+- models/events/zone_static_events.py - Zone static state events
+- models/events/zone_runtime_events.py - Zone animation/render mode events
+
+This file provides backward compatibility for imports from models.events
 """
 
-from dataclasses import dataclass
-from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Generic, TypeVar
-import time
-from models.enums import EncoderSource, ButtonID, KeyboardSource
+# Re-export everything from models.events folder
+from models.events import (
+    # Type and base
+    EventType,
+    Event,
+    EventSource,
+    EncoderSource,
+    KeyboardSource,
+    # Hardware events
+    EncoderRotateEvent,
+    EncoderClickEvent,
+    ButtonPressEvent,
+    KeyboardKeyPressEvent,
+    # Zone state events
+    ZoneStaticStateChangedEvent,
+    ZoneRenderModeChangedEvent,
+    ZoneAnimationChangedEvent,
+    AnimationStartedEvent,
+    AnimationStoppedEvent,
+    AnimationParameterChangedEvent,
+)
 
-
-class EventType(Enum):
-    """Event types in the system"""
-    # Hardware events (RPI)
-    ENCODER_ROTATE = auto()
-    ENCODER_CLICK = auto()
-    BUTTON_PRESS = auto()
-    
-    # Keyboard eventss
-    KEYBOARD_KEYPRESS = auto() 
-    
-    # Future: Web API, MQTT, system events
-    WEB_COMMAND = auto()
-    MQTT_COMMAND = auto()
-    SYSTEM_EVENT = auto()
-
-TSource = TypeVar("TSource", bound=Enum)
-
-@dataclass
-class Event(Generic[TSource]):
-    """
-    Base event class
-
-    All events inherit from this and must specify:
-    - type: EventType (what kind of event)
-    - source: Enum (where it came from: EncoderSource.SELECTOR, ButtonID.BTN1, etc.)
-    - data: dict (event-specific payload)
-    - timestamp: float (when it happened)
-    """
-    type: EventType
-    source: TSource | None  # EncoderSource or ButtonID
-    data: Dict[str, Any]
-    timestamp: float
-
-@dataclass
-class EncoderRotateEvent(Event[EncoderSource]):
-    """Encoder rotation event"""
-
-    def __init__(self, source: EncoderSource, delta: int):
-        """
-        Args:
-            source: EncoderSource.SELECTOR or EncoderSource.MODULATOR
-            delta: -1 (CCW) or +1 (CW)
-        """
-        super().__init__(
-            type=EventType.ENCODER_ROTATE,
-            source=source,
-            data={"delta": delta},
-            timestamp=time.time()
-        )
-
-    @property
-    def delta(self) -> int:
-        """Rotation direction (-1 or +1)"""
-        return self.data["delta"]
-
-@dataclass
-class EncoderClickEvent(Event[EncoderSource]):
-    """Encoder button click event"""
-
-    def __init__(self, source: EncoderSource):
-        """
-        Args:
-            source: EncoderSource.SELECTOR or EncoderSource.MODULATOR
-        """
-        super().__init__(
-            type=EventType.ENCODER_CLICK,
-            source=source,
-            data={},
-            timestamp=time.time()
-        )
-
-@dataclass
-class ButtonPressEvent(Event[ButtonID]):
-    """Button press event"""
-
-    def __init__(self, source: ButtonID):
-        """
-        Args:
-            button_id: ButtonID.BTN1, ButtonID.BTN2, ButtonID.BTN3, or ButtonID.BTN4
-        """
-        super().__init__(
-            type=EventType.BUTTON_PRESS,
-            source=source,
-            data={},
-            timestamp=time.time()
-        )
-
-@dataclass
-class KeyboardKeyPressEvent(Event[KeyboardSource]):
-    """Keyboard key press event"""
-
-    def __init__(self, key: str, modifiers: Optional[List[str]] = None, source: KeyboardSource = KeyboardSource.STDIN):
-        """
-        Args:
-            key: The key that was pressed (e.g., 'a', 'Enter', etc.)
-        """
-        super().__init__(
-            type=EventType.KEYBOARD_KEYPRESS,
-            source=source,
-            data={"key": key, "modifiers": modifiers or []},
-            timestamp=time.time()
-        )
-
-    @property
-    def key(self) -> str:
-        """The key that was pressed"""
-        return self.data["key"]
-    
-    @property
-    def modifiers(self) -> List[str]:
-        return self.data["modifiers"]
+__all__ = [
+    # Type and base
+    "EventType",
+    "Event",
+    "EventSource",
+    "EncoderSource",
+    "KeyboardSource",
+    # Hardware
+    "EncoderRotateEvent",
+    "EncoderClickEvent",
+    "ButtonPressEvent",
+    "KeyboardKeyPressEvent",
+    # Zone state
+    "ZoneStaticStateChangedEvent",
+    "ZoneRenderModeChangedEvent",
+    "ZoneAnimationChangedEvent",
+    "AnimationStartedEvent",
+    "AnimationStoppedEvent",
+    "AnimationParameterChangedEvent",
+]

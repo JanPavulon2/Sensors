@@ -5,127 +5,135 @@ All animations inherit from BaseAnimation and implement the run() method.
 """
 
 import asyncio
-from typing import Dict, Tuple, AsyncIterator, Optional, List, Sequence
+from typing import Dict, AsyncIterator, Optional, Any, TYPE_CHECKING
+
+from models.animation_params import AnimationParamID, AnimationParam
 from models.color import Color
-from models.domain.zone import ZoneCombined
+from models.domain import ZoneCombined
 from models.enums import ZoneID
 
+if TYPE_CHECKING:
+    from models.frame import BaseFrame
 
 class BaseAnimation:
     """
     Base class for all LED animations
 
-    Animations are async generators that yield (zone_id, r, g, b) tuples
+    Animations are async generators that yield frames
     to update LED colors frame by frame.
 
-    Args:
-        zones: List of ZoneCombined objects
-        speed: Animation speed (1-100, where 100 is fastest)
-        excluded_zones: List of ZoneID enums to exclude from animation
-        **kwargs: Animation-specific parameters
+    IMPORTANT:
+    - One instance of animation = ONE ZONE.
+    - Multi-zone animations are handled by AnimationEngine by spawning
+      multiple animation instances.
 
-    Example:
-        async for zone_id, r, g, b in animation.run():
-            strip.set_zone_color(zone_id, r, g, b)
+    Subclasses MUST implement async def step(self) which returns either:
+        SingleZoneFrame    (zone-level color)
+        PixelFrame       (pixel-level override)
+
+    ARCHITECTURE INVARIANTS:
+    - PARAMS: class-level dict of parameter definitions (metadata only)
+    - params: instance-level dict of parameter values (runtime state)
+    - Use get_param() to read values with fallback to defaults
+    - Use set_param() or adjust_param() to modify values
+    - Parameter definitions are stateless - they provide adjust/clamp logic
     """
+    PARAMS: Dict[AnimationParamID, AnimationParam] = {}  # Parameter definitions (class-level)
 
-    def __init__(self, zones: List[ZoneCombined], speed: int = 50, excluded_zones: Optional[List[ZoneID]] = None, **kwargs):
-        self.zones = zones
-        self.excluded_zones = excluded_zones or []
-        self.speed = max(1, min(100, speed))  # Clamp 1-100
+    def __init__(
+        self,
+        zone: ZoneCombined,
+        params: Dict[AnimationParamID, Any]
+    ):
+        # Every animation instance works on only ONE zone
+        self.zone = zone
+        self.zone_id: ZoneID = zone.config.id
+
+        self.params: Dict[AnimationParamID, Any] = params.copy()  # Parameter values (instance-level)
+        
         self.running = False
-        self.zone_colors: Dict[ZoneID, Color] = {}  # Cache current zone colors
-        self.zone_brightness: Dict[ZoneID, int] = {}  # Cache current zone brightness
+        
+    # ------------------------------------------------------------
+    # Runtime
+    # ------------------------------------------------------------
 
-        # Filter out excluded zones - use ZoneID as keys
-        self.active_zones: Dict[ZoneID, List[int]] = {
-            zone.config.id: [zone.config.start_index, zone.config.end_index]
-            for zone in zones
-            if zone.config.id not in self.excluded_zones
-        }
-
-        # Store only active zones for animations that need sequential access
-        self.active_zone_objects: List[ZoneCombined] = [
-            zone for zone in zones
-            if zone.config.id not in self.excluded_zones
-        ]
-
-    async def run(self) -> AsyncIterator[Tuple[ZoneID, int, int, int]]:
-        """
-        Main animation loop - yields (zone_id, r, g, b) tuples
-
-        Must be implemented by subclasses.
-
-        Yields:
-            Tuple of (ZoneID enum, red, green, blue)
-        """
-        raise NotImplementedError("Subclasses must implement run()")
+    async def step(self):
+        raise NotImplementedError
 
     def stop(self):
-        """Stop the animation"""
         self.running = False
+        
+        
+    # ============================================================
+    # Parameter helpers
+    # ============================================================
+    # Parameters store raw values (int/float/str/bool).
+    # Parameter definitions (PARAMS) provide defaults and constraints.
+    # ============================================================
 
-    def update_param(self, param: str, value):
+    def get_param(self, param_id: AnimationParamID, default: Any = None) -> Any:
         """
-        Update animation parameter live
+        Get parameter value from instance storage.
 
-        Args:
-            param: Parameter name (e.g., 'speed', 'color')
-            value: New value
+        Falls back to:
+        1. param_id in self.params → return value
+        2. param_id in PARAMS → return param_def.default
+        3. otherwise → return provided default
         """
-        if hasattr(self, param):
-            setattr(self, param, value)
+        if param_id in self.params:
+            return self.params[param_id]
 
-    def set_zone_color_cache(self, zone_id: ZoneID, color: Color):
-        """Cache zone color for animations that need current colors"""
-        self.zone_colors[zone_id] = color
+        param_def = self.PARAMS.get(param_id)
+        if param_def is not None:
+            return param_def.default
 
-    def set_zone_brightness_cache(self, zone_id: ZoneID, brightness: int):
-        """Cache zone brightness for animations that need current brightness"""
-        self.zone_brightness[zone_id] = brightness
+        return default
 
-    def get_cached_color(self, zone_id: ZoneID) -> Optional[Color]:
-        """Get cached Color object for zone"""
-        return self.zone_colors.get(zone_id)
+    def set_param(self, param_id: AnimationParamID, value: Any) -> None:
+        """Set parameter value directly (must be supported by PARAMS)"""
+        if param_id in self.PARAMS:
+            self.params[param_id] = value
 
-    def get_cached_brightness(self, zone_id: ZoneID) -> Optional[int]:
-        """Get cached brightness for zone"""
-        return self.zone_brightness.get(zone_id)
+    def adjust_param(self, param_id: AnimationParamID, delta: int) -> Optional[Any]:
+        """Adjust parameter by delta, return adjusted value or None"""
+        param_def = self.PARAMS.get(param_id)
+        if not param_def:
+            return None
 
-    def _calculate_frame_delay(self) -> float:
+        current_value = self.get_param(param_id, param_def.default)
+        new_value = param_def.adjust(current_value, delta)
+
+        self.params[param_id] = new_value
+        return new_value
+    
+    # ------------------------------------------------------------
+    # Zone context helpers (NOT animation params)
+    # ------------------------------------------------------------
+
+    @property
+    def base_color(self):
+        return self.zone.state.color
+
+    @property
+    def base_brightness(self):
+        return self.zone.brightness
+
+    @property
+    def pixel_count(self) -> int:
+        return self.zone.config.pixel_count
+    
+    # ------------------------------------------------------------
+    # Main generator loop used by AnimationEngine
+    # ------------------------------------------------------------
+    async def run(self) -> AsyncIterator["BaseFrame"]:
         """
-        Calculate delay between frames based on speed
-
-        Returns:
-            Delay in seconds (50 FPS at speed 100, slower at lower speeds)
-        """
-        # Speed 100 = 50 FPS (0.02s), Speed 1 = 10 FPS (0.1s)
-        min_delay = 0.02  # 50 FPS max
-        max_delay = 0.1   # 10 FPS min
-        return max_delay - (self.speed / 100) * (max_delay - min_delay)
-
-    async def run_preview(self, pixel_count: int = 8) -> AsyncIterator[Sequence[Tuple[int, int, int]]]:
-        """
-        Generate simplified preview frames for preview panel (8 pixels)
-
-        Override this in subclasses to provide custom preview visualization.
-        Default implementation shows static color.
-
-        Args:
-            pixel_count: Number of preview pixels (default: 8)
-
-        Yields:
-            List of (r, g, b) tuples, one per pixel
-
-        Example:
-            async for frame in animation.run_preview(8):
-                preview_panel.show_frame(frame)
+        Every animation runs in its own task created by AnimationEngine.
+        Produces frames indefinitely until stop() is called.
         """
         self.running = True
-        # Default: show static color
-        static_color = (100, 100, 100)
-        frame = [static_color] * pixel_count
 
         while self.running:
-            yield frame
-            await asyncio.sleep(self._calculate_frame_delay())
+            frame = await self.step()
+            if frame is not None:
+                yield frame
+     

@@ -39,57 +39,54 @@ class ZonePixelMapper:
         self.strip_led_count = strip_led_count
         self._mappings: Dict[ZoneID, ZoneMapping] = {}
 
+        
         for zone in zones:
-            # Generate physical indices list
             start, end = zone.start_index, zone.end_index
 
+            # normalize order
             if start <= end:
                 indices = list(range(start, end + 1))
             else:
-                # Inverted config (end < start) - normalize to ascending
+                # allow misconfigured zones
                 indices = list(range(end, start + 1))
 
-            # Clamp to strip bounds (safety)
+            # clamp for safety
             indices = [i for i in indices if 0 <= i < strip_led_count]
 
-            # If zone.reversed is True, logical access will flip these
             self._mappings[zone.id] = ZoneMapping(
                 zone_id=zone.id,
                 indices=indices,
                 reversed=zone.reversed,
             )
+            
+        # ----------------------------
+    # PUBLIC API
+    # ----------------------------
 
     def get_indices(self, zone_id: ZoneID) -> List[int]:
         """
-        Get physical indices for zone in LOGICAL order.
-
-        If zone.reversed == True:
-            Logical index 0 → last physical index
-            Logical index N-1 → first physical index
-
-        If zone.reversed == False:
-            Logical index i → indices[i]
+        Return physical indices for this zone in LOGICAL order
+        (meaning reversed if the zone is marked as reversed).
         """
         mapping = self._mappings.get(zone_id)
         if not mapping:
             return []
 
         if mapping.reversed:
-            # Return reversed copy (logical 0 = last phys index)
             return list(reversed(mapping.indices))
-        else:
-            return list(mapping.indices)
+
+        return list(mapping.indices)
 
     def get_physical_indices_raw(self, zone_id: ZoneID) -> List[int]:
-        """Get raw physical indices (ignoring reversed flag)."""
+        """Return raw physical indices without reversal."""
         mapping = self._mappings.get(zone_id)
         return list(mapping.indices) if mapping else []
 
     def all_zone_ids(self) -> List[ZoneID]:
-        """Return all registered zone IDs."""
+        """Return IDs of all configured zones."""
         return list(self._mappings.keys())
 
     def get_zone_length(self, zone_id: ZoneID) -> int:
-        """Get pixel count for zone."""
+        """Return number of pixels for a zone."""
         mapping = self._mappings.get(zone_id)
         return len(mapping.indices) if mapping else 0

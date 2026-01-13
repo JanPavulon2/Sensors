@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from managers.hardware_manager import HardwareManager
     from managers.animation_manager import AnimationManager
     from managers.color_manager import ColorManager
-    from managers.parameter_manager import ParameterManager
 
 log = get_logger().for_category(LogCategory.CONFIG) 
 
@@ -66,8 +65,6 @@ class ConfigManager:
         self.hardware_manager: 'HardwareManager'
         self.animation_manager: 'AnimationManager'
         self.color_manager: 'ColorManager'
-        self.parameter_manager: 'ParameterManager'
-
     def load(self):
         """
         Load YAML configuration with include system support
@@ -160,7 +157,6 @@ class ConfigManager:
         from managers.hardware_manager import HardwareManager
         from managers.animation_manager import AnimationManager
         from managers.color_manager import ColorManager
-        from managers.parameter_manager import ParameterManager
 
         # HardwareManager - always initialize (required)
         # Pass singleton gpio_manager for centralized GPIO registration
@@ -176,7 +172,8 @@ class ConfigManager:
         # AnimationManager - always initialize with fallback to empty
         try:
             self.animation_manager = AnimationManager(self.data)
-            self.animation_manager.print_summary()
+            anims = self.animation_manager.get_all_animations()
+            log.info(f"AnimationManager initialized with {len(anims)} animations")
         except Exception as ex:
             log.error("Failed to initialize AnimationManager, using empty", error=str(ex))
             self.animation_manager = AnimationManager({})
@@ -191,14 +188,6 @@ class ConfigManager:
         except Exception as ex:
             log.warn("Failed to initialize ColorManager, using empty", error=str(ex))
             self.color_manager = ColorManager({})
-
-        # ParameterManager - always initialize with fallback to empty
-        try:
-            self.parameter_manager = ParameterManager(self.data)
-            self.parameter_manager.print_summary()
-        except Exception as ex:
-            log.error("Failed to initialize ParameterManager, using empty", error=str(ex))
-            self.parameter_manager = ParameterManager({})
 
         # Build zone-to-hardware mapping
         self.zone_mapping = self._parse_zone_mapping()
@@ -326,7 +315,7 @@ class ConfigManager:
 
         for zone_dict in zones_raw:
             pixel_count = zone_dict.get("pixel_count", 0)
-            zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "UNKNOWN"))
+            zone_id = EnumHelper.to_enum(ZoneID, zone_dict.get("id", "FLOOR"))
 
             # Assign GPIO from mapping (defaults to 18 if not found)
             gpio_pin = gpio_mapping.get(zone_id, 18)
