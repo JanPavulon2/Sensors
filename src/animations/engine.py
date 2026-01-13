@@ -6,6 +6,7 @@ Uses TransitionService for smooth transitions between animation states.
 """
 
 import asyncio
+import time
 from typing import Dict, Optional, Type
 from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
@@ -17,6 +18,7 @@ from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneID
 from services.zone_service import ZoneService
 from utils.logger import get_logger, LogCategory
+from lifecycle.task_registry import TaskCategory, create_tracked_task
 
 log = get_logger().for_category(LogCategory.ANIMATION)
 
@@ -24,12 +26,9 @@ def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
     """Build animation registry dynamically from AnimationID enum"""
     class_map = {
         AnimationID.BREATHE: BreatheAnimation,
-        AnimationID.COLOR_FADE: ColorFadeAnimation,
         AnimationID.SNAKE: SnakeAnimation,
         AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
-        
-        # AnimationID.COLOR_CYCLE: ColorCycleAnimation,
-        # AnimationID.MATRIX: MatrixAnimation,  # TEMPORARY: Disabled
+        AnimationID.COLOR_FADE: ColorFadeAnimation
     }
 
     # Convert enum to string keys using .name
@@ -77,19 +76,17 @@ class AnimationEngine:
         """
         Start an animation by animation ID with optional transition
         """
-        
-        async with self._lock:
-            # Stop previous if exists
-            if zone_id in self.tasks:
+        # Stop previous if exists
+        if zone_id in self.tasks:
                 log.warn(f"Zone {zone_id.name} already has animation, stopping old one")
                 await self.stop_for_zone(zone_id)
 
+        async with self._lock:
             # Resolve zone model
             zone = self.zone_service.get_zone(zone_id)
             if not zone:
                 log.error(f"No such zone: {zone_id}")
                 return
-
 
             # Build animation instance
             AnimClass = self.ANIMATIONS.get(anim_id)
@@ -107,30 +104,51 @@ class AnimationEngine:
             # Store meta
             self.active_anim_ids[zone_id] = anim_id
             self.active_animations[zone_id] = anim
+            
             # Spawn task
-            task = asyncio.create_task(self._run_loop(zone_id, anim))
+            # task = asyncio.create_task(self._run_loop(zone_id, anim))
+            task = create_tracked_task(
+                self._run_loop(zone_id, anim),
+                category=TaskCategory.ANIMATION,
+                description=f"Animation loop for zone {zone_id} ({anim})"
+            )
+            
             self.tasks[zone_id] = task
 
             log.info(
-                f"Started animation {anim_id.name} on zone {zone_id.name}",
-                animated_zones=", ".join(z.name for z in self.tasks.keys())
+                f"Started animation {anim_id.name} on zone {zone_id.name}"
             )
             
     async def stop_for_zone(self, zone_id: ZoneID):
         """Stop animation for a single zone."""
+
+        log.info(f"Stopping animation on zone {zone_id.name}")
+
+        # Extract task without holding lock during await
+        task = None
         async with self._lock:
             task = self.tasks.pop(zone_id, None)
-            if task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
             self.active_anim_ids.pop(zone_id, None)
             self.active_animations.pop(zone_id, None)
-            
-            log.info(f"Stopped animation on zone {zone_id.name}")
+
+        if not task:
+            return
+        
+        task.cancel()
+        
+        try:
+            await asyncio.wait_for(task, timeout=1.0)
+        except asyncio.CancelledError:
+            pass
+        except asyncio.TimeoutError:
+            log.warn(f"Animation task for {zone_id.name} did not respond to cancellation")
+
+        # Clean up state
+        async with self._lock:
+            self.active_anim_ids.pop(zone_id, None)
+            self.active_animations.pop(zone_id, None)
+
+        log.info(f"Stopped animation on zone {zone_id.name}")
             
 
     async def stop_all(self):
@@ -161,29 +179,47 @@ class AnimationEngine:
     # ------------------------------------------------------------
 
     async def _run_loop(self, zone_id: ZoneID, animation: BaseAnimation):
-        """Run an animation until stopped."""
+        """Run an animation until stopped.
+
+        Animation loop:
+        - animation.step() decides WHEN a frame exists
+        - engine forwards frames immediately
+        - renderer (FrameManager) controls FPS
+        """
         
         log.info(f"_run_loop started for {zone_id.name}")
-        frame_count = 0
+        
+        frames_sent = 0
+        last_log = time.monotonic()
             
         try:
             while True:
                 frame = await animation.step()
-                frame_count += 1
                 
-                if frame is None:
-                    await asyncio.sleep(0)
-                    continue
-                await self.frame_manager.push_frame(frame)
-                await asyncio.sleep(0)
-
+                now = time.monotonic()
+                if now - last_log >= 1.0:
+                    # log.warn(
+                    #     "ANIM FPS",
+                    #     zone=zone_id.name,
+                    #     fps=frames_sent 
+                    # )
+                    frames_sent = 0
+                    last_log = now
+                
+                if frame is not None:
+                    await self.frame_manager.push_frame(frame)
+                    frames_sent += 1
+                
+                await asyncio.sleep(1 / self.frame_manager.fps)
         except asyncio.CancelledError:
             log.debug(f"Animation task for {zone_id.name} canceled")
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
         except Exception as e:
             log.error(
                 f"Animation error on {zone_id.name}: {e}",
                 exc_info=True
             )
+        
         finally:
             # async with self._lock:
             #     self.tasks.pop(zone_id, None)
@@ -191,15 +227,14 @@ class AnimationEngine:
             # NOTE: Do NOT acquire lock here - would cause deadlock with stop_for_zone()
             # The caller is responsible for cleaning up task dictionaries
             
-            log.info(f"Animation task for {zone_id.name} finished after {frame_count} frames")
+            log.info(
+                f"Animation task for {zone_id.name} finished, "
+                f"frames sent: {frames_sent}"
+            )
             
     # ------------------------------------------------------------------
     # RUNTIME HELPERS
     # ------------------------------------------------------------------
-
-    def get_current_animation_id(self, zone_id: ZoneID) -> Optional[AnimationID]:
-        """Get name of currently running animation"""
-        return self.active_anim_ids.get(zone_id)
 
     def create_animation_instance(self, anim_id: AnimationID, zone_id: Optional[ZoneID] = None, **params):
         """

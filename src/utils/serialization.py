@@ -11,6 +11,7 @@ Single source of truth for frontend JSON API compatibility.
 from typing import TypeVar, Type, Any, Dict, Optional
 from enum import Enum
 
+from models.domain.animation import AnimationState
 from models.enums import ZoneID, AnimationID, ColorMode, ZoneRenderMode
 from models.color import Color
 from models.animation_params import (
@@ -36,12 +37,7 @@ class Serializer:
     # ========================================================================
     # ENUM SERIALIZATION
     # ========================================================================
-
-    @staticmethod
-    def enum_to_str(value: Optional[Enum]) -> Optional[str]:
-        """Convert any enum to string name"""
-        return value.name if value else None
-
+    
     @staticmethod
     def to_str(value) -> Optional[str]:
         """
@@ -64,6 +60,12 @@ class Serializer:
             return value
         return str(value)
 
+
+    @staticmethod
+    def enum_to_str(value: Optional[Enum]) -> Optional[str]:
+        """Convert any enum to string name"""
+        return value.name if value else None
+
     @staticmethod
     def str_to_enum(value: str, enum_type: Type[T]) -> T:
         """Convert string to enum, raise ValueError if invalid"""
@@ -71,37 +73,6 @@ class Serializer:
             return enum_type[value]
         except KeyError:
             raise ValueError(f"Invalid {enum_type.__name__}: {value}")
-
-    # ========================================================================
-    # ANIMATION PARAMETER DICT CONVERSION
-    # ========================================================================
-
-    @staticmethod
-    def animation_params_enum_to_str(animation_params: Dict[AnimationParamID, Any]) -> Dict[str, Any]:
-        """
-        Convert AnimationParamID enum keys to strings for JSON/API.
-
-        Transforms: {AnimationParamID.SPEED: 50} → {"speed": 50}
-        """
-        return {param_id.value: value for param_id, value in animation_params.items()}
-
-    @staticmethod
-    def animation_params_str_to_enum(animation_params: Dict[str, Any]) -> Dict[AnimationParamID, Any]:
-        """
-        Convert string param names to AnimationParamID enums from JSON/API.
-
-        Transforms: {"speed": 50} → {AnimationParamID.SPEED: 50}
-        Skips unknown parameters with a warning.
-        """
-        result = {}
-        for param_str, value in animation_params.items():
-            try:
-                # Convert string value to AnimationParamID enum (using enum value, not name)
-                param_id = AnimationParamID(param_str)
-                result[param_id] = value
-            except ValueError:
-                log.warn(f"Unknown animation parameter: {param_str}, skipping")
-        return result
 
     # ========================================================================
     # ZONE SERIALIZATION
@@ -126,6 +97,77 @@ class Serializer:
             "brightness": zone.brightness,
             "color": Serializer.color_to_dict(zone.state.color),
         }
+
+        
+    # ========================================================================
+    # ZONE MODE SERIALIZATION
+    # ========================================================================
+
+    @staticmethod
+    def zone_render_mode_to_str(mode: ZoneRenderMode) -> str:
+        """Convert ZoneRenderMode enum to string"""
+        return mode.name
+
+    @staticmethod
+    def str_to_zone_render_mode(value: str) -> ZoneRenderMode:
+        """Convert string to ZoneRenderMode enum"""
+        try:
+            return ZoneRenderMode[value]
+        except KeyError:
+            raise ValueError(f"Invalid ZoneRenderMode: {value}")
+
+
+    # ========================================================================
+    # ANIMATION SERIALIZATION
+    # ========================================================================
+
+    @staticmethod
+    def animation_state_to_dict(anim_state: AnimationState) -> Dict[str, Any]:
+        """
+        Serialize animation state to dict
+        
+        Args:
+            anim_state: AnimationState object
+
+        Returns:
+            Dict with animation id, parameters with values
+        """
+        return {
+            "id": anim_state.id,
+            "parameters": [p.name for p in anim_state.parameters],
+        }
+
+
+    # ========================================================================
+    # ANIMATION PARAMETER DICT CONVERSION
+    # ========================================================================
+
+    @staticmethod
+    def animation_params_enum_to_str(animation_params: Dict[AnimationParamID, Any]) -> Dict[str, Any]:
+        """
+        Convert AnimationParamID enum keys to strings for JSON/API.
+
+        Transforms: {AnimationParamID.SPEED: 50} → {"speed": 50}
+        """
+        return {param_id.name: value for param_id, value in animation_params.items()}
+
+    @staticmethod
+    def animation_params_str_to_enum(animation_params: Dict[str, Any]) -> Dict[AnimationParamID, Any]:
+        """
+        Convert string param names to AnimationParamID enums from JSON/API.
+
+        Transforms: {"speed": 50} → {AnimationParamID.SPEED: 50}
+        Skips unknown parameters with a warning.
+        """
+        result = {}
+        for param_str, value in animation_params.items():
+            try:
+                # Convert string value to AnimationParamID enum (using enum value, not name)
+                param_id = AnimationParamID(param_str)
+                result[param_id] = value
+            except ValueError:
+                log.warn(f"Unknown animation parameter: {param_str}, skipping")
+        return result
 
     # ========================================================================
     # COLOR SERIALIZATION
@@ -181,42 +223,3 @@ class Serializer:
         except (KeyError, TypeError, ValueError) as e:
             log.error(f"Failed to deserialize color: {e}")
             raise
-
-    # ========================================================================
-    # ANIMATION SERIALIZATION
-    # ========================================================================
-
-    @staticmethod
-    def animation_to_dict(anim_config) -> Dict[str, Any]:
-        """
-        Serialize animation config to dict
-
-        Args:
-            anim_config: AnimationConfig object
-
-        Returns:
-            Dict with id, display_name, description, parameters
-        """
-        return {
-            "id": anim_config.id.name,
-            "display_name": anim_config.display_name,
-            "description": anim_config.description,
-            "parameters": [p.name for p in anim_config.parameters],
-        }
-
-    # ========================================================================
-    # ZONE MODE SERIALIZATION
-    # ========================================================================
-
-    @staticmethod
-    def zone_render_mode_to_str(mode: ZoneRenderMode) -> str:
-        """Convert ZoneRenderMode enum to string"""
-        return mode.name
-
-    @staticmethod
-    def str_to_zone_render_mode(value: str) -> ZoneRenderMode:
-        """Convert string to ZoneRenderMode enum"""
-        try:
-            return ZoneRenderMode[value]
-        except KeyError:
-            raise ValueError(f"Invalid ZoneRenderMode: {value}")

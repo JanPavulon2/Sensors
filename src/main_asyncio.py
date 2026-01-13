@@ -12,9 +12,11 @@ Responsible for:
 import sys
 from typing import List, Optional
 
+from api.socketio_handler import wrap_app_with_socketio
 from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
 from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
 from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
+from lifecycle.handlers.frame_manager_shutdown_handler import FrameManagerShutdownHandler
 from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
 from lifecycle.handlers.indicator_shutdown_handler import IndicatorShutdownHandler
 from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
@@ -25,6 +27,7 @@ from managers.hardware_manager import HardwareManager
 from models.domain.zone import ZoneCombined
 from services.service_container import ServiceContainer
 from models.enums import FramePriority
+from services.snapshot_publisher import SnapshotPublisher
 
 # ---------------------------------------------------------------------------
 # UTF-8 ENCODING FIX (important for Raspberry Pi)
@@ -37,22 +40,22 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
 import asyncio
-import os
-import uvicorn
-from fastapi import FastAPI
 
 from pathlib import Path
 from utils.logger import get_logger, configure_logger
-from services.log_broadcaster import get_broadcaster
 from api.main import create_app
 from api.dependencies import set_service_container
 
-from models.enums import LogCategory, LogLevel, FramePriority
-from components import ControlPanel, KeyboardInputAdapter, PreviewPanel
+from api.socketio.server import create_socketio_server
+from api.socketio.registry import register_socketio
+from services.log_broadcaster import get_broadcaster
+
+from models.enums import LogCategory, LogLevel
+from components import KeyboardInputAdapter
 from hardware.gpio.gpio_manager import GPIOManager
-from hardware.hardware_coordinator import HardwareCoordinator, HardwareBundle
+from hardware.hardware_coordinator import HardwareCoordinator
 from controllers.led_controller.lighting_controller import LightingController
-from controllers import ControlPanelController, PreviewPanelController
+from controllers import ControlPanelController
 from managers import ConfigManager
 from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService, ServiceContainer
 from services.middleware import log_middleware
@@ -89,46 +92,6 @@ from lifecycle.task_registry import (
     TaskCategory,
     TaskRegistry
 )
-# ---------------------------------------------------------------------------
-# SHUTDOWN & CLEANUP
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# API SERVER RUNNER
-# ---------------------------------------------------------------------------
-
-async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) -> None:
-    """
-    Run FastAPI/Uvicorn server in asyncio event loop.
-
-    Disables uvicorn's own signal handlers to use our shutdown coordinator instead.
-    The server runs until cancelled (via CancelledError from shutdown system).
-    """
-    log.debug("API: run_api_server() entered")
-    
-    config = uvicorn.Config(
-        app=app,
-        host=host,
-        port=port,
-        loop="asyncio",
-        log_level="info",
-        access_log=False,
-        # lifespan="on"
-    )
-
-    server = uvicorn.Server(config)
-    server.install_signal_handlers = lambda: None  # Prevent uvicorn from handling signals
-
-    try:
-        log.debug(f"🌐 Starting API server on {host}:{port}")
-        await server.serve()
-    except asyncio.CancelledError:
-        # Expected during shutdown - uvicorn raises CancelledError on lifespan shutdown
-        log.debug("🌐 API server cancelled (expected during shutdown)")
-        raise  # Let the cancellation propagate to task handler
-
-    
-    log.debug("API: run_api_server() exiting (server.serve() returned)")
 
 # ---------------------------------------------------------------------------
 # Application Entry
@@ -137,13 +100,21 @@ async def run_api_server(app: FastAPI, host: str = "0.0.0.0", port: int = 8000) 
 async def main():
     """Main async entry point (dependency injection and event loop startup)."""
 
-    # Initialize broadcaster first so all logs can be transmitted
-    _broadcaster = get_broadcaster()
-    _broadcaster.start()
-    get_logger().set_broadcaster(_broadcaster)
+    log.info("Initializing Diuna application...")
 
-    log.info("Starting Diuna application...")
-
+    # Create Socket.IO server
+    log.info("Creating Socket.IO server...")
+    socketio_server = create_socketio_server(cors_origins=["*"])
+    
+    # Initialize broadcaster early so all logs can be transmitted
+    broadcaster = get_broadcaster()
+    broadcaster.set_socketio_server(socketio_server)
+    broadcaster.start()
+    
+    get_logger().set_broadcaster(broadcaster)
+    
+    log.info("Socket.IO + LogBroadcaster initialized (early)")
+    
     # ========================================================================
     # 1. INFRASTRUCTURE
     # ========================================================================
@@ -156,7 +127,7 @@ async def main():
     config_manager.load()
 
     log.info("Initializing event bus...")
-    event_bus = EventBus()
+    event_bus = EventBus().instance()
     event_bus.add_middleware(log_middleware)
 
     log.info("Loading application state...")
@@ -204,7 +175,7 @@ async def main():
         frame_manager.add_zone_strip(strip)
         # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        log.info(f"Zone strip registered on GPIO {gpio_pin}")
+        log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
 
     
     # ========================================================================
@@ -212,14 +183,21 @@ async def main():
     # ========================================================================
 
     services = ServiceContainer(
+        event_bus=event_bus,
         zone_service=zone_service,
         animation_service=animation_service,
         app_state_service=app_state_service,
         frame_manager=frame_manager,
-        event_bus=event_bus,
         color_manager=config_manager.color_manager,
-        config_manager=config_manager
+        config_manager=config_manager,
+        data_assembler=assembler
     )
+    
+    snapshot_publisher = SnapshotPublisher(
+        zone_service=zone_service,
+        event_bus=event_bus,
+    )
+
 
     # Register service container with API for dependency injection
     set_service_container(services)
@@ -227,9 +205,6 @@ async def main():
 
     log.info("Initializing LED controller...")
     lighting_controller = LightingController(
-        config_manager=config_manager,
-        event_bus=event_bus,
-        gpio_manager=gpio_manager,
         service_container=services
     )
     log.info("Finished initializing LED controller...")
@@ -270,6 +245,9 @@ async def main():
     )
 
     
+    log.info("Registering Socket.IO modules...")
+    await register_socketio(socketio_server, services)
+        
     # ========================================================================
     # 8. API SERVER
     # ========================================================================
@@ -280,18 +258,27 @@ async def main():
     port_mgr = PortManager.instance()
     await port_mgr.ensure_available(port=8000)
 
-    log.info("Starting API server...")
-    app = create_app()
-
-    # Use APIServerWrapper for clean shutdown with force_exit fix
+    log.info("Creating FastAPI app...")
+    fastapi_app = create_app(
+        title="Diuna LED System",
+        version="1.0.0",
+        docs_enabled=True,
+        cors_origins=["*"]
+    )
+    
+    log.info("Wrapping FastAPI app with Socket.IO...")
+    app = wrap_app_with_socketio(fastapi_app, socketio_server)
+    
     api_wrapper = APIServerWrapper(app, host="0.0.0.0", port=8000)
 
+    log.info("Starting FastAPI app...")
     api_task = create_tracked_task(
         api_wrapper.start(),
         category=TaskCategory.API,
         description="FastAPI/Uvicorn Server"
     )
-    log.info("API server task created")
+    
+    log.info("FastAPI app started")
 
     # ============================================================
     # 10. SHUTDOWN COORDINATOR
@@ -303,8 +290,9 @@ async def main():
     coordinator.register(APIServerShutdownHandler(api_wrapper))  # ← Pass wrapper, not task
     coordinator.register(AnimationShutdownHandler(lighting_controller))
     coordinator.register(IndicatorShutdownHandler(lighting_controller.selected_zone_indicator))
+    coordinator.register(FrameManagerShutdownHandler(frame_manager))  # ← Frame manager cleanup (includes executor shutdown)
     coordinator.register(LEDShutdownHandler(hardware))
-    coordinator.register(TaskCancellationHandler([keyboard_task, polling_task]))  # ← Keyboard and polling tasks
+    coordinator.register(TaskCancellationHandler([frame_manager_task, keyboard_task, polling_task]))  # ← Add frame manager task
     coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 
@@ -331,7 +319,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log.info("Keyboard interrupt received")
     except Exception as e:
-        log.error(f"Fatal error: {e}")
         log.error(f"Fatal error: {e}", exc_info=True)
     finally:
         sys.exit(0)

@@ -13,18 +13,6 @@ Priority System:
 
 Only the highest-priority frame is rendered. When high-priority sources stop,
 rendering automatically falls back to lower priorities.
-
-FrameManager 
----------------
-Wielokanałowy renderer LED wspierający:
-- wiele GPIO
-- wiele fizycznych stripów
-- strefy rozłożone na kilku GPIO
-- preview + główne paski
-- odwracanie stref (reversed)
-- animacje i tryb statyczny
-
-Warstwa: RENDER / INFRASTRUCTURE
 """
 
 
@@ -33,6 +21,7 @@ import asyncio
 import time
 from typing import Dict, List, Optional, Deque, cast
 from collections import deque
+# from concurrent.futures import ThreadPoolExecutor  # TODO: Re-enable for async rendering
 
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
@@ -41,7 +30,7 @@ from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripF
 from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 
-log = get_logger().for_category(LogCategory.RENDER_ENGINE)
+log = get_logger().for_category(LogCategory.FRAME_MANAGER)
 
 class WS2811Timing:
     """
@@ -91,7 +80,7 @@ class FrameManager:
         Args:
             fps: Target render frequency (1-240, default 60)
         """
-        
+
         self.fps = max(1, min(fps, 240))
 
         # Dual queue system (separate for main strip and preview)
@@ -102,10 +91,10 @@ class FrameManager:
             for p in FramePriority
             if isinstance(p.value, int)
         }
-        
+
         # Registered render targets
         self.zone_strips: List[ZoneStrip] = []  # ZoneStrip instances
-       
+
         self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
         # Runtime state
@@ -120,13 +109,17 @@ class FrameManager:
         self.dropped_frames = 0
         self.frames_rendered = 0
         self.dma_skipped = 0  # Count of DMA transfers skipped due to frame match
-        
+
         self.last_rendered_frame: Optional[MainStripFrame] = None
 
         self.last_rendered_frame_hash = None
-        
+
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
+
+        # Note: Hardware executor commented out for now due to compatibility issues
+        # Will use loop.run_in_executor(None, ...) with default executor instead
+        # self._hw_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="FrameMgr-HW")
 
         log.info(
             "FrameManager initialized",
@@ -140,14 +133,14 @@ class FrameManager:
         """Register a LED strip (ZoneStrip)."""
 
         if strip in self.zone_strips:
+            log.warn(f"Skipping registering zone strip in FrameManager - already registered")
             return
 
         self.zone_strips.append(strip)
-        log.info(f"FrameManager: added strip {strip}")
-
+           
         # Initialize zone render states for all zones in this strip
         strip_zone_ids = strip.mapper.all_zone_ids()
-        log.info(f"add_zone_strip: strip has {len(strip_zone_ids)} zones: {[z.name for z in strip_zone_ids]}")
+        log.info(f"Registering zone strip with {len(strip_zone_ids)} zones ({[z.name for z in strip_zone_ids]}) registered in FrameManager")
 
         for zone_id in strip_zone_ids:
             if zone_id not in self.zone_render_states:
@@ -156,9 +149,9 @@ class FrameManager:
                     zone_id=zone_id,
                     pixels=[Color.black()] * zone_length,
                 )
-                log.debug(f"  Initialized render state for {zone_id.name} ({zone_length} pixels)")
+                log.debug(f"Initialized black render state for zone {zone_id.name} ({zone_length} pixels)")
 
-        log.info(f"Added main strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
+        log.info(f"Added strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
         
     def remove_zone_strip(self, strip: ZoneStrip) -> None:
         """Unregister a LED strip."""
@@ -259,12 +252,22 @@ class FrameManager:
                 await self.render_task
             except asyncio.CancelledError:
                 pass
-            
+
         log.info(
             "FrameManager stopped",
             frames_rendered=self.frames_rendered,
             dropped_frames=self.dropped_frames,
         )
+
+    async def shutdown(self) -> None:
+        """Cleanup and shutdown FrameManager resources."""
+        await self.stop()
+
+        # TODO: Re-enable executor shutdown when executor approach is debugged
+        # Shutdown hardware executor gracefully
+        # self._hw_executor.shutdown(wait=True)
+
+        log.info("FrameManager shutdown complete")
 
     # === Metrics ===
 
@@ -297,7 +300,7 @@ class FrameManager:
         
         log.info(f"Render loop @ {self.fps} FPS (delay={frame_delay*1000:.2f}ms)")
 
-        while self.running:
+        while self.running:                        
             # Handle pause/step
             if self.paused and not self.step_requested:
                 await asyncio.sleep(0.01)
@@ -314,12 +317,13 @@ class FrameManager:
             try:
                 # frame = await self._select_frame_by_priority()
                 frame = await self._drain_frames()
-                
+
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
                 if frame:
                     if frame is not self.last_rendered_frame:
                         # Frame changed (different object) → do full render with hardware DMA
+                        # TODO: Replace with async wrapper after debugging executor issues
                         self._render_atomic(frame)
                         self.last_rendered_frame = frame
                         self.frames_rendered += 1
@@ -445,11 +449,38 @@ class FrameManager:
 
     # === Rendering ===
 
+    # TODO: Uncomment and fix these when re-enabling async rendering with executor
+    # async def _render_atomic_async(self, main_frame: Optional[MainStripFrame]) -> None:
+    #     """
+    #     Async wrapper for atomic frame rendering.
+    #
+    #     Offloads blocking hardware DMA operations to thread pool executor,
+    #     preventing event loop blocking.
+    #     """
+    #     loop = asyncio.get_running_loop()
+    #
+    #     try:
+    #         await loop.run_in_executor(
+    #             self._hw_executor,
+    #             self._render_atomic_blocking,
+    #             main_frame
+    #         )
+    #     except Exception as e:
+    #         log.error(f"Hardware render error: {e}", exc_info=True)
+    #         raise
+    #
+    # def _render_atomic_blocking(self, main_frame: Optional[MainStripFrame]) -> None:
+    #     """
+    #     Blocking hardware rendering (runs in executor thread).
+    #
+    #     Safe to block here - executor thread handles DMA operations
+    #     without blocking the event loop.
+    #     """
+    #     self._render_atomic(main_frame)
+
     def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
         """
         Render frames to all registered strips atomically.
-
-        Ensures main strip and preview panel are synchronized.
         """
         # Render main strip
         if main_frame:
@@ -525,7 +556,7 @@ class FrameManager:
                 log.error(f"Render error on strip {strip}: {e}", exc_info=True)
     
         
-    def _prepare_strip_frame(self, strip, merged):
+    def _prepare_strip_frame(self, strip: ZoneStrip, merged):
         """Extract only zones belonging to this strip."""
         zone_ids = strip.mapper.all_zone_ids()
 
@@ -534,7 +565,7 @@ class FrameManager:
             for z in zone_ids
         }
     
-    def _validate_strip_frame(self, strip, strip_frame):
+    def _validate_strip_frame(self, strip: ZoneStrip, strip_frame):
         """Check lengths, mapping, and hardware buffer size."""
         pixel_count = getattr(strip, "pixel_count", None)
         zone_ids = list(strip_frame.keys())
@@ -562,12 +593,17 @@ class FrameManager:
         except Exception as ex:
             log.debug(f"hardware.get_frame() failed: {ex}", exc_info=True)
     
-    def _apply_strip_frame(self, strip, strip_frame):
+    def _apply_strip_frame(self, strip: ZoneStrip, strip_frame: Dict[ZoneID, List[Color]]):
         """Send pixel data to hardware."""
-        #log.debug(
-        #    f"Calling show_full_pixel_frame on {strip} with {len(strip_frame)} zones: "
-        #    f"{[z.name for z in strip_frame.keys()]}"
-        # )
+        
+        for zone_id, pixels in strip_frame.items():
+            if not pixels:
+                continue
+
+            # weź pierwszy pixel ze strefy
+            c = pixels[0]
+            (r, g, b) = c.to_rgb()
+            
         strip.show_full_pixel_frame(strip_frame)
         # log.debug(f"show_full_pixel_frame completed on {strip}")
     

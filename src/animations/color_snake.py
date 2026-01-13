@@ -9,13 +9,10 @@ import time
 from typing import List
 
 from animations.base import BaseAnimation
+from models.animation_params import AnimationParamID, LengthParam, SpeedParam, PrimaryColorHueParam
 from models.color import Color
 from models.frame import PixelFrame
 from models.enums import FramePriority, FrameSource
-from models.animation_params.animation_param_id import AnimationParamID
-from models.animation_params.length_param import LengthParam
-from models.animation_params.speed_param import SpeedParam
-from models.animation_params.primary_color_hue_param import PrimaryColorHueParam
 
 
 class ColorSnakeAnimation(BaseAnimation):
@@ -38,7 +35,7 @@ class ColorSnakeAnimation(BaseAnimation):
 
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
-        AnimationParamID.LENGTH: LengthParam(default=5, min_value=2, max_value=10),
+        AnimationParamID.LENGTH: LengthParam(default=7, min_value=3, max_value=15),
         AnimationParamID.PRIMARY_COLOR_HUE: PrimaryColorHueParam(),
     }
 

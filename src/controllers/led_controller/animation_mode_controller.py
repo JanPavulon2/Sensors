@@ -7,11 +7,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 from models.enums import ZoneRenderMode
+from models.events.types import EventType
+from models.events.zone_runtime_events import AnimationStartedEvent, ZoneAnimationParamChangedEvent
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
-from utils.serialization import Serializer
 from services import ServiceContainer
 from animations.engine import AnimationEngine
-from animations.breathe import BreatheAnimation
 
 if TYPE_CHECKING:
     from models.domain.zone import ZoneCombined
@@ -26,12 +27,13 @@ class AnimationModeController:
     PARAMETER FLOW:
     - cycle_param(): Get available params from anim.PARAMS (definitions)
     - adjust_param(): Call anim.adjust_param(id, delta) → stores in zone.state
-    - Adjusted values persist in zone.state.animation.parameter_values
+    - Adjusted values persist in zone.state.animation.parameters
     - Changes saved to state.json via zone_service
     """
 
     def __init__(
         self,
+        event_bus: EventBus,
         services: ServiceContainer,
         animation_engine: AnimationEngine
     ):
@@ -39,7 +41,8 @@ class AnimationModeController:
         Controls animation selection and parameter tuning
         for a SINGLE selected zone.
         """
-    
+        
+        self.event_bus = event_bus
         self.zone_service = services.zone_service
         self.app_state_service = services.app_state_service
         self.animation_service = services.animation_service
@@ -52,6 +55,10 @@ class AnimationModeController:
         self.selected_animation_index = 0
         self.selected_animation_param_id = 0
 
+        self.event_bus.subscribe(
+            event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
+            handler=self._on_zone_animation_param_changed  # type: ignore
+        )
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -71,12 +78,72 @@ class AnimationModeController:
         log.info(f"AnimationMode init: {len(animated_zones)} zones")
 
         for zone in animated_zones:
-            # await self._ensure_animation_assigned(zone)
-            await self._start_zone_animation(zone)
+            asyncio.create_task(self._start_zone_animation(zone))
             
-            self.zone_service.save_state()
+        self.event_bus.subscribe(
+            event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
+            handler=self._on_zone_animation_param_changed  # type: ignore
+        )
+        
+    def _on_zone_animation_param_changed(self, event: ZoneAnimationParamChangedEvent) -> None:
+        zone = self.zone_service.get_zone(event.zone_id)
+        if not zone:
+            log.warn(f"Zone state changed but zone not found: {event.zone_id}")
+            return
+
+        if zone.state.mode != ZoneRenderMode.ANIMATION:
+            log.warn(f"Zone animation parameter changed but zone is not in animation mode")
+            return
+
+        anim = self.animation_engine.active_animations.get(zone.id)
+        if not anim:
+            log.warn(f"Animation for zone {event.zone_id} not found")
+            return
+        
+        log.info(
+            f"Zone parameter changed, updating animation",
+            zone=zone.config.display_name,
+            parameter=event.param_id,
+            value=event.value
+        )
+        
+        anim.set_param(event.param_id, event.value)
+
+
+    async def enter_zone(self, zone: ZoneCombined):
+        """
+        Called when zone enters ANIMATION render mode.
+        """
+        anim_state = zone.state.animation
+        if not anim_state:
+            log.warn("Zone entered ANIMATION without animation assigned", zone=zone.id)
+            return
+
+        params = self.animation_service.build_params_for_zone(
+            anim_state.id,
+            anim_state.parameters,
+            zone
+        )
+
+        log.info(
+            "Entering ANIMATION mode",
+            zone=zone.config.display_name,
+            animation=anim_state.id.name,
+            params=params
+        )
+        
+        await self.animation_engine.start_for_zone(
+            zone.config.id,
+            anim_state.id,
+            params
+        )
             
-            
+    async def leave_zone(self, zone: ZoneCombined):
+        """
+        Called when zone leaves ANIMATION render mode.
+        """
+        await self.animation_engine.stop_for_zone(zone.config.id)
+        
     def cycle_animation(self, delta: int) -> None:
         zone = self.zone_service.get_selected_zone()
         if not zone or zone.state.mode != ZoneRenderMode.ANIMATION:
@@ -88,19 +155,8 @@ class AnimationModeController:
 
         anim_id = self.available_animations[self.selected_animation_index]
         
-        from models.domain.animation import AnimationState
-        zone.state.animation = AnimationState(
-            id=anim_id, 
-            parameter_values={}
-        )
-
-        log.info(
-            "Animation changed",
-            zone=zone.config.display_name,
-            animation=anim_id.name,
-        )
-        asyncio.create_task(self._start_zone_animation(zone))
-
+        self.zone_service.set_animation(zone.id, anim_id)
+        
     # ------------------------------------------------------------------
     # Parameter editing
     # ------------------------------------------------------------------
@@ -143,7 +199,7 @@ class AnimationModeController:
         """
         Adjust animation parameter for currently selected zone.
 
-        Updates zone.state.animation.parameter_values and propagates change
+        Updates zone.state.animation.parameters and propagates change
         to running animation engine.
         """
 
@@ -170,27 +226,8 @@ class AnimationModeController:
             log.debug(f"Parameter {param_id.name} not adjustable")
             return
 
-        # Store adjusted value in zone state
-        zone.state.animation.parameter_values[param_id] = new_value
-        self.zone_service.save_state()
-
-        # Get param definition for logging
-        param_def = anim.PARAMS.get(param_id)
-        param_label = param_def.label if param_def else param_id.name
-
-        log.info(
-            "Animation param adjusted",
-            zone=zone.config.display_name,
-            param=param_label,
-            value=new_value
-        )
-        
-    async def _apply_parameter_change(self, zone: 'ZoneCombined'):
-        """Apply parameter change to running animation in engine."""
-        if not zone.state.animation:
-            return
-
-        await self._start_zone_animation(zone)
+        # Use zone_service to persist and emit event
+        self.zone_service.set_animation_param(zone.id, param_id, new_value)
         
     # ------------------------------------------------------------------
     # Internals
@@ -199,11 +236,12 @@ class AnimationModeController:
     async def _start_zone_animation(self, zone: ZoneCombined) -> None:
         anim = zone.state.animation
         if not anim:
+            log.warn(f"Zone {zone.config.display_name} is in animation mode, but has no animation specified")
             return
 
         params = self.animation_service.build_params_for_zone(
             anim.id,
-            anim.parameter_values,
+            anim.parameters,
             zone,
         )
 
@@ -214,11 +252,11 @@ class AnimationModeController:
             params=params,
         )
         
-        await self.animation_engine.start_for_zone(
+        asyncio.create_task(self.animation_engine.start_for_zone(
             zone.id,
             anim.id,
             params
-        )
+        ))
         
     async def _ensure_animation_assigned(self, zone: ZoneCombined) -> None:
         if zone.state.animation or not self.available_animations:
@@ -226,7 +264,7 @@ class AnimationModeController:
 
         from models.domain.animation import AnimationState
         first_anim = self.available_animations[0]
-        zone.state.animation = AnimationState(id=first_anim, parameter_values={})
+        zone.state.animation = AnimationState(id=first_anim, parameters={})
 
         log.info(
             "Auto-assigned animation",
@@ -234,9 +272,3 @@ class AnimationModeController:
             animation=first_anim.name,
         )
         
-    
-    def _get_selected_animation_zone(self) -> ZoneCombined | None:
-        zone = self.zone_service.get_selected_zone()
-        if not zone or zone.state.mode != ZoneRenderMode.ANIMATION:
-            return None
-        return zone

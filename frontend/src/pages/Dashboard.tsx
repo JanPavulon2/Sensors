@@ -3,23 +3,53 @@
  * Main dashboard with system metrics, zone overview, and controls
  */
 
+import { useState } from 'react';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useZonesQuery, useCheckBackendConnection } from '@/hooks';
-import { ZonesList } from '@/components/zones';
+} from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
+import { useCheckBackendConnection } from '@/shared/hooks';
+import { useZones } from '@/features/zones/hooks';
+import { ZonesGrid, ZoneEditPanel } from '@/features/zones/components';
 
 export function Dashboard(): JSX.Element {
-  const { data: zonesData, isLoading: zonesLoading, error: zonesError } = useZonesQuery();
+  // Real-time zone updates via Socket.IO
+  const zones = useZones();
   const { isConnected, isLoading: connectionLoading } = useCheckBackendConnection();
 
-  const zones = zonesData?.zones || [];
+  // Note: Real-time zone updates via Socket.IO are automatically initialized
+  // when the zones module is imported (see features/zones/index.ts)
+
+  // Zone detail panel state
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+
   const zoneCount = zones.length;
-  const totalPixels = zones.reduce((sum, zone) => sum + zone.pixel_count, 0);
+  const totalPixels = zones.reduce((sum: number, zone) => sum + zone.pixel_count, 0);
+  const zonesLoading = zoneCount === 0 && !isConnected;
+
+  // Find selected zone and its index
+  const selectedZone = zones.find(z => z.id === selectedZoneId);
+  const selectedZoneIndex = selectedZone ? zones.indexOf(selectedZone) : 0;
+
+  // Navigation handlers for detail panel
+  const handlePrevZone = () => {
+    if (selectedZoneIndex > 0) {
+      setSelectedZoneId(zones[selectedZoneIndex - 1].id);
+    }
+  };
+
+  const handleNextZone = () => {
+    if (selectedZoneIndex < zones.length - 1) {
+      setSelectedZoneId(zones[selectedZoneIndex + 1].id);
+    }
+  };
+
+  const handleClosePanel = () => {
+    setSelectedZoneId(null);
+  };
 
   return (
     <div className="space-y-8">
@@ -128,17 +158,6 @@ export function Dashboard(): JSX.Element {
         </Card>
       </div>
 
-      {/* Error State */}
-      {zonesError && (
-        <Card className="border-error bg-error/10">
-          <CardContent className="pt-6">
-            <p className="text-sm text-error">
-              Error loading zones: {zonesError instanceof Error ? zonesError.message : 'Unknown error'}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Zones Section */}
       {isConnected && zoneCount > 0 && (
         <div className="space-y-4">
@@ -148,8 +167,20 @@ export function Dashboard(): JSX.Element {
               {zoneCount} zone{zoneCount !== 1 ? 's' : ''} configured
             </p>
           </div>
-          <ZonesList />
+          <ZonesGrid onSelectZone={setSelectedZoneId} />
         </div>
+      )}
+
+      {/* Zone Edit Panel */}
+      {selectedZone && (
+        <ZoneEditPanel
+          zone={selectedZone}
+          currentIndex={selectedZoneIndex}
+          totalZones={zoneCount}
+          onClose={handleClosePanel}
+          onPrevZone={handlePrevZone}
+          onNextZone={handleNextZone}
+        />
       )}
 
       {/* Empty State */}

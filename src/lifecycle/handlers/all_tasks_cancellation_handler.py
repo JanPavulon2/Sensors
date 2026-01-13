@@ -73,7 +73,7 @@ class AllTasksCancellationHandler(IShutdownHandler):
             try:
                 t.cancel(msg="shutdown")
                 log.debug(
-                    f"[AllTasksCancellation] Cancelled task: {repr(t)}"
+                    f"[AllTasksCancellation] Cancelled task: {t.get_name()}"
                 )
             except Exception as e:
                 log.error(

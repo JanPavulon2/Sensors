@@ -8,10 +8,9 @@
  */
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TaskMonitor } from "@/components/debug/TaskMonitor";
-import { StateViewer } from "@/components/debug";
-import { Logger } from "@/components/logger";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
+import { TaskMonitor } from "@/features/tasks/components";
+import { Logger } from "@/features/logger/components";
 import { Activity, FileText, Database } from "lucide-react";
 
 type DebugTab = "tasks" | "logs" | "state";
@@ -31,16 +30,16 @@ export function DebugPage(): JSX.Element {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DebugTab)}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="tasks" className="flex items-center gap-2">
+        <TabsList variant="underline" className="w-full">
+          <TabsTrigger variant="underline" value="tasks" className="flex items-center justify-center gap-2">
             <Activity className="w-4 h-4" />
             Tasks
           </TabsTrigger>
-          <TabsTrigger value="logs" className="flex items-center gap-2">
+          <TabsTrigger variant="underline" value="logs" className="flex items-center justify-center gap-2">
             <FileText className="w-4 h-4" />
             Logs
           </TabsTrigger>
-          <TabsTrigger value="state" className="flex items-center gap-2">
+          <TabsTrigger variant="underline" value="state" className="flex items-center justify-center gap-2">
             <Database className="w-4 h-4" />
             State
           </TabsTrigger>
@@ -54,11 +53,6 @@ export function DebugPage(): JSX.Element {
         {/* Logger Tab */}
         <TabsContent value="logs" className="space-y-4">
           <Logger />
-        </TabsContent>
-
-        {/* State Viewer Tab */}
-        <TabsContent value="state" className="space-y-4">
-          <StateViewer />
         </TabsContent>
       </Tabs>
     </div>

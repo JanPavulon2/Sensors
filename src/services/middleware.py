@@ -23,12 +23,13 @@ def log_middleware(event: Event) -> Event:
     source_str = Serializer.enum_to_str(event.source)
 
     # Format data compactly
-    if 'delta' in event.data:
-        data_str = f"delta={event.data['delta']}"
+    data = event.to_data()
+    if 'delta' in data:
+        data_str = f"delta={data['delta']}"
     else:
-        data_str = str(event.data)
+        data_str = str(data)
 
-    log.info(
+    log.debug(
         f"Event: {event.type.name} from {source_str} | {data_str}"
     )
     return event

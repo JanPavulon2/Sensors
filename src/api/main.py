@@ -20,26 +20,23 @@ FastAPI automatically:
 - Validates request/response schemas against OpenAPI
 - Generates client SDK documentation
 """
-import asyncio
 import sys
+import asyncio
     
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
     sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
+from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import Optional
 
-from api.routes import zones, logger as logger_routes, system
+from api.routes import zones, logger as logger_routes, system, animations
 from api.middleware.error_handler import register_exception_handlers
-from api.middleware.websocket_validation import validate_app_websockets
-from api.websocket import websocket_logs_endpoint
-from api.websocket_tasks import websocket_tasks_endpoint
-from utils.logger import get_logger
+from utils.logger import get_logger, LogCategory
 from models.enums import LogCategory
 
 log = get_logger().for_category(LogCategory.API)
@@ -51,16 +48,16 @@ async def lifespan(app: FastAPI):
         yield
     except asyncio.CancelledError:
         # Normal shutdown cancellation – swallow it
-        log.debug("!!!FastAPI lifespan cancelled!!!")
+        log.debug("FastAPI lifespan cancelled (normal shutdown)")
     finally:
-        log.info("!!!FastAPI lifespan shutdown complete!!!")
+        log.info("FastAPI lifespan shutdown complete")
 
 def create_app(
     title: str = "Diuna LED System",
     description: str = "REST API for programmable LED control",
     version: str = "1.0.0",
     docs_enabled: bool = True,
-    cors_origins: list[str] = None
+    cors_origins: Optional[list[str]] = None
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -95,14 +92,7 @@ def create_app(
     # =========================================================================
     # CORS Configuration
     # =========================================================================
-    # CORS (Cross-Origin Resource Sharing) allows browsers to make requests
-    # from different origins (domains). Without this, browser requests from
-    # http://localhost:3000 to http://localhost:8000 would be blocked.
-
     if cors_origins is None:
-        # For development: Allow all origins on dev ports (5173, 5175, 3000)
-        # In production, restrict to specific domains
-        # IMPORTANT: This development config allows any origin accessing the API
         cors_origins = ["*"]
         log.warn("CORS configured to allow all origins (development mode). Restrict this in production!")
 
@@ -135,11 +125,8 @@ def create_app(
     # =========================================================================
     # Exception Handlers
     # =========================================================================
-    # Register handlers for different error types.
-    # These convert exceptions to properly formatted JSON responses.
-
+    
     register_exception_handlers(app)
-
     log.info("Exception handlers registered")
 
     # =========================================================================
@@ -149,22 +136,12 @@ def create_app(
     # Each router has its own prefix (e.g., /zones) and is composed
     # into the main app under /api/v1.
 
-    app.include_router(
-        zones.router,
-        prefix="/api/v1"
-    )
+    app.include_router(zones.router, prefix="/api/v1")
+    app.include_router(logger_routes.router, prefix="/api/v1")
+    app.include_router(system.router, prefix="/api/v1")
+    app.include_router(animations.router, prefix="/api/v1")
 
-    app.include_router(
-        logger_routes.router,
-        prefix="/api/v1"
-    )
-
-    app.include_router(
-        system.router,
-        prefix="/api/v1"
-    )
-
-    log.debug("Routes registered: zones (/api/v1/zones), logger (/api/v1/logger), system (/api/v1/system)")
+    log.debug("Routes registered: zones, logger, system, animations (all under /api/v1)")
 
     # =========================================================================
     # Health Check Endpoint
@@ -176,7 +153,6 @@ def create_app(
         summary="Health check",
         description="Check if API is running and responding"
     )
-    
     async def health_check():
         """Simple health check endpoint for monitoring"""
         return {
@@ -185,12 +161,9 @@ def create_app(
             "version": version
         }
 
-    log.debug("Health check endpoint registered at /api/health")
-
     # =========================================================================
     # Root Redirect
     # =========================================================================
-
     @app.get("/", include_in_schema=False)
     async def root():
         """Redirect root to documentation"""
@@ -202,70 +175,8 @@ def create_app(
             }
         )
 
-    # =========================================================================
-    # WebSocket Endpoints
-    # =========================================================================
-
-    @app.websocket("/ws/logs")
-    async def websocket_logs(websocket: WebSocket):
-        """WebSocket endpoint for real-time log streaming"""
-        log.info("WebSocket /ws/logs upgrade request received")
-        try:
-            # Delegate to handler (which will accept the connection)
-            await websocket_logs_endpoint(websocket)
-        except Exception as e:
-            log.error(f"WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
-            # Only try to close if the connection was actually accepted
-            try:
-                if websocket.client_state.name == 'CONNECTED':
-                    await websocket.close(code=1011, reason="Internal server error")
-            except Exception as close_error:
-                log.debug(f"Could not close WebSocket after error: {close_error}")
-
-    log.info("WebSocket endpoint registered at /ws/logs")
-
-    @app.websocket("/ws/tasks")
-    async def websocket_tasks(websocket: WebSocket):
-        """WebSocket endpoint for real-time task monitoring"""
-        log.info("WebSocket /ws/tasks upgrade request received")
-        try:
-            # Delegate to handler (which will accept the connection)
-            await websocket_tasks_endpoint(websocket)
-        except Exception as e:
-            log.error(f"Task WebSocket handler error: {type(e).__name__}: {e}", exc_info=True)
-            # Only try to close if the connection was actually accepted
-            try:
-                if websocket.client_state.name == 'CONNECTED':
-                    await websocket.close(code=1011, reason="Internal server error")
-            except Exception as close_error:
-                log.debug(f"Could not close WebSocket after error: {close_error}")
-
-    log.info("WebSocket endpoint registered at /ws/tasks")
-
+    log.info("Health check endpoints registered")
+    
     log.info(f"FastAPI app created successfully: {title}")
-
-    # =========================================================================
-    # WebSocket Validation (Catch Missing Type Hints at Startup)
-    # =========================================================================
-    # Validates all WebSocket handlers have proper type hints on their parameters.
-    # This catches issues early (at app startup) rather than at runtime (HTTP 403).
-    try:
-        validate_app_websockets(app)
-        log.debug("WebSocket handlers validated successfully")
-    except Exception as e:
-        log.error(f"WebSocket validation failed: {e}")
-        raise
-
+    
     return app
-
-
-# ============================================================================
-# NOTE: This module is imported by main_asyncio.py
-# ============================================================================
-#
-# Entry point is: python -m src.main_asyncio
-#
-# This module provides the create_app() factory function used to bootstrap
-# the FastAPI application. It's kept separate for clean separation of concerns:
-# - api/main.py: FastAPI app configuration
-# - main_asyncio.py: Async runtime + API server integration

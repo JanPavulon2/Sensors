@@ -6,8 +6,8 @@
  */
 
 import React, { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { useDesignTheme, useThemeSwitch, initializeDesignStore } from '../store/designStore';
 import { getDefaultPresets } from '../utils/colors';
 import styles from './DesignShowcase.module.css';

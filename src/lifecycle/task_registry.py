@@ -138,7 +138,6 @@ class TaskRegistry:
     _instance: Optional["TaskRegistry"] = None
 
     def __init__(self) -> None:
-        # Protected by self._lock
         self._lock = asyncio.Lock()
         self._records: Dict[int, TaskRecord] = {}
         self._next_id: int = 1

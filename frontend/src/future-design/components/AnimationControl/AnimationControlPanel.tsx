@@ -33,10 +33,8 @@ const ANIMATION_TYPES: { id: AnimationID; label: string; icon: string; descripti
   { id: 'STATIC', label: 'Static', icon: '📍', description: 'Solid color, no animation' },
   { id: 'BREATHE', label: 'Breathe', icon: '💨', description: 'Smooth brightness pulsing' },
   { id: 'COLOR_FADE', label: 'Fade', icon: '🌅', description: 'Smooth color transition' },
-  { id: 'COLOR_CYCLE', label: 'Cycle', icon: '🔄', description: 'Fast color loop' },
   { id: 'SNAKE', label: 'Snake', icon: '🐍', description: 'Pixels chase pattern' },
   { id: 'COLOR_SNAKE', label: 'Color Snake', icon: '🐍', description: 'Colored pixels chase pattern' },
-  { id: 'MATRIX', label: 'Matrix', icon: '🟩', description: 'Matrix rain effect' },
 ];
 
 // Parameter specifications for each animation type

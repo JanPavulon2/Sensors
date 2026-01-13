@@ -2,14 +2,10 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "RGB",
-        "rgb": [
-          26,
-          24,
-          158
-        ]
+        "mode": "PRESET",
+        "preset_name": "blue"
       },
-      "brightness": 95,
+      "brightness": 42,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -20,89 +16,61 @@
     "lamp": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "yellow"
       },
-      "brightness": 100,
+      "brightness": 10,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
       }
     },
-    "back": {
-      "color": {
-        "mode": "HUE",
-        "hue": 264
-      },
-      "brightness": 0,
-      "is_on": true
-    },
-    "desk": {
-      "color": {
-        "mode": "PRESET",
-        "preset_name": "pink"
-      },
-      "brightness": 63,
-      "is_on": true,
-      "mode": "STATIC"
-    },
     "pixel": {
       "color": {
-        "mode": "HUE",
-        "hue": 250
-      },
-      "brightness": 21,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "COLOR_FADE",
-        "parameters": {
-          "speed": 40
-        }
-      }
-    },
-    "preview": {
-      "color": {
-        "mode": "HUE",
-        "hue": 113
-      },
-      "brightness": 100,
-      "is_on": true,
-      "mode": "STATIC",
-      "animation": {
-        "id": "BREATHE",
-        "parameters": {
-          "speed": 20
-        }
-      }
-    },
-    "pixel2": {
-      "color": {
-        "mode": "RGB",
-        "rgb": [
-          255,
-          0,
-          199
-        ]
+        "mode": "PRESET",
+        "preset_name": "red"
       },
       "brightness": 100,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
+        "id": "SNAKE",
+        "parameters": {}
+      }
+    },
+    "preview": {
+      "color": {
+        "mode": "HUE",
+        "hue": 170
+      },
+      "brightness": 100,
+      "is_on": false,
+      "mode": "STATIC",
+      "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {
-          "speed": 68,
-          "length": 4
-        }
+        "parameters": {}
+      }
+    },
+    "pixel2": {
+      "color": {
+        "mode": "PRESET",
+        "preset_name": "blue"
+      },
+      "brightness": 52,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "SNAKE",
+        "parameters": {}
       }
     },
     "circle": {
       "color": {
-        "mode": "HUE",
-        "hue": 173
+        "mode": "PRESET",
+        "preset_name": "green"
       },
-      "brightness": 7,
+      "brightness": 12,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -112,11 +80,11 @@
     },
     "gate": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "sky_blue"
+        "mode": "HUE",
+        "hue": 240
       },
-      "brightness": 100,
-      "is_on": true,
+      "brightness": 83,
+      "is_on": false,
       "mode": "STATIC"
     }
   },
@@ -131,5 +99,9 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 2,
-    "selected_zone_edit_target": 
+    "selected_zone_index": 6,
+    "selected_zone_edit_target": "COLOR_PRESET",
+    "frame_by_frame_mode": false,
+    "save_on_change": true
+  }
+}

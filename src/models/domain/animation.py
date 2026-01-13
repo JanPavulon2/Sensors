@@ -23,4 +23,13 @@ class AnimationConfig:
 class AnimationState:
     """Mutable animation state from JSON (stored per-zone)"""
     id: AnimationID
-    parameter_values: Dict[AnimationParamID, Any] = field(default_factory=dict)
+    parameters: Dict[AnimationParamID, Any] = field(default_factory=dict)
+    
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id.name,
+            "parameters": {
+                k.name: v
+                for k, v in self.parameters.items()
+            }
+        }

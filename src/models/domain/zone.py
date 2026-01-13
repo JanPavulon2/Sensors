@@ -102,7 +102,7 @@ class ZoneState:
 
 @dataclass
 class ZoneCombined:
-    """Zone with config, state, and parameters"""
+    """Zone with config and state"""
     config: ZoneConfig
     state: ZoneState
 

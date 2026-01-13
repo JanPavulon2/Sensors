@@ -134,7 +134,7 @@ reset_zone(zone_id: str) -> ZoneResponse
 
 **Request Models:**
 - `ColorRequest` - Flexible color specification
-- `ZoneColorUpdateRequest` - Update zone color
+- `SetZoneColorRequest` - Set zone color
 - `ZoneBrightnessUpdateRequest` - Update brightness
 - `ZoneRenderModeUpdateRequest` - Change render mode
 - `ZoneUpdateRequest` - Update multiple fields

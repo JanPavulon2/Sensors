@@ -10,7 +10,15 @@ animations:
     description: "Smooth breathing effect"
     enabled: true
     order: 1
-    parameters: [ANIM_INTENSITY]
+    parameters: []
+
+  COLOR_FADE:
+    name: Color Fade
+    class: ColorFadeAnimation
+    description: "Rainbow hue cycling"
+    enabled: true
+    order: 2
+    parameters: []
 
   SNAKE:
     name: Snake
@@ -18,14 +26,6 @@ animations:
     description: "Sequential zone chase"
     enabled: true
     order: 3
-    parameters: [ANIM_LENGTH]
-
-  COLOR_CYCLE:
-    name: Color Cycle
-    class: ColorCycleAnimation
-    description: "All zones cycle through presets"
-    enabled: true
-    order: 4
     parameters: []
 
   COLOR_SNAKE:
@@ -33,21 +33,13 @@ animations:
     class: ColorSnakeAnimation
     description: "Multi-pixel rainbow snake"
     enabled: true
-    order: 5
-    parameters: [ANIM_LENGTH, ANIM_HUE_OFFSET]
+    order: 4
+    parameters: []
 
   COLOR_FADE:
     name: Color Fade
     class: ColorFadeAnimation
     description: "Rainbow hue cycling"
     enabled: true
-    order: 6
-    parameters: [ANIM_INTENSITY]
-
-  # MATRIX:
-  #   name: Matrix
-  #   class: MatrixAnimation
-  #   description: "Digital rain effect (Matrix)"
-  #   enabled: false
-  #   order: 7
-  #   parameters: [ANIM_LENGTH, ANIM_INTENSITY]
+    order: 5
+    parameters: []
