@@ -30,10 +30,6 @@ class RuntimeInfo:
             return False
 
     @classmethod
-    def has_module(cls, module_name: str) -> bool:
-        return importlib.util.find_spec(module_name) is not None
-
-    @classmethod
     def has_ws281x(cls) -> bool:
         return cls.has_module("rpi_ws281x")   
       
@@ -45,18 +41,11 @@ class RuntimeInfo:
     @classmethod
     def has_evdev(cls) -> bool:
         return cls.has_module("evdev")   
-      
-# def detect_runtime() -> RuntimeInfo:
-#     system = platform.system()
-#     machine = platform.machine()
-#     platform_id = f"{system}-{machine}"
-
-#     return RuntimeInfo(
-#         platform=platform_id,
-#         system=system,
-#         machine=machine,
-#         has_gpio=importlib.util.find_spec("RPi.GPIO") is not None,
-#         has_ws281x=importlib.util.find_spec("rpi_ws281x") is not None,
-#         has_evdev=importlib.util.find_spec("evdev") is not None,
-#     )
+            
+    @classmethod
+    def has_module(cls, module_name: str) -> bool:
+        try:
+            return importlib.util.find_spec(module_name) is not None
+        except Exception:
+            return False
         

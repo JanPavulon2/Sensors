@@ -2,14 +2,14 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "blue"
+        "mode": "HUE",
+        "hue": 307
       },
-      "brightness": 42,
+      "brightness": 100,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "BREATHE",
+        "id": "SNAKE",
         "parameters": {}
       }
     },
@@ -68,11 +68,11 @@
     "circle": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "green"
+        "preset_name": "lime"
       },
-      "brightness": 12,
-      "is_on": true,
-      "mode": "STATIC",
+      "brightness": 69,
+      "is_on": false,
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {}

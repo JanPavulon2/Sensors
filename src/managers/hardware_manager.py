@@ -28,7 +28,7 @@ from models.hardware import (
 )
 from models.enums import BuzzerID, LEDStripID, LEDStripType, ButtonID, EncoderID
 
-from hardware.gpio.gpio_manager import GPIOManager
+from hardware.gpio import IGPIOManager
 from utils.logger import get_logger, LogCategory
 from utils.serialization import Serializer
 
@@ -46,7 +46,7 @@ class HardwareManager:
     - Registers all GPIO pins
     """
 
-    def __init__(self, data: Dict[str, Any], gpio_manager: GPIOManager):
+    def __init__(self, data: Dict[str, Any], gpio_manager: IGPIOManager):
         self.data = data
         self.gpio = gpio_manager
         self.config: Optional[HardwareConfig] = None

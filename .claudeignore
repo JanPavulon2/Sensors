@@ -2,7 +2,9 @@ backups/
 old_working/
 samples/
 diunaenv/
+.diunaenv/
 .vscode/
+.vs/
 __pycache__/
 *.pyc
 *.log

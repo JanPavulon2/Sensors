@@ -338,6 +338,7 @@ class TaskRegistry:
             t.get_duration() for t in completed_tasks
             if t.get_duration() is not None
         ]
+        
         avg_completed_duration = sum(completed_durations) / len(completed_durations) if completed_durations else 0
 
         # Category breakdown

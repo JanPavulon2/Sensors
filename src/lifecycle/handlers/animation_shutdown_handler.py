@@ -1,32 +1,11 @@
-"""
-Shutdown handlers for application components.
-
-Each handler is responsible for   one aspect of the application.
-They are called in priority order by ShutdownCoordinator.
-"""
-
 from __future__ import annotations
 import asyncio
 
-from typing import List, Optional
-
-from hardware.hardware_coordinator import HardwareBundle
 from controllers.led_controller.lighting_controller import LightingController
-from hardware.gpio.gpio_manager import GPIOManager
 from lifecycle.shutdown_protocol import IShutdownHandler
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.SHUTDOWN)
-
-"""
-IShutdownHandler Protocol
-========================
-Hardware abstraction for LED strips.
-Minimal contract for any physical driver (WS281x, APA102, etc).
-"""
-
-from typing import Protocol, List
-from models.color import Color
 
 class AnimationShutdownHandler(IShutdownHandler):
     """

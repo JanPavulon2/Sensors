@@ -32,8 +32,8 @@ class MockHardware:
         self.applied_frames += 1
 
 
-class MockZoneStrip:
-    """Minimal realistic ZoneStrip with partial update support."""
+class MockLedChannel:
+    """Minimal realistic LedChannel with partial update support."""
 
     def __init__(self):
         self.mapper = MockZoneMapper()
@@ -58,7 +58,7 @@ class MockZoneStrip:
         self.hw.apply_frame(frame)
 
 def test_partial_updates_single_zone():
-    strip = MockZoneStrip()
+    strip = MockLedChannel()
 
     # initial: all black
     assert strip.hw.pixels == [Color.black()] * 9
@@ -78,7 +78,7 @@ def test_partial_updates_single_zone():
 
 
 def test_multiple_partial_updates_accumulate():
-    strip = MockZoneStrip()
+    strip = MockLedChannel()
 
     strip.show_partial({
         ZoneID.FLOOR: [Color.red(), Color.red(), Color.red()],
@@ -101,7 +101,7 @@ def test_multiple_partial_updates_accumulate():
 
 
 def test_partial_overwrite():
-    strip = MockZoneStrip()
+    strip = MockLedChannel()
 
     strip.show_partial({
         ZoneID.FLOOR: [Color.red(), Color.red(), Color.red()],
@@ -115,7 +115,7 @@ def test_partial_overwrite():
 
 
 def test_partial_empty_does_nothing():
-    strip = MockZoneStrip()
+    strip = MockLedChannel()
 
     strip.show_partial({
         ZoneID.LEFT: [Color.green(), Color.green()],

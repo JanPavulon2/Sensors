@@ -1,19 +1,7 @@
-
-"""
-Shutdown handlers for application components.
-
-Each handler is responsible for shutting down one aspect of the application.
-They are called in priority order by ShutdownCoordinator.
-"""
-
 from __future__ import annotations
-import asyncio
 
-from typing import List, Optional
-
-from hardware.hardware_coordinator import HardwareBundle
 from controllers.led_controller.lighting_controller import LightingController
-from hardware.gpio.gpio_manager import GPIOManager
+from hardware.gpio.gpio_manager_interface import IGPIOManager
 from lifecycle.shutdown_protocol import IShutdownHandler
 from utils.logger import get_logger, LogCategory
 
@@ -26,10 +14,6 @@ Hardware abstraction for LED strips.
 Minimal contract for any physical driver (WS281x, APA102, etc).
 """
 
-from typing import Protocol, List
-from models.color import Color
-
-
 class GPIOShutdownHandler(IShutdownHandler):
     """
     Shutdown handler for GPIO hardware.
@@ -40,7 +24,7 @@ class GPIOShutdownHandler(IShutdownHandler):
     Priority: 10 (shutdown last)
     """
 
-    def __init__(self, gpio_manager: GPIOManager):
+    def __init__(self, gpio_manager: IGPIOManager):
         """
         Initialize GPIO shutdown handler.
 

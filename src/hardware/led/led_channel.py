@@ -1,5 +1,5 @@
 """
-ZoneStrip - Logical zone-aware LED strip rendering interface.
+LedChannel - Logical zone-aware LED strip rendering interface.
 
 Core Rendering Path:
     FrameManager.show_full_pixel_frame() ← Main rendering (60 FPS)
@@ -11,7 +11,7 @@ Secondary Methods:
     show() ← Hardware flush (rarely used)
 
 Architecture:
-    ZoneStrip (zone-to-pixel mapper + rendering interface)
+    LedChannel (zone-to-pixel mapper + rendering interface)
       ↓ delegates to
     IPhysicalStrip (hardware abstraction)
       ↓ implemented by
@@ -31,7 +31,7 @@ from utils.logger import get_logger, LogCategory
 log = get_logger().for_category(LogCategory.ZONE)
 
 
-class ZoneStrip:
+class LedChannel:
     """
     Logical multi-zone LED strip rendering interface.
 
@@ -49,7 +49,7 @@ class ZoneStrip:
         hardware: IPhysicalStrip,
     ) -> None:
         """
-        Initialize ZoneStrip.
+        Initialize LedChannel.
 
         Args:
             pixel_count: Total LEDs on physical strip
@@ -61,7 +61,7 @@ class ZoneStrip:
         self.mapper = ZonePixelMapper(zones, pixel_count)
 
         log.info(
-            "ZoneStrip initialized",
+            "LedChannel initialized",
             pixel_count=pixel_count,
             zones=len(zones),
             zone_ids=[z.id.name for z in zones],
@@ -138,4 +138,4 @@ class ZoneStrip:
 
     def __repr__(self) -> str:
         zones = len(self.mapper.all_zone_ids())
-        return f"<ZoneStrip pixels={self.pixel_count} zones={zones}>"
+        return f"<LedChannel pixels={self.pixel_count} zones={zones}>"

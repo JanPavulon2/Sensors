@@ -1,5 +1,4 @@
 
-# components/keyboard_input_adapter.py
 from typing import Optional, Dict, List
 import asyncio
 from evdev import InputDevice, list_devices, ecodes

@@ -1,7 +1,7 @@
 """
 Tests for partial frame support (Phase 3 foundation).
 
-Tests that ZoneStrip properly handles frames that only update certain zones,
+Tests that LedChannel properly handles frames that only update certain zones,
 preserving pixels from previous frames for zones not included in partial frames.
 """
 
@@ -68,8 +68,8 @@ class MockZoneMapper:
         return len(indices)
 
 
-class MockZoneStrip:
-    """Mock ZoneStrip for testing partial frames."""
+class MockLedChannel:
+    """Mock LedChannel for testing partial frames."""
 
     def __init__(self):
         self.hardware = MockHardware(90)
@@ -99,7 +99,7 @@ class TestPartialFrameSupport:
 
     def test_complete_frame_renders_all_zones(self):
         """Complete frame with all zones renders correctly."""
-        strip = MockZoneStrip()
+        strip = MockLedChannel()
 
         # Create complete frame (all zones)
         zone_colors = {
@@ -119,7 +119,7 @@ class TestPartialFrameSupport:
 
     def test_partial_frame_preserves_missing_zones(self):
         """Partial frame preserves pixels from previous frame for missing zones."""
-        strip = MockZoneStrip()
+        strip = MockLedChannel()
 
         # First, set all zones to black
         first_frame = strip.build_frame_from_zones({
@@ -152,7 +152,7 @@ class TestPartialFrameSupport:
 
     def test_multiple_partial_frames_accumulate_changes(self):
         """Multiple partial frames accumulate changes without losing previous zones."""
-        strip = MockZoneStrip()
+        strip = MockLedChannel()
 
         # Start with all zones black
         initial = strip.build_frame_from_zones({
@@ -189,7 +189,7 @@ class TestPartialFrameSupport:
 
     def test_overwrite_previous_partial_frame(self):
         """Partial frame can overwrite previously set zones."""
-        strip = MockZoneStrip()
+        strip = MockLedChannel()
 
         # Partial 1: Set FLOOR to red
         partial1 = strip.build_frame_from_zones({
@@ -207,7 +207,7 @@ class TestPartialFrameSupport:
 
     def test_empty_partial_frame_preserves_all(self):
         """Empty partial frame (no zones) preserves all pixels."""
-        strip = MockZoneStrip()
+        strip = MockLedChannel()
 
         # Set some pixels
         initial = strip.build_frame_from_zones({

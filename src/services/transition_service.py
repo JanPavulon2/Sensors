@@ -23,7 +23,7 @@ from models.transition import TransitionType, TransitionConfig
 from models.enums import LogLevel, LogCategory, FramePriority, FrameSource, ZoneID
 from models.frame import PixelFrame
 from utils.logger import get_category_logger
-from zone_layer.zone_strip import ZoneStrip
+from hardware.led.led_channel import LedChannel
 from models.color import Color
 log = get_category_logger(LogCategory.SYSTEM)
 
@@ -72,7 +72,7 @@ class TransitionService:
         Initialize transition service
 
         Args:
-            strip: ZoneStrip instance with LED control methods
+            strip: LedChannel instance with LED control methods
             frame_manager: FrameManager instance for centralized rendering (optional)
         """
         self.strip = strip
@@ -148,11 +148,11 @@ class TransitionService:
         """
         Convert frame to zone-based pixel dictionary.
 
-        Handles both ZoneStrip and PreviewPanel.
+        Handles both LedChannel and PreviewPanel.
         Uses ZoneID enums as keys.
         """
-        if isinstance(self.strip, ZoneStrip):
-            # ZoneStrip: distribute pixels using mapper
+        if isinstance(self.strip, LedChannel):
+            # LedChannel: distribute pixels using mapper
             zone_pixels_dict = {}
             for zone_id in self.strip.mapper.all_zone_ids():
                 pixel_indices = self.strip.mapper.get_indices(zone_id)
@@ -176,8 +176,8 @@ class TransitionService:
         if config.type == TransitionType.NONE:
             return  # No transition
 
-        if not isinstance(self.strip, ZoneStrip):
-            log.warn("TransitionService requires ZoneStrip")
+        if not isinstance(self.strip, LedChannel):
+            log.warn("TransitionService requires LedChannel")
             await asyncio.sleep(config.duration_ms / 1000)
             return
 
@@ -422,7 +422,7 @@ class TransitionService:
         new_state_setter()
 
         # Capture new state
-        if isinstance(self.strip, ZoneStrip):
+        if isinstance(self.strip, LedChannel):
             new_frame = self.strip.get_frame()
             if new_frame:
                 # Clear to black and fade in
@@ -558,7 +558,7 @@ class TransitionService:
         config = config or TransitionConfig(TransitionType.CUT, duration_ms=100)
         async with self._transition_lock:
             log.debug(f"Cut transition: {config.duration_ms}ms black")
-            if isinstance(self.strip, ZoneStrip) and self.frame_manager:
+            if isinstance(self.strip, LedChannel) and self.frame_manager:
                 # Submit black frame via FrameManager (as Color objects)
                 black_frame = [Color.black()] * self.strip.pixel_count
                 zone_pixels_dict = self._get_zone_pixels_dict(black_frame)

@@ -6,7 +6,7 @@ from models.frame import MainStripFrame
 
 
 @pytest.mark.asyncio
-async def test_singlezone_partial_merge(frame_manager, mock_zone_strip):
+async def test_singlezone_partial_merge(frame_manager, mock_led_channel):
     # Initial state = black
     assert all(
         all(p.to_rgb() == (0, 0, 0) for p in zs.pixels)

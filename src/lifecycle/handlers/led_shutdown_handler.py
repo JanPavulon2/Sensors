@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hardware.hardware_coordinator import HardwareBundle
 from controllers.led_controller.lighting_controller import LightingController
-from hardware.gpio.gpio_manager import GPIOManager
+from hardware.gpio import IGPIOManager
 from lifecycle.shutdown_protocol import IShutdownHandler
 from utils.logger import get_logger, LogCategory
 
@@ -28,7 +28,7 @@ class LEDShutdownHandler(IShutdownHandler):
         Initialize LED shutdown handler.
 
         Args:
-            hardware: HardwareBundle containing zone strips
+            hardware: HardwareBundle containing led channels
         """
         self.hardware = hardware
 
@@ -38,21 +38,21 @@ class LEDShutdownHandler(IShutdownHandler):
         return 100
 
     async def shutdown(self) -> None:
-        """Clear all LEDs on all GPIO strips."""
-        log.info("Clearing LEDs on all GPIO strips...")
+        """Clear all LEDs on all led channels."""
+        log.info("Clearing LEDs on all channels...")
 
         try:
-            # Clear all zone strips (there may be multiple GPIO pins)
-            for gpio_pin, strip in self.hardware.zone_strips.items():
+            # Clear all leds on all channels (there may be multiple GPIO pins)
+            for gpio_pin, led_channel in self.hardware.led_channels.items():
                 try:
-                    strip.clear()
+                    led_channel.clear()
                     log.debug(f"Cleared GPIO {gpio_pin}")
                 except Exception as e:
-                    log.error(f"Error clearing GPIO {gpio_pin}: {e}")
+                    log.error(f"Error clearing led channel on GPIO: {gpio_pin}: {e}")
 
-            log.info("All LEDs cleared")
+            log.info("All LED channels cleared")
 
         except Exception as e:
-            log.error(f"Error during LED clearing: {e}", exc_info=True)
+            log.error(f"Error during LED channel: {e}", exc_info=True)
             raise
 

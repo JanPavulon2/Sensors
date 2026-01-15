@@ -21,7 +21,7 @@ def mock_zone_mapper():
 
 
 @pytest.fixture
-def mock_zone_strip(mock_zone_mapper):
+def mock_led_channel(mock_zone_mapper):
     strip = MagicMock()
     strip.mapper = mock_zone_mapper
     return strip
@@ -45,9 +45,9 @@ def zone_service():
 
 
 @pytest.fixture
-def frame_manager(mock_zone_strip):
+def frame_manager(mock_led_channel):
     fm = FrameManager(fps=1000)  # high FPS so tests run fast
-    fm.add_zone_strip(mock_zone_strip)
+    fm.add_led_channel(mock_led_channel)
     return fm
 
 

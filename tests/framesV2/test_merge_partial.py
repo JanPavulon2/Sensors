@@ -23,7 +23,7 @@ async def test_partial_merge_keeps_other_zones_untouched():
             self.shown = frame
 
     strip = DummyStrip()
-    fm.add_zone_strip(strip)
+    fm.add_led_channel(strip)
 
     # --- najpierw ustawiamy bazowy stan (jakby jakiś full frame był na starcie)
     fm.zone_render_states[ZoneID.TOP].pixels = [
