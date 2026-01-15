@@ -9,23 +9,23 @@ PreviewPanel is a logical component within that physical strip.
 """
 
 from typing import Tuple, List
-from zone_layer.zone_strip import ZoneStrip
+from hardware.led.led_channel import LedChannel
 from models.color import Color
 
 class PreviewPanel:
     """
     Preview panel logical component - 8 LED zone
 
-    Part of GPIO 19 (AUX_5V) ZoneStrip, CJMCU-2812-8 preview panel.
+    Part of GPIO 19 (AUX_5V) LedChannel, CJMCU-2812-8 preview panel.
 
     This component does NOT directly manipulate pixels or call show().
     All rendering is done through FrameManager via PreviewPanelController.
 
-    The preview zone is part of the shared ZoneStrip and should be updated
+    The preview zone is part of the shared LedChannel and should be updated
     through the normal frame submission process, not direct hardware calls.
 
     Args:
-        zone_strip: ZoneStrip instance for GPIO 19 (AUX_5V) containing PIXEL and PREVIEW zones
+        led_channel: LedChannel instance for GPIO 19 (AUX_5V) containing PIXEL and PREVIEW zones
         count: Number of LEDs in preview (default 8)
         brightness: Global brightness 0-255 (default 32)
 
@@ -38,18 +38,18 @@ class PreviewPanel:
 
     def __init__(
         self,
-        zone_strip: ZoneStrip,
+        led_channel: LedChannel,
         count: int = 8,
         brightness: int = 32
     ):
         """
-        Initialize PreviewPanel as logical view of PREVIEW zone in ZoneStrip.
+        Initialize PreviewPanel as logical view of PREVIEW zone in LedChannel.
 
         PREVIEW zone is part of the AUX_5V strip (GPIO 19).
         This component stores configuration but does NOT perform rendering.
 
         Args:
-            zone_strip: ZoneStrip instance for GPIO 19 (AUX_5V) containing both PIXEL and PREVIEW zones
+            led_channel: LedChannel instance for GPIO 19 (AUX_5V) containing both PIXEL and PREVIEW zones
             count: Number of LEDs in preview (default 8)
             brightness: Global brightness 0-255 (default 32)
 
@@ -62,7 +62,7 @@ class PreviewPanel:
         """
         self.count = count
         self.brightness = brightness
-        self.zone_strip = zone_strip
+        self.led_channel = led_channel
 
     def _reverse_index(self, index: int) -> int:
         """
@@ -111,7 +111,7 @@ class PreviewPanel:
         """
         if 0 <= pixel_index < self.count:
             color = Color.from_rgb(r, g, b)
-            self.zone_strip.set_pixel_color(ZoneID.PREVIEW, pixel_index)
+            self.led_channel.set_pixel_color(ZoneID.PREVIEW, pixel_index)
             self._pixel_strip.setPixelColor(pixel_index, color)
             if show:
                 self._pixel_strip.show()

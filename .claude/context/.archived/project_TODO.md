@@ -177,10 +177,10 @@ After 1000 zone changes: 1000 orphaned pulse tasks consuming memory.
 
 ### 9. Hardware State Capture with Zone Reversal
 **Severity**: MEDIUM | **Status**: PARTIAL BUG
-**Files**: `components/zone_strip.py:238-246`
+**Files**: `components/led_channel.py:238-246`
 
 **What's needed**:
-- [ ] Decide: use `components/zone_strip.py` OR `zone_layer/zone_strip.py` (don't keep both!)
+- [ ] Decide: use `components/led_channel.py` OR `zone_layer/led_channel.py` (don't keep both!)
 - [ ] In `get_frame()`, apply zone reversal mapping
 - [ ] Or: transition service accounts for reversal
 - [ ] Test: Capture frame from reversed zone, fade to black, verify pixels match

@@ -343,7 +343,7 @@ selected| data    | to pixels|to LEDS  | cycle   |
    └─ Load into DMA buffer
 
 6. Hardware update:
-   zone_strip.show()
+   led_channel.show()
 
 7. Return to step 1 (repeat 60 times per second)
 ```

@@ -7,12 +7,13 @@ from typing import Optional, List
 from services.event_bus import EventBus
 from models.events import KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory
+from .keyboard_adapter_interface import IKeyboardAdapter
 
 log = get_logger().for_category(LogCategory.EVENT)
 
-class StdinKeyboardAdapter:
+class StdinKeyboardAdapter(IKeyboardAdapter):
     """
-    Terminal stdin keyboard input (SSH/VSCode/local terminal)
+    Terminal standard keyboard input (SSH/VSCode/local terminal)
 
     Features:
     - Async-native (non-blocking)

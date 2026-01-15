@@ -8,10 +8,9 @@ Provides event-driven interface for hardware input polling.
 Publishes events to EventBus instead of using callbacks.
 """
 
-from components import RotaryEncoder, PreviewPanel
-#from hardware.input.button import Button
-from hardware import Button
-from hardware.gpio.gpio_manager import GPIOManager
+from hardware.input.rotary_encoder import RotaryEncoder
+from hardware.input import Button
+from hardware.gpio.gpio_manager_interface import IGPIOManager
 from managers.hardware_manager import HardwareManager
 
 
@@ -29,7 +28,7 @@ class ControlPanel:
     def __init__(
         self,
         hardware_manager: HardwareManager,
-        gpio_manager: GPIOManager
+        gpio_manager: IGPIOManager
     ):
         """
         Initialize ControlPanel
@@ -62,11 +61,11 @@ class ControlPanel:
 
         # Buttons
         button_pins = hardware_manager.button_pins
-        self.buttons = [Button(pin) for pin in button_pins]
+        self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
 
-        # Preview Panel - initialized later in main_asyncio.py after zone_strips are created
-        # PreviewPanel is a logical view of PREVIEW zone within ZoneStrip(GPIO 19)
-        # It will be passed the zone_strip instance that contains both PIXEL and PREVIEW zones
+        # Preview Panel - initialized later in main_asyncio.py after led_channels are created
+        # PreviewPanel is a logical view of PREVIEW zone within LedChannel(GPIO 19)
+        # It will be passed the led_channel instance that contains both PIXEL and PREVIEW zones
         self.preview_panel = None
 
 

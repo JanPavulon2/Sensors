@@ -145,7 +145,7 @@ async def _render_zone_frame(self, frame: ZoneFrame) -> None:
 
 ## Hardware Update
 
-**Location**: `src/zone_layer/zone_strip.py:120`
+**Location**: `src/zone_layer/led_channel.py:120`
 
 ```python
 async def show_full_pixel_frame(self, pixels: List[Tuple[int, int, int]]) -> None:
@@ -266,7 +266,7 @@ async def render_zone(self, zone_id: ZoneID, color: Color, brightness: float):
     frame = ZoneFrame(zones=zone_colors, priority=MANUAL)
 
     # Submit to FrameManager
-    await self.zone_strip_controller.submit_all_zones_frame(zone_colors)
+    await self.led_channel_controller.submit_all_zones_frame(zone_colors)
 ```
 
 ## Transition Frame Sequence

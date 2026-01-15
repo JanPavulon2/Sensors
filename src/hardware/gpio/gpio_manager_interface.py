@@ -1,7 +1,10 @@
-from typing import Protocol, Dict
+from typing import Protocol, Dict, Literal
 from models.enums import GPIOPullMode, GPIOInitialState
 
 class IGPIOManager(Protocol):
+    
+    HIGH = Literal[1]
+    LOW = Literal[0]
     
     # -------------------------------
     # Registration

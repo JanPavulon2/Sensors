@@ -250,7 +250,7 @@ Testing doesn't require hardware:
 mock_hardware = Mock(spec=IPhysicalStrip)
 
 # Create zone strip with mock
-zone_strip = ZoneStrip(zones=zones, hardware=mock_hardware)
+led_channel = ZoneStrip(zones=zones, hardware=mock_hardware)
 
 # Test application logic without GPIO access
 animation_service.start('BREATHE')
@@ -267,7 +267,7 @@ hardware = WS281xStrip(gpio=18, pixel_count=51, color_order=ColorOrder.BGR)
 hardware = MySuperNewLEDDriver(gpio=20, pixel_count=100)
 
 # Rest of code: unchanged!
-zone_strip = ZoneStrip(zones=zones, hardware=hardware)
+led_channel = ZoneStrip(zones=zones, hardware=hardware)
 ```
 
 ### For Extension

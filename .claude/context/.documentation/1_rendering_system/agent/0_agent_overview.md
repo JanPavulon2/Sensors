@@ -44,9 +44,9 @@ Welcome, AI agent! This documentation extends the [user documentation](../user/0
 | **LEDController** | `src/controllers/led_controller/led_controller.py` | 597 |
 | **StaticModeController** | `src/controllers/led_controller/static_mode_controller.py` | 241 |
 | **AnimationModeController** | `src/controllers/led_controller/animation_mode_controller.py` | 255 |
-| **ZoneStripController** | `src/controllers/zone_strip_controller.py` | 273 |
+| **ZoneStripController** | `src/controllers/led_channel_controller.py` | 273 |
 | **TransitionService** | `src/services/transition_service.py` | 350+ |
-| **ZoneStrip** | `src/zone_layer/zone_strip.py` | 250+ |
+| **ZoneStrip** | `src/zone_layer/led_channel.py` | 250+ |
 | **WS281xStrip** | `src/hardware/led/ws281x_strip.py` | 200+ |
 
 **Total rendering system**: ~4,500 lines across 20+ files
@@ -88,7 +88,7 @@ Layer 1: WS281xStrip (GPIO hardware interface)
 | 1 | **LEDController** | `led_controller.py` | ✅ ACTIVE | Main orchestrator |
 | 2 | **StaticModeController** | `static_mode_controller.py` | ✅ ACTIVE | Zone editing + pulsing |
 | 3 | **AnimationModeController** | `animation_mode_controller.py` | ✅ ACTIVE | Animation selection |
-| 4 | **ZoneStripController** | `zone_strip_controller.py` | ✅ ACTIVE | Rendering interface |
+| 4 | **ZoneStripController** | `led_channel_controller.py` | ✅ ACTIVE | Rendering interface |
 | 5 | **PowerToggleController** | `power_toggle_controller.py` | ✅ ACTIVE | Power on/off |
 | 6 | **LampWhiteModeController** | `lamp_white_mode_controller.py` | ✅ ACTIVE | LAMP white mode |
 | 7 | **FramePlaybackController** | `frame_playback_controller.py` | ✅ IMPLEMENTED | Frame-by-frame debugging |
@@ -96,7 +96,7 @@ Layer 1: WS281xStrip (GPIO hardware interface)
 | 9 | **PreviewPanelController** | `preview_panel_controller.py` | ⚠️ DISABLED | Preview visualization |
 
 **All controllers are in** `src/controllers/led_controller/` **except**:
-- ZoneStripController: `src/controllers/zone_strip_controller.py`
+- ZoneStripController: `src/controllers/led_channel_controller.py`
 - ControlPanelController: `src/controllers/control_panel_controller.py`
 
 ## Recent Refactoring (Phase 6)

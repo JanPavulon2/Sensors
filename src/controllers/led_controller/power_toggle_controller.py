@@ -84,7 +84,7 @@ class PowerToggleController:
 
         # Fade out each GPIO strip
         fades = []
-        # TODO: Use frame_manager.zone_strips for per-strip fades
+        # TODO: Use frame_manager.led_channels for per-strip fades
         # for gpio, strip_controller in self.strip_controllers.items():
         #     fade = strip_controller.transition_service.fade_out(transition)
         #     fades.append(fade)
@@ -129,7 +129,7 @@ class PowerToggleController:
 
         # Fade in each GPIO strip (each strip renders only its own zones)
         fades = []
-        for strip in self.frame_manager.zone_strips:
+        for strip in self.frame_manager.led_channels:
             frame = strip.build_frame_from_zones(color_map)
             fade = strip.transition_service.fade_in(frame, transition_config)
             fades.append(fade)

@@ -70,9 +70,9 @@ class LightingController:
         self.frame_manager = service_container.frame_manager
 
         # Create and attach animation engine
-        # Use first available zone strip from FrameManager (all strips have same zone mappings)
-        if not self.frame_manager.zone_strips:
-            raise ValueError("No zone strips registered with FrameManager")
+        # Use first available led channel from FrameManager (all channels have same zone mappings)
+        if not self.frame_manager.led_channels:
+            raise ValueError("No led channels registered with FrameManager")
 
         log.info("Initializing animation engine")
         self.animation_engine = AnimationEngine(

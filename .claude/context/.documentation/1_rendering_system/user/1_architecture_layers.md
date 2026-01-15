@@ -266,7 +266,7 @@ Rendering happens
 9. FrameManager.render() cycle:
    - Select highest priority frame (ANIMATION=30)
    - Convert ZoneFrame to pixel array
-   - Call zone_strip.show_full_pixel_frame(pixels)
+   - Call led_channel.show_full_pixel_frame(pixels)
    ↓
 10. ZoneStrip.show_full_pixel_frame():
     - Convert pixel array colors to RGB

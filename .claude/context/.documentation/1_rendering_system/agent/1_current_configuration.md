@@ -297,7 +297,7 @@ Pixel Index | Zone    | Use
 
 ### Zone Mapping
 - `src/zone_layer/zone_pixel_mapper.py` - Converts zone ID to pixel indices
-- `src/zone_layer/zone_strip.py` - Maintains pixel buffer
+- `src/zone_layer/led_channel.py` - Maintains pixel buffer
 
 ### Hardware Initialization
 - `src/main_asyncio.py:80-126` - Creates WS281xStrip per GPIO
@@ -305,7 +305,7 @@ Pixel Index | Zone    | Use
 
 ### Frame Rendering
 - `src/engine/frame_manager.py:433-460` - Renders pixel frames
-- `src/zone_layer/zone_strip.py:show_full_pixel_frame()` - Submits to hardware
+- `src/zone_layer/led_channel.py:show_full_pixel_frame()` - Submits to hardware
 
 ## Adding a New GPIO Pin
 

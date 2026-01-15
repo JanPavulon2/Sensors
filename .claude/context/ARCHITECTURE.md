@@ -580,7 +580,7 @@ src/
 │   ├── button.py
 │   ├── rotary_encoder.py
 │   ├── control_module.py       # Hardware event publisher (PHYSICAL + LOGICAL)
-│   ├── zone_strip.py           # Main LED strip
+│   ├── led_channel.py           # Main LED strip
 │   ├── preview_panel.py        # Preview strip
 │   └── keyboard/               # Keyboard input adapters
 │       ├── __init__.py
@@ -818,13 +818,13 @@ strip.show()
 **Simplified Facade**:
 ```python
 # ZoneStrip API
-zone_strip.set_zone_color("lamp", 255, 200, 150)
-zone_strip.set_multiple_zones({
+led_channel.set_zone_color("lamp", 255, 200, 150)
+led_channel.set_multiple_zones({
     "lamp": (255, 200, 150),
     "top": (0, 150, 255)
 })
-zone_strip.clear_zone("lamp")
-zone_strip.clear_all()
+led_channel.clear_zone("lamp")
+led_channel.clear_all()
 ```
 
 **CRITICAL**: Zone dict format is `{"zone_name": [start_index, end_index]}` where indices are 0-based pixel positions.
