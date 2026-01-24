@@ -40,12 +40,28 @@ zones:
     order: 5
     reversed: false
 
+  - id: MATRIX
+    name: Matrix
+    tag: pixel
+    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
+    enabled: true
+    order: 6
+    reversed: false
+
+  - id: MATRIX2
+    name: Matrix2
+    tag: matrix2
+    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
+    enabled: true
+    order: 7
+    reversed: false
+
   - id: PIXEL2
     name: Pixel2
     tag: pixel2
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 6
+    order: 8
     reversed: false
 
   - id: PREVIEW
@@ -53,7 +69,7 @@ zones:
     tag: preview
     pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
     enabled: true
-    order: 7
+    order: 9
     reversed: true
 
   # - id: DESK
