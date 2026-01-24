@@ -22,6 +22,12 @@ from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.HARDWARE)
 
+# Import ws module at module level for color order constants
+try:
+    from rpi_ws281x import ws  # type: ignore
+except ImportError:
+    ws = None  # type: ignore
+
 # Color order channel mapping
 COLOR_ORDER_MAP = {
     "RGB": (0, 1, 2),
@@ -294,11 +300,11 @@ class WS281xStrip(IPhysicalStrip):
     def _decode_color_order(self, order: str) -> int:
         """Map color order string to rpi_ws281x constant."""
         mapping = {
-            "RGB": self.ws.WS2811_STRIP_RGB,
-            "RBG": self.ws.WS2811_STRIP_RBG,
-            "GRB": self.ws.WS2811_STRIP_GRB,
-            "GBR": self.ws.WS2811_STRIP_GBR,
-            "BRG": self.ws.WS2811_STRIP_BRG,
-            "BGR": self.ws.WS2811_STRIP_BGR,
+            "RGB": ws.WS2811_STRIP_RGB,
+            "RBG": ws.WS2811_STRIP_RBG,
+            "GRB": ws.WS2811_STRIP_GRB,
+            "GBR": ws.WS2811_STRIP_GBR,
+            "BRG": ws.WS2811_STRIP_BRG,
+            "BGR": ws.WS2811_STRIP_BGR,
         }
-        return mapping.get(order.upper(), self.ws.WS2811_STRIP_GRB)
+        return mapping.get(order.upper(), ws.WS2811_STRIP_GRB)
