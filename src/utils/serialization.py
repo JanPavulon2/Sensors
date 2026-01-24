@@ -149,7 +149,7 @@ class Serializer:
 
         Transforms: {AnimationParamID.SPEED: 50} → {"speed": 50}
         """
-        return {param_id.name: value for param_id, value in animation_params.items()}
+        return {param_id.value: value for param_id, value in animation_params.items()}
 
     @staticmethod
     def animation_params_str_to_enum(animation_params: Dict[str, Any]) -> Dict[AnimationParamID, Any]:

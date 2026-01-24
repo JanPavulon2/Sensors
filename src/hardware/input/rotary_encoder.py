@@ -8,12 +8,6 @@ Provides simple interface: read() returns -1/0/1, is_pressed() returns bool.
 Registers all GPIO pins via GPIOManager.
 """
 
-try:
-    import RPi.GPIO as GPIO
-except ImportError:
-    print('GPIO NOT AVAILABLE')
-    # raise RuntimeError("RPi.GPIO not available")
-
 import time
 from hardware.gpio import IGPIOManager
 

@@ -60,12 +60,13 @@ class LedChannel:
         self.hardware = hardware
         self.mapper = ZonePixelMapper(zones, pixel_count)
 
-        log.info(
-            "LedChannel initialized",
-            pixel_count=pixel_count,
-            zones=len(zones),
-            zone_ids=[z.id.name for z in zones],
-        )
+        
+        # log.info(
+        #     "LedChannel initialized",
+        #     pixel_count=pixel_count,
+        #     zones=len(zones),
+        #     zone_ids=[z.id.name for z in zones],
+        # )
 
     # ==================== Reading Current State ====================
 

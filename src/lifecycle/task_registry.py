@@ -253,20 +253,19 @@ class TaskRegistry:
 
     # -----------------------------
     # Internal broadcast helper
-    # -----------------------------
+    # Note: Broadcasting is now primarily handled through Socket.IO
+    # See: src/api/socketio/tasks/broadcaster.py
+    # This method is kept for backwards compatibility but does nothing
     async def _broadcast_task_event(self, event_type: str, task_data: dict[str, Any]) -> None:
-        """Broadcast a task event to connected WebSocket clients."""
-        if not TaskRegistry.broadcasting_enabled:
-            return
-        
-        try:
-            from api.websocket_tasks import broadcast_task_update
-            await broadcast_task_update(event_type, task_data)
-        except ImportError:
-            # API module not available (e.g., test environment)
-            pass
-        except Exception as e:
-            log.debug(f"Error broadcasting task event: {e}")
+        """
+        Broadcast a task event (no-op, for backwards compatibility).
+
+        Broadcasting is now handled through Socket.IO:
+        - src/api/socketio/tasks/broadcaster.py (server-side)
+        - Frontend listens on Socket.IO events: tasks:all, tasks:active, tasks:stats
+        """
+        # Socket.IO handles broadcasting - clients request data on-demand
+        pass
 
     # -----------------------------
     # Utility: find record by task instance

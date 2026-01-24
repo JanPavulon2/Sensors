@@ -44,6 +44,7 @@ class SnapshotPublisher:
             EventType.ZONE_STATIC_STATE_CHANGED,
             EventType.ZONE_RENDER_MODE_CHANGED,
             EventType.ZONE_ANIMATION_CHANGED,
+            EventType.ZONE_ANIMATION_PARAM_CHANGED,
             EventType.ANIMATION_PARAMETER_CHANGED,
         ):
             self.event_bus.subscribe(event_type, self._on_zone_changed)

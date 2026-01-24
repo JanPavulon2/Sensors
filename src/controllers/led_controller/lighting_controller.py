@@ -77,7 +77,8 @@ class LightingController:
         log.info("Initializing animation engine")
         self.animation_engine = AnimationEngine(
             frame_manager=self.frame_manager,
-            zone_service=self.zone_service
+            zone_service=self.zone_service,
+            event_bus=self.event_bus
         )
 
         log.info("Initializing static mode controller")

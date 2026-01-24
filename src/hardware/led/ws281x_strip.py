@@ -13,16 +13,14 @@ Features:
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
-
-from rpi_ws281x import PixelStrip, Color as WS281xColor, ws
-
+from enum import StrEnum
+from typing import List, TYPE_CHECKING
 from hardware.led.strip_interface import IPhysicalStrip
+from runtime import RuntimeInfo
 from models.color import Color
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.HARDWARE)
-
 
 # Color order channel mapping
 COLOR_ORDER_MAP = {
@@ -35,12 +33,23 @@ COLOR_ORDER_MAP = {
 }
 
 
+class ColorOrder(StrEnum):
+    RGB = "RGB"
+    RBG = "RBG"
+    GRB = "GRB"
+    GBR = "GBR"
+    BRG = "BRG"
+    BGR = "BGR"
+
+    def lower(self) -> str:
+        return self.value.lower()
+    
 @dataclass(frozen=True)
 class WS281xConfig:
     """Configuration for WS281x LED strip."""
     gpio_pin: int
-    led_count: int
-    color_order: str = "GRB"  # WS2811/WS2812 typical
+    pixel_count: int
+    color_order: str = "GRB" # "GRB"  # WS2811/WS2812 typical
     frequency_hz: int = 800_000
     dma_channel: int = 10
     brightness: int = 255
@@ -50,14 +59,43 @@ class WS281xConfig:
 
 class WS281xStrip(IPhysicalStrip):
     """
-    WS281x hardware driver using rpi_ws281x library.
+    WS281x physical LED strip.
 
     - _buffer: List[Color] is canonical source of truth
     - All reads (get_pixel) use _buffer (no hardware query)
     - apply_frame() pushes entire buffer in single DMA transfer
     """
 
-    def __init__(self, config: WS281xConfig) -> None:
+    def __init__(
+        self, 
+        gpio_pin: int,
+        pixel_count: int,
+        color_order: str = "GRB",
+        brightness: int = 255,
+        dma_channel: int = 10,
+        channel: int = 0, 
+        invert: bool = False
+    ) -> None:
+        
+        if not RuntimeInfo.has_ws281x():
+            raise RuntimeError("rpi_ws281x not available on this platform")
+        
+        config = WS281xConfig(
+            gpio_pin, 
+            pixel_count,
+            color_order=color_order,
+            frequency_hz=800_000,
+            dma_channel=dma_channel,
+            brightness=brightness,
+            invert=False,
+            channel=channel
+        )
+        
+        self._led_count = config.pixel_count
+        self._buffer: List[Color] = [Color.black() for _ in range(config.pixel_count)]
+
+        
+            
         self.config = config
 
         # Validate color order
@@ -69,12 +107,18 @@ class WS281xStrip(IPhysicalStrip):
 
         log.debug(f"WS281xStrip init: color_order={config.color_order}, strip_type_const={hex(strip_type_const) if strip_type_const else None}, order_map={self._order_map}")
 
+        from rpi_ws281x import PixelStrip, Color as WSColor, ws # type: ignore
+        
+        self._WSColor = WSColor
+        self.ws = ws
+        
         # Create PixelStrip (try full signature, fallback if binding differs)
         self._strip_type_handled_by_library = False
+        
         try:
             log.debug(f"Creating PixelStrip with strip_type_const={hex(strip_type_const) if strip_type_const else None}")
-            self._pixel_strip = PixelStrip(
-                config.led_count,
+            self._pixel_strip: 'PixelStrip' = PixelStrip(
+                config.pixel_count,
                 config.gpio_pin,
                 config.frequency_hz,
                 config.dma_channel,
@@ -83,13 +127,15 @@ class WS281xStrip(IPhysicalStrip):
                 config.channel,
                 strip_type_const,
             )
+            
             log.debug("PixelStrip created with strip_type parameter - library will handle color order")
             self._strip_type_handled_by_library = True
+            
         except TypeError as e:
             # Older rpi_ws281x version without strip_type param
             log.warn(f"PixelStrip failed with strip_type, falling back to old API: {e}")
             self._pixel_strip = PixelStrip(
-                config.led_count,
+                config.pixel_count,
                 config.gpio_pin,
                 config.frequency_hz,
                 config.dma_channel,
@@ -97,6 +143,7 @@ class WS281xStrip(IPhysicalStrip):
                 config.brightness,
                 config.channel,
             )
+            
             log.warn("Using old PixelStrip API - apply_frame() will handle color order remapping")
             self._strip_type_handled_by_library = False
 
@@ -104,12 +151,12 @@ class WS281xStrip(IPhysicalStrip):
         self._pixel_strip.begin()
 
         # Local buffer (source of truth for get_pixel)
-        self._buffer: List[Color] = [Color.black() for _ in range(config.led_count)]
+        self._buffer: List[Color] = [Color.black() for _ in range(config.pixel_count)]
 
         log.info(
             "WS281xStrip initialized",
             gpio=config.gpio_pin,
-            count=config.led_count,
+            count=config.pixel_count,
             order=config.color_order,
             dma=config.dma_channel,
             pwm=config.channel,
@@ -119,21 +166,21 @@ class WS281xStrip(IPhysicalStrip):
 
     @property
     def led_count(self) -> int:
-        return self.config.led_count
+        return self.config.pixel_count
 
     def set_pixel(self, index: int, color: Color) -> None:
         """
         Set pixel in buffer (does not push to hardware).
         Call show() or apply_frame() to render.
         """
-        if 0 <= index < self.config.led_count:
+        if 0 <= index < self.config.pixel_count:
             self._buffer[index] = color
         else:
             log.debug("set_pixel: index out of range", index=index)
 
     def get_pixel(self, index: int) -> Color:
         """Read pixel from buffer (fast, no hardware query)."""
-        if 0 <= index < self.config.led_count:
+        if 0 <= index < self.config.pixel_count:
             return self._buffer[index]
         return Color.black()
 
@@ -150,7 +197,7 @@ class WS281xStrip(IPhysicalStrip):
         - Clears remaining pixels if frame shorter than led_count
         - Calls show() once at end (fast path)
         """
-        length = min(len(pixels), self.config.led_count)
+        length = min(len(pixels), self.config.pixel_count)
         r_i, g_i, b_i = self._order_map
         use_rgb_helper = hasattr(self._pixel_strip, "setPixelColorRGB")
 
@@ -188,20 +235,20 @@ class WS281xStrip(IPhysicalStrip):
                 if use_rgb_helper:
                     self._pixel_strip.setPixelColorRGB(i, r_final, g_final, b_final)
                 else:
-                    self._pixel_strip.setPixelColor(i, WS281xColor(r_final, g_final, b_final))
+                    self._pixel_strip.setPixelColor(i, self._WSColor(r_final, g_final, b_final))
             except Exception as ex:
                 log.error("apply_frame: setPixel failed", index=i, error=str(ex))
 
         # Clear remaining pixels if frame shorter than strip
-        if length < self.config.led_count:
+        if length < self.config.pixel_count:
             black = Color.black()
-            for i in range(length, self.config.led_count):
+            for i in range(length, self.config.pixel_count):
                 self._buffer[i] = black
                 try:
                     if use_rgb_helper:
                         self._pixel_strip.setPixelColorRGB(i, 0, 0, 0)
                     else:
-                        self._pixel_strip.setPixelColor(i, WS281xColor(0, 0, 0))
+                        self._pixel_strip.setPixelColor(i, self._WSColor(0, 0, 0))
                 except Exception:
                     pass
 
@@ -224,12 +271,12 @@ class WS281xStrip(IPhysicalStrip):
         use_rgb_helper = hasattr(self._pixel_strip, "setPixelColorRGB")
 
         try:
-            for i in range(self.config.led_count):
+            for i in range(self.config.pixel_count):
                 self._buffer[i] = black
                 if use_rgb_helper:
                     self._pixel_strip.setPixelColorRGB(i, 0, 0, 0)
                 else:
-                    self._pixel_strip.setPixelColor(i, WS281xColor(0, 0, 0))
+                    self._pixel_strip.setPixelColor(i, self._WSColor(0, 0, 0))
             self._pixel_strip.show()
         except Exception as ex:
             log.error("clear failed", error=str(ex))
@@ -244,15 +291,14 @@ class WS281xStrip(IPhysicalStrip):
 
     # ==================== Helpers ====================
 
-    @staticmethod
-    def _decode_color_order(order: str) -> int:
+    def _decode_color_order(self, order: str) -> int:
         """Map color order string to rpi_ws281x constant."""
         mapping = {
-            "RGB": ws.WS2811_STRIP_RGB,
-            "RBG": ws.WS2811_STRIP_RBG,
-            "GRB": ws.WS2811_STRIP_GRB,
-            "GBR": ws.WS2811_STRIP_GBR,
-            "BRG": ws.WS2811_STRIP_BRG,
-            "BGR": ws.WS2811_STRIP_BGR,
+            "RGB": self.ws.WS2811_STRIP_RGB,
+            "RBG": self.ws.WS2811_STRIP_RBG,
+            "GRB": self.ws.WS2811_STRIP_GRB,
+            "GBR": self.ws.WS2811_STRIP_GBR,
+            "BRG": self.ws.WS2811_STRIP_BRG,
+            "BGR": self.ws.WS2811_STRIP_BGR,
         }
-        return mapping.get(order.upper(), ws.WS2811_STRIP_GRB)
+        return mapping.get(order.upper(), self.ws.WS2811_STRIP_GRB)

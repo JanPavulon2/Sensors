@@ -17,19 +17,12 @@ Usage:
     app = ASGIApp(socketio_server, app)
 """
 
-from dataclasses import dataclass, asdict
-from typing import Optional, Any, Dict
+from dataclasses import asdict
+from typing import Optional
 from socketio import AsyncServer, ASGIApp
-from models.domain import ZoneCombined
-from models.enums import ZoneID
-from models.events import (
-    EventType
-)
+from models.events import EventType
 from models.events.zone_snapshot_events import ZoneSnapshotUpdatedEvent
-from models.events.zone_static_events import ZoneStaticStateChangedEvent
-from services.event_bus import EventBus
 from services.service_container import ServiceContainer
-from api.socketio.zones.dto import ZoneSnapshotDTO
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.SOCKETIO)
@@ -63,26 +56,6 @@ class SocketIOHandler:
             "zone:snapshot",
             asdict(event.snapshot),
         )
-
-            
-        log.info("Socket.IO ready")
-
-    def _subscribe_to_events(self) -> None:
-        """Subscribe to backend EventBus events for broadcasting"""
-        if not self.services or not self.services.event_bus:
-            log.warn("EventBus not available for Socket.IO")
-            return
-
-        event_bus: EventBus = self.services.event_bus
-
-        # Subscribe to zone state changes
-        # Note: EventBus.subscribe() supports async handlers despite type hint saying otherwise
-        # event_bus.subscribe(
-        #     EventType.ZONE_STATIC_STATE_CHANGED,
-        #     self._on_zone_state_changed  # type: ignore
-        # )
-
-        log.info("Socket.IO subscribed to EventBus events")
 
     def _register_connection_handlers(self) -> None:
         """Register client-side event handlers"""
@@ -187,26 +160,6 @@ class SocketIOHandler:
                 await socketio_server.emit('error', {'message': str(e)}, room=sid)
 
         log.info("Client event handlers registered (zones, animations, tasks, logs)")
-
-    async def _on_zone_state_changed(self, event: ZoneSnapshotDTO) -> None:
-        """EventBus handler: Broadcast zone state change to all clients"""
-        log.debug(f"Socketio Handler: snapshot received",
-            snapshot=event
-        )
-        
-        if not self.socketio_server:
-            return
-        
-        if self.services is None or self.services.zone_service is None:
-            return
-            
-        zone = self.services.zone_service.get_zone(ZoneID[event.id])
-        payload = ZoneSnapshotDTO.from_zone(zone)
-
-        await self.socketio_server.emit("zone:snapshot", asdict(payload))
-
-        # await self.socketio_server.emit('zone:state_changed', payload)
-        log.debug(f"Emitted zone snapshot: {zone.config.id.name}")
 
 
 # Global instance

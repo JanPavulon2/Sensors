@@ -202,22 +202,6 @@ class PreviewPanelController:
                 hue_offset=params.get('hue_offset', 30)
             )
 
-        # elif animation_id == "matrix":
-        #     return MatrixAnimation(
-        #         zones=empty_zones,
-        #         speed=speed,
-        #         hue=params.get('hue', 120),  # Default green
-        #         length=params.get('length', 5),
-        #         intensity=params.get('intensity', 100)
-        #     )
-        
-        elif animation_id == AnimationID.COLOR_CYCLE:
-            return ColorCycleAnimation(
-                zones=empty_zones,
-                speed=speed,
-                hue=params.get('hue', 120),  # Default green
-            )
-
         else:
             # Unknown animation
             return None
