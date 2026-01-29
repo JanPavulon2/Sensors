@@ -6,7 +6,7 @@
         "preset_name": "yellow"
       },
       "brightness": 4,
-      "is_on": false,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
@@ -58,9 +58,9 @@
     "matrix": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "violet"
+        "preset_name": "amber"
       },
-      "brightness": 21,
+      "brightness": 0,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -84,8 +84,8 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 0,
-    "selected_zone_edit_target": "COLOR_PRESET",
+    "selected_zone_index": 3,
+    "selected_zone_edit_target": "COLOR_HUE",
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

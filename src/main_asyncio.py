@@ -40,8 +40,7 @@ from models.enums import LogCategory, LogLevel
 # === API ===
 from api.main import create_app
 from api.dependencies import set_service_container
-from api.socketio_handler import wrap_app_with_socketio
-from api.socketio.server import create_socketio_server
+from api.socketio.server import create_socketio_server, wrap_app_with_socketio
 from api.socketio.registry import register_socketio
 
 # === Infrastructure ===
@@ -92,6 +91,21 @@ async def main():
 
     # Create Socket.IO server
     log.info("Creating Socket.IO server...")
+    
+    cors_origins = []
+    if cors_origins is None:
+        cors_origins = [
+            "http://192.168.137.139:3000",
+            "http://192.168.137.139:8000",
+            "http://192.168.137.139:5173",
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:5173",
+        ]
+        
     socketio_server = create_socketio_server(cors_origins=["*"])
     
     # Initialize broadcaster early so all logs can be transmitted
@@ -110,12 +124,12 @@ async def main():
 
     log.info(
         "Runtime detected",
-        linux=runtime.is_linux,
-        rpi=runtime.is_raspberry_pi,
-        windows=runtime.is_windows,
-        has_ws281x=runtime.has_ws281x,
-        has_evdev=runtime.has_evdev,
-        has_gpio=runtime.has_gpio,
+        linux=runtime.is_linux(),
+        rpi=runtime.is_raspberry_pi(),
+        windows=runtime.is_windows(),
+        has_ws281x=runtime.has_ws281x(),
+        has_evdev=runtime.has_evdev(),
+        has_gpio=runtime.has_gpio(),
     )
 
     log.info("Initializing GPIO manager (singleton)...")
@@ -252,7 +266,7 @@ async def main():
 
     
     log.info("Registering Socket.IO modules...")
-    await register_socketio(socketio_server, services)
+    register_socketio(socketio_server, services)
         
     # ========================================================================
     # 8. API SERVER
