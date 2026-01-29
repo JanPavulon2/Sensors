@@ -14,46 +14,30 @@ zones:
   - id: CIRCLE
     name: Circle
     tag: circle
-    pixel_count: 14       # 9 physical LEDs (3 * 3)
+    pixel_count: 21       # 9 physical LEDs (3 * 3)
     enabled: true
     order: 2
 
-  - id: LAMP
-    name: Lamp
-    tag: lamp
-    pixel_count: 19      # 57 physical LEDs (19 * 3)
-    enabled: true
-    order: 3
+  # - id: LAMP
+  #   name: Lamp
+  #   tag: lamp
+  #   pixel_count: 19      # 57 physical LEDs (19 * 3)
+  #   enabled: true
+  #   order: 3
 
-  - id: GATE
-    name: Gate
-    tag: gate
-    pixel_count: 3      
-    enabled: true
-    order: 4
+  # - id: GATE
+  #   name: Gate
+  #   tag: gate
+  #   pixel_count: 3      
+  #   enabled: true
+  #   order: 4
 
   - id: PIXEL
     name: Pixel
     tag: pixel
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 5
-    reversed: false
-
-  - id: MATRIX
-    name: Matrix
-    tag: pixel
-    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
-    enabled: true
-    order: 6
-    reversed: false
-
-  - id: MATRIX2
-    name: Matrix2
-    tag: matrix2
-    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
-    enabled: true
-    order: 7
+    order: 3
     reversed: false
 
   - id: PIXEL2
@@ -61,16 +45,32 @@ zones:
     tag: pixel2
     pixel_count: 30     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 8
+    order: 4
     reversed: false
 
-  - id: PREVIEW
-    name: Preview
-    tag: preview
-    pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
+  - id: MATRIX
+    name: Matrix
+    tag: matrix
+    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
     enabled: true
-    order: 9
-    reversed: true
+    order: 5
+    reversed: false
+
+  - id: MATRIX2
+    name: Matrix2
+    tag: matrix2
+    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
+    enabled: true
+    order: 6
+    reversed: false
+
+  # - id: PREVIEW
+  #   name: Preview
+  #   tag: preview
+  #   pixel_count: 8      # 8-pixel preview panel on GPIO 19 (mounted upside down)
+  #   enabled: true
+  #   order: 9
+  #   reversed: true
 
   # - id: DESK
   #   name: Desk
