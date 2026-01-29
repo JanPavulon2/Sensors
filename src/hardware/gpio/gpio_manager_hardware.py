@@ -45,7 +45,20 @@ class HardwareGPIOManager(IGPIOManager):
 
         log.info("GPIO manager initialized (BCM mode)")
 
-    
+    # -------------------------------
+    # GPIO Constants (from RPi.GPIO)
+    # -------------------------------
+
+    @property
+    def HIGH(self) -> int:
+        """GPIO HIGH state from RPi.GPIO"""
+        return self._gpio.HIGH
+
+    @property
+    def LOW(self) -> int:
+        """GPIO LOW state from RPi.GPIO"""
+        return self._gpio.LOW
+
     # -------------------------------
     # Registration
     # -------------------------------

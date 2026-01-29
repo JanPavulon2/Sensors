@@ -14,7 +14,7 @@ zones:
   - id: CIRCLE
     name: Circle
     tag: circle
-    pixel_count: 21       # 9 physical LEDs (3 * 3)
+    pixel_count: 14       
     enabled: true
     order: 2
 
@@ -56,13 +56,13 @@ zones:
     order: 5
     reversed: false
 
-  - id: MATRIX2
-    name: Matrix2
-    tag: matrix2
-    pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
-    enabled: true
-    order: 6
-    reversed: false
+  # - id: MATRIX2
+  #   name: Matrix2
+  #   tag: matrix2
+  #   pixel_count: 48     # 30-pixel custom LED strip on GPIO 19
+  #   enabled: true
+  #   order: 6
+  #   reversed: false
 
   # - id: PREVIEW
   #   name: Preview

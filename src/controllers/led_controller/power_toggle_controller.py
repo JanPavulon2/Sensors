@@ -11,7 +11,7 @@ from models.enums import ZoneRenderMode
 from services import ServiceContainer
 
 if TYPE_CHECKING:
-    from controllers.preview_panel_controller import PreviewPanelController
+    from obsolete.preview_panel_controller import PreviewPanelController
 
 log = get_logger().for_category(LogCategory.GENERAL)
 

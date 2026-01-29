@@ -13,6 +13,20 @@ class MockGPIOManager(IGPIOManager):
         log.info("Mock GPIO manager initialized")
 
     # -------------------------------
+    # GPIO Constants
+    # -------------------------------
+
+    @property
+    def HIGH(self) -> int:
+        """GPIO HIGH state"""
+        return 1
+
+    @property
+    def LOW(self) -> int:
+        """GPIO LOW state"""
+        return 0
+
+    # -------------------------------
     # Registration
     # -------------------------------
     def register_input(

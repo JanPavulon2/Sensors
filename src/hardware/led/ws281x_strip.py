@@ -99,9 +99,6 @@ class WS281xStrip(IPhysicalStrip):
         
         self._led_count = config.pixel_count
         self._buffer: List[Color] = [Color.black() for _ in range(config.pixel_count)]
-
-        
-            
         self.config = config
 
         # Validate color order

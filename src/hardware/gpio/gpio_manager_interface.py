@@ -1,11 +1,24 @@
-from typing import Protocol, Dict, Literal
+from typing import Protocol, Dict
 from models.enums import GPIOPullMode, GPIOInitialState
 
 class IGPIOManager(Protocol):
-    
-    HIGH = Literal[1]
-    LOW = Literal[0]
-    
+    """
+    GPIO Manager Protocol
+
+    Defines interface for GPIO operations across different implementations
+    (hardware RPi.GPIO vs mock for testing).
+    """
+
+    @property
+    def HIGH(self) -> int:
+        """GPIO HIGH state (1)"""
+        ...
+
+    @property
+    def LOW(self) -> int:
+        """GPIO LOW state (0)"""
+        ...
+
     # -------------------------------
     # Registration
     # -------------------------------

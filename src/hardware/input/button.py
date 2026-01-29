@@ -36,9 +36,6 @@ class Button:
         # State tracking
         self._last_state = gpio_manager.read(pin)
         self._last_press_time = 0.0
-        
-        self.HIGH = 1
-        self.LOW = 0
 
     # ---------------------------------------------------------------
     # Public API
@@ -55,9 +52,9 @@ class Button:
         now = time.time()
 
         pressed = False
-        
+
         # FALLING EDGE: HIGH → LOW
-        if self._last_state == self.HIGH and current_state == self.LOW:
+        if self._last_state == self.gpio_manager.HIGH and current_state == self.gpio_manager.LOW:
             if (now - self._last_press_time) >= self.debounce_time:
                 pressed = True
                 self._last_press_time = now
@@ -81,7 +78,7 @@ class Button:
         Return True if the button is currently physically held down.
         Does NOT include debouncing, purely raw state.
         """
-        return self.gpio_manager.read(self.pin) == self.LOW
+        return self.gpio_manager.read(self.pin) == self.gpio_manager.LOW
 
     def __repr__(self) -> str:
         return f"<Button pin={self.pin}>"

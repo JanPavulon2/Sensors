@@ -360,7 +360,9 @@ class LightingController:
         Zone render mode is currently toggled via keyboard (Z=STATIC, X=ANIMATION).
         This method is a placeholder for per-zone mode toggle via selector.
         """
-        # TODO: Implement selector-based mode toggle if needed in future
+        if not self.app_state_service.get_state().edit_mode:
+            log.info("Selector click ignored when not in edit mode")
+            return
 
     def _handle_modulator_rotation(self, delta: int):
         """

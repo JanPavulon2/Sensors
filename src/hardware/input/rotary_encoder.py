@@ -32,10 +32,12 @@ class RotaryEncoder:
         # This component receives already-registered pins, just uses them for input reading
         # Do NOT register pins here to avoid conflicts
 
-        # State tracking
+        # State tracking for rotation
         self._last_clk = self.gpio_manager.read(clk)
-        self._last_button_state = self.gpio_manager.HIGH
-        self._last_button_time = 0
+
+        # State tracking for button press
+        self._last_state = self.gpio_manager.read(sw)
+        self._last_press_time = 0.0
 
     def read(self) -> int:
         """
@@ -60,22 +62,22 @@ class RotaryEncoder:
 
     def is_pressed(self) -> bool:
         """
-        Check if button is pressed (with debouncing)
+        Check if button was pressed (with debouncing)
 
         Returns:
-            True if button was pressed (falling edge with debounce)
-            False otherwise
+            True once per physical press (after debounce)
         """
         current_state = self.gpio_manager.read(self.sw_pin)
-        current_time = time.time()
+        now = time.time()
 
-        # Detect falling edge (button press)
-        if self._last_button_state == self.gpio_manager.HIGH and current_state == self.gpio_manager.LOW:
-            if (current_time - self._last_button_time) > self.debounce_time:
-                self._last_button_time = current_time
-                self._last_button_state = current_state
-                return True
+        pressed = False
 
-        self._last_button_state = current_state
-        return False
+        # FALLING EDGE: HIGH → LOW
+        if self._last_state == self.gpio_manager.HIGH and current_state == self.gpio_manager.LOW:
+            if (now - self._last_press_time) >= self.debounce_time:
+                pressed = True
+                self._last_press_time = now
 
+        # Update state AFTER detection
+        self._last_state = current_state
+        return pressed
