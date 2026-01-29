@@ -193,7 +193,7 @@ export function Dashboard(): JSX.Element {
         </Card>
       )}
 
-      {/* Documentation Card */}
+      {/* Documentation Card - Quick Start (commented out)
       <Card className="bg-bg-elevated border border-accent-primary/20">
         <CardHeader>
           <CardTitle className="text-sm">Quick Start</CardTitle>
@@ -205,6 +205,7 @@ export function Dashboard(): JSX.Element {
           <p>4. Create animations and preview in real-time</p>
         </CardContent>
       </Card>
+      */}
     </div>
   );
 }
