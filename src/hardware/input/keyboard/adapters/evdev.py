@@ -1,12 +1,11 @@
 
-from typing import Optional, Dict, List
 import asyncio
+from typing import Optional, Dict
 from evdev import InputDevice, list_devices, ecodes
-from evdev import util as evdev_util
 from models.events import KeyboardKeyPressEvent
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
-from .keyboard_adapter_interface import IKeyboardAdapter
+from .base import IKeyboardAdapter
 
 log = get_logger().for_category(LogCategory.HARDWARE)
 
@@ -25,7 +24,6 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
         self.event_bus = event_bus
         self.device_path = device_path
         self.device: Optional[InputDevice] = None
-        self._running = False
 
         # Track modifier key states
         self._modifiers: Dict[str, bool] = {
@@ -33,6 +31,65 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
             "SHIFT": False,
             "ALT": False
         }
+
+    async def run(self) -> None:
+        """Main async loop reading keyboard events with retry and resilience."""
+        
+        log.info("Starting evdev keyboard adapter")
+    
+        if not self.device_path:
+            self.device_path = await self._find_keyboard_device()
+
+        if not self.device_path:
+            log.info("No evdev keyboard device found")
+            raise RuntimeError("No evdev keyboard available")
+            
+        try:
+            self.device = InputDevice(self.device_path)
+            log.info(
+                "Opened evdev keyboard device",
+                device=self.device.name,
+                path=self.device_path
+            )
+        except (OSError, PermissionError) as e:
+            log.info(
+                "Evdev keyboard device cannot be opened",
+                path=self.device_path,
+                reason=str(e)
+            )
+            raise RuntimeError(f"Cannot open evdev keyboard device: {e}") from e
+            
+        loop = asyncio.get_running_loop()
+        log.info("Physical keyboard active (evdev mode)")
+
+        try:
+            while True:
+                try:
+                    # Read blocking in executor
+                    events = await loop.run_in_executor(None, self.device.read)
+                    for event in events:
+                        if event.type == ecodes.EV_KEY:
+                            await self._handle_key_event(event)
+
+                except OSError as e:
+                    log.warn(f"Temporary read error: {e}")
+                    await asyncio.sleep(0.1)
+                    continue  # retry after short delay
+                except Exception as e:
+                    log.error(f"Unexpected error in keyboard loop: {e}")
+                    await asyncio.sleep(0.1)
+                    continue
+
+        except asyncio.CancelledError:
+            log.debug("Evdev keyboard cancelled (task stopped)")
+            raise
+        
+        finally:
+            try:
+                if self.device:
+                    self.device.close()
+            except Exception:
+                pass
 
     async def _find_keyboard_device(self) -> Optional[str]:
         """
@@ -92,60 +149,12 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
 
         return best_path
 
-    async def run(self) -> bool:
-        """Main async loop reading keyboard events with retry and resilience."""
-        if not self.device_path:
-            self.device_path = await self._find_keyboard_device()
+    def _coerce_key_name(self, key_name: str | tuple[str]) -> str:
+        if isinstance(key_name, tuple):
+            # evdev sometimes reports aliases like ('LEFTSHIFT',)
+            return key_name[0]
+        return key_name
 
-        if not self.device_path:
-            log.warn("No physical keyboard found via evdev")
-            return False
-
-        try:
-            self.device = InputDevice(self.device_path)
-            if self.device is None:
-                log.error(f"Device not found in '{self.device_path}'")
-                return False
-            
-            log.info("Listening for physical keyboard input",
-                     device=self.device.name, path=self.device_path)
-        except (OSError, PermissionError) as e:
-            log.error(f"Cannot open keyboard device: {e}")
-            return False
-
-        loop = asyncio.get_running_loop()
-        log.info("Physical keyboard active (evdev mode)")
-
-        try:
-            while True:
-                try:
-                    # Read blocking in executor
-                    events = await loop.run_in_executor(None, self.device.read)
-                    for event in events:
-                        if event.type == ecodes.EV_KEY:
-                            await self._handle_key_event(event)
-
-                except OSError as e:
-                    log.warn(f"Temporary read error: {e}")
-                    await asyncio.sleep(0.1)
-                    continue  # retry after short delay
-                except Exception as e:
-                    log.error(f"Unexpected error in keyboard loop: {e}")
-                    await asyncio.sleep(0.1)
-                    continue
-
-        except asyncio.CancelledError:
-            log.debug("Evdev keyboard cancelled (task stopped)")
-            raise
-        finally:
-            try:
-                if self.device:
-                    self.device.close()
-            except Exception:
-                pass
-
-        return True
-    
     async def _handle_key_event(self, event) -> None:
         log.info(
             "Keyboard key event",
@@ -165,6 +174,9 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
 
         pressed = event.value == 1
         released = event.value == 0
+
+        raw_key_name = key_name
+        key_name = self._coerce_key_name(raw_key_name)
 
         # update modifier states
         self._update_modifier_state(key_name, pressed=pressed)
@@ -188,10 +200,6 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
         await self.event_bus.publish(
             KeyboardKeyPressEvent(normalized, modifiers)
         )
-    
-    def stop(self) -> None:
-        """Signal loop to stop (useful if you call run() as a task)"""
-        self._running = False
 
     def _update_modifier_state(self, key_name: str, pressed: bool) -> None:
         k = (key_name or "").upper()

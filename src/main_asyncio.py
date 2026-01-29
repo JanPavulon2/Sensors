@@ -47,7 +47,7 @@ from api.socketio.registry import register_socketio
 # === Infrastructure ===
 from hardware.gpio.gpio_manager_factory import create_gpio_manager
 from hardware.hardware_coordinator import HardwareCoordinator
-from hardware.input.keyboard import create_keyboard_adapter
+from hardware.input.keyboard import start_keyboard
 
 # === Services ===
 from services.port_manager import PortManager
@@ -213,11 +213,10 @@ async def main():
     # ========================================================================
 
     log.info("Initializing keyboard input...")
-    keyboard = create_keyboard_adapter(event_bus)
     keyboard_task = create_tracked_task(
-        keyboard.run(),
+        start_keyboard(event_bus),
         category=TaskCategory.INPUT,
-        description="KeyboardInputAdapter"
+        description="KeyboardInput"
     )
 
     # ========================================================================

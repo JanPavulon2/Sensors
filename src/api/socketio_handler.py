@@ -20,6 +20,7 @@ Usage:
 from dataclasses import asdict
 from typing import Optional
 from socketio import AsyncServer, ASGIApp
+from api.socketio.zones.dto import ZoneSnapshotDTO
 from models.events import EventType
 from models.events.zone_snapshot_events import ZoneSnapshotUpdatedEvent
 from services.service_container import ServiceContainer

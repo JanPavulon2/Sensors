@@ -18,9 +18,9 @@
         "mode": "PRESET",
         "preset_name": "red"
       },
-      "brightness": 1,
-      "is_on": false,
-      "mode": "STATIC",
+      "brightness": 19,
+      "is_on": true,
+      "mode": "ANIMATION",
       "animation": {
         "id": "COLOR_SNAKE",
         "parameters": {}
@@ -31,9 +31,9 @@
         "mode": "HUE",
         "hue": 109
       },
-      "brightness": 1,
-      "is_on": false,
-      "mode": "STATIC",
+      "brightness": 48,
+      "is_on": true,
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
@@ -57,15 +57,19 @@
     },
     "matrix": {
       "color": {
-        "mode": "HUE",
-        "hue": 306
+        "mode": "PRESET",
+        "preset_name": "violet"
       },
       "brightness": 21,
-      "is_on": false,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {}
+        "parameters": {
+          "speed": 92,
+          "length": 13,
+          "primary_color_hue": 310
+        }
       }
     }
   },

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
 
-from components.control_panel import ControlPanel
+from hardware.input.control_panel import ControlPanel
 from hardware.gpio import IGPIOManager
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory

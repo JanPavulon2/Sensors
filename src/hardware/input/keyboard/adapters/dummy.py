@@ -5,10 +5,10 @@ Does nothing - just prevents crashes during initialization.
 
 import asyncio
 from services.event_bus import EventBus
-from .keyboard_adapter_interface import IKeyboardAdapter
+from .base import IKeyboardAdapter
 
 
-class DummyKeyboardAdapter:
+class DummyKeyboardAdapter(IKeyboardAdapter):
     """
     Dummy keyboard adapter that does nothing.
 

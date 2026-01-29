@@ -13,4 +13,11 @@ class IKeyboardAdapter(Protocol):
     """
 
     async def run(self) -> None:
+        """
+        Start keyboard adapter.
+
+        Must:
+        - block until cancelled
+        - raise Exception if adapter cannot start
+        """
         ...

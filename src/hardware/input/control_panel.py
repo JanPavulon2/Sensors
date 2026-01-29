@@ -22,7 +22,6 @@ class ControlPanel:
         - Selector (Encoder): Selects items (zones, animations, etc.)
         - Modulator (Encoder): Modulates parameter values
         - 4x Buttons: Mode toggles and special functions
-        - Preview Panel (CJMCU-2812-8): 8 RGB LEDs for previews
     """
 
     def __init__(
@@ -62,11 +61,6 @@ class ControlPanel:
         # Buttons
         button_pins = hardware_manager.button_pins
         self.buttons = [Button(pin, gpio_manager) for pin in button_pins]
-
-        # Preview Panel - initialized later in main_asyncio.py after led_channels are created
-        # PreviewPanel is a logical view of PREVIEW zone within LedChannel(GPIO 19)
-        # It will be passed the led_channel instance that contains both PIXEL and PREVIEW zones
-        self.preview_panel = None
 
 
 
