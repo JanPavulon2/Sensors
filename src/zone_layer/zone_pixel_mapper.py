@@ -59,7 +59,7 @@ class ZonePixelMapper:
                 reversed=zone.reversed,
             )
             
-        # ----------------------------
+    # ----------------------------
     # PUBLIC API
     # ----------------------------
 

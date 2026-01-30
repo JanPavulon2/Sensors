@@ -2,9 +2,6 @@ from __future__ import annotations
 import asyncio
 from typing import List
 
-from hardware.hardware_coordinator import HardwareBundle
-from controllers.led_controller.lighting_controller import LightingController
-from hardware.gpio.gpio_manager import GPIOManager
 from lifecycle.shutdown_protocol import IShutdownHandler
 from utils.logger import get_logger, LogCategory
 

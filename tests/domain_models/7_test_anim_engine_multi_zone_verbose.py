@@ -54,7 +54,7 @@ async def test_animation_engine_verbose_two_zones_breathe():
 
     fm = FrameManager(fps=240)
     strip = DummyStrip()
-    fm.add_zone_strip(strip)
+    fm.add_led_channel(strip)
 
     zone_service = DummyZoneService()
     engine = AnimationEngine(fm, zone_service)

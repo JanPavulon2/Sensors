@@ -55,4 +55,5 @@ hardware_mappings:
     zones:
       - PIXEL
       - PIXEL2
-      - PREVIEW
+      - MATRIX
+      - MATRIX2

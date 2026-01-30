@@ -20,7 +20,7 @@ async def test_different_zones_update_independently():
         def show_full_pixel_frame(self, frame): self.shown = frame
 
     strip = DummyStrip()
-    fm.add_zone_strip(strip)
+    fm.add_led_channel(strip)
 
     # initial state
     fm.zone_render_states[ZoneID.TOP].pixels = [

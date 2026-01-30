@@ -24,7 +24,7 @@ AnimationEngine.start()
 ```
 StaticModeController.enter_mode()
   → render_zone(zone_id, color, brightness)
-    → zone_strip.set_zone_color()
+    → led_channel.set_zone_color()
       → strip.show() ✗ (DIRECT, bypasses FrameManager)
 
 TransitionService.fade_out()
@@ -56,9 +56,9 @@ T3   | - | - | ?
    - Synchronizes main strip + preview
 
 2. **But legacy direct methods still exist and are ACTIVELY USED**:
-   - `zone_strip.set_zone_color()` - calls show() directly
-   - `zone_strip.set_pixel_color_absolute()` - calls show() directly
-   - `zone_strip.clear()` - calls show() directly
+   - `led_channel.set_zone_color()` - calls show() directly
+   - `led_channel.set_pixel_color_absolute()` - calls show() directly
+   - `led_channel.clear()` - calls show() directly
    - `TransitionService.fade_out/fade_in()` - call show() directly
    - `PreviewPanel` render methods - call show() directly
 

@@ -144,7 +144,7 @@ async def adjust_param(self, param_id: ParameterID, delta: int):
 
 ### 4. ZoneStripController (Rendering Interface)
 
-**File**: `src/controllers/zone_strip_controller.py`
+**File**: `src/controllers/led_channel_controller.py`
 **Lines**: 273
 **Status**: ✅ ACTIVE (unified rendering entry point)
 

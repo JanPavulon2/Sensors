@@ -8,6 +8,7 @@ multiple shutdown handlers in priority order.
 
 import asyncio
 import signal
+import sys
 from typing import List, Optional, Dict, Any, Set
 from utils.logger import get_logger, LogCategory
 
@@ -90,18 +91,25 @@ class ShutdownCoordinator:
             loop: Running asyncio event loop
         """
         self._shutdown_event = asyncio.Event()
-        shutdown_event = self._shutdown_event  # Capture for closure
 
-        def signal_handler(sig: signal.Signals) -> None:
-            """Handle OS signal by triggering shutdown event."""
-            self._shutdown_trigger["reason"] = sig.name
-            log.info(f"Signal {sig.name} received → triggering shutdown")
-            shutdown_event.set()
+        # Platform-specific signal handler setup
+        if sys.platform.startswith('win'):
+            # Windows: loop.add_signal_handler() not supported
+            log.info("OS signal handlers not available on Windows (Ctrl+C handled by asyncio)")
+        else:
+            # Unix/Linux: use asyncio signal handlers
+            shutdown_event = self._shutdown_event  # Capture for closure
 
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
+            def signal_handler(sig: signal.Signals) -> None:
+                """Handle OS signal by triggering shutdown event."""
+                self._shutdown_trigger["reason"] = sig.name
+                log.info(f"Signal {sig.name} received → triggering shutdown")
+                shutdown_event.set()
 
-        log.info("Signal handlers installed (SIGINT, SIGTERM)")
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
+
+            log.info("Signal handlers installed (SIGINT, SIGTERM)")
 
     def _get_critical_task_categories(self) -> Set[str]:
         """

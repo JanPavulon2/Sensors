@@ -10,28 +10,7 @@ Responsible for:
 """
 
 import sys
-from typing import List, Optional
-
-from api.socketio_handler import wrap_app_with_socketio
-from lifecycle.handlers.all_tasks_cancellation_handler import AllTasksCancellationHandler
-from lifecycle.handlers.animation_shutdown_handler import AnimationShutdownHandler
-from lifecycle.handlers.api_server_shutdown_handler import APIServerShutdownHandler
-from lifecycle.handlers.frame_manager_shutdown_handler import FrameManagerShutdownHandler
-from lifecycle.handlers.gpio_shutdown_handler import GPIOShutdownHandler
-from lifecycle.handlers.indicator_shutdown_handler import IndicatorShutdownHandler
-from lifecycle.handlers.led_shutdown_handler import LEDShutdownHandler
-from lifecycle.handlers.task_cancellation_handler import TaskCancellationHandler
-from lifecycle.api_server_wrapper import APIServerWrapper
-from services.port_manager import PortManager
-from managers.hardware_manager import HardwareManager
-from models.domain.zone import ZoneCombined
-from services.service_container import ServiceContainer
-from models.enums import FramePriority
-from services.snapshot_publisher import SnapshotPublisher
-
-# ---------------------------------------------------------------------------
-# UTF-8 ENCODING FIX (important for Raspberry Pi)
-# ---------------------------------------------------------------------------
+import asyncio
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
@@ -39,28 +18,60 @@ if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
 if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
-import asyncio
-
 from pathlib import Path
+
+# === Lifecycle Management ===
+from lifecycle.handlers import (
+    AllTasksCancellationHandler, AnimationShutdownHandler, APIServerShutdownHandler, FrameManagerShutdownHandler,
+    GPIOShutdownHandler, IndicatorShutdownHandler, LEDShutdownHandler, TaskCancellationHandler
+)
+from lifecycle.api_server_wrapper import APIServerWrapper
+from lifecycle import ShutdownCoordinator
+from lifecycle.task_registry import (
+    create_tracked_task,
+    TaskCategory,
+    TaskRegistry
+)
+
+# === Logger Setup ===
 from utils.logger import get_logger, configure_logger
+from models.enums import LogCategory, LogLevel
+
+# === API ===
 from api.main import create_app
 from api.dependencies import set_service_container
-
-from api.socketio.server import create_socketio_server
+from api.socketio.server import create_socketio_server, wrap_app_with_socketio
 from api.socketio.registry import register_socketio
-from services.log_broadcaster import get_broadcaster
 
-from models.enums import LogCategory, LogLevel
-from components import KeyboardInputAdapter
-from hardware.gpio.gpio_manager import GPIOManager
+# === Infrastructure ===
+from hardware.gpio.gpio_manager_factory import create_gpio_manager
 from hardware.hardware_coordinator import HardwareCoordinator
-from controllers.led_controller.lighting_controller import LightingController
-from controllers import ControlPanelController
-from managers import ConfigManager
-from services import EventBus, DataAssembler, ZoneService, AnimationService, ApplicationStateService, ServiceContainer
+from hardware.input.keyboard import start_keyboard
+
+# === Services ===
+from services.port_manager import PortManager
+from services.service_container import ServiceContainer
+from services.snapshot_publisher import SnapshotPublisher
+from services.log_broadcaster import get_broadcaster
+from services import (
+    EventBus, DataAssembler, ZoneService, AnimationService,
+    ApplicationStateService, ServiceContainer
+)
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
+
+# === Managers ===
+from managers import ConfigManager
+
+# === Controllers ===
+from controllers.led_controller.lighting_controller import LightingController
+from controllers import ControlPanelController
+
+# === Engine ===
 from engine.frame_manager import FrameManager
+
+# === Runtime ===
+from runtime.runtime_info import RuntimeInfo
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
@@ -68,30 +79,6 @@ from engine.frame_manager import FrameManager
 
 log = get_logger().for_category(LogCategory.SYSTEM)
 configure_logger(LogLevel.DEBUG)
-
-DEBUG_NOPULSE = False
-
-
-# === Infrastructure imports ===
-from hardware.gpio.gpio_manager import GPIOManager
-from managers import ConfigManager
-from services import (
-    EventBus, DataAssembler, ZoneService, AnimationService,
-    ApplicationStateService, ServiceContainer
-)
-from services.middleware import log_middleware
-
-# === Hardware Layer ===
-from hardware.hardware_coordinator import HardwareCoordinator
-
-# === Lifecycle Management ===
-from lifecycle import ShutdownCoordinator
-
-from lifecycle.task_registry import (
-    create_tracked_task,
-    TaskCategory,
-    TaskRegistry
-)
 
 # ---------------------------------------------------------------------------
 # Application Entry
@@ -104,6 +91,21 @@ async def main():
 
     # Create Socket.IO server
     log.info("Creating Socket.IO server...")
+    
+    cors_origins = []
+    if cors_origins is None:
+        cors_origins = [
+            "http://192.168.137.139:3000",
+            "http://192.168.137.139:8000",
+            "http://192.168.137.139:5173",
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:5173",
+        ]
+        
     socketio_server = create_socketio_server(cors_origins=["*"])
     
     # Initialize broadcaster early so all logs can be transmitted
@@ -118,9 +120,20 @@ async def main():
     # ========================================================================
     # 1. INFRASTRUCTURE
     # ========================================================================
+    runtime = RuntimeInfo()
+
+    log.info(
+        "Runtime detected",
+        linux=runtime.is_linux(),
+        rpi=runtime.is_raspberry_pi(),
+        windows=runtime.is_windows(),
+        has_ws281x=runtime.has_ws281x(),
+        has_evdev=runtime.has_evdev(),
+        has_gpio=runtime.has_gpio(),
+    )
 
     log.info("Initializing GPIO manager (singleton)...")
-    gpio_manager = GPIOManager()
+    gpio_manager = create_gpio_manager()
 
     log.info("Loading configuration...")
     config_manager = ConfigManager(gpio_manager)
@@ -139,25 +152,24 @@ async def main():
     app_state_service = ApplicationStateService(assembler)
     zone_service = ZoneService(assembler, app_state_service, event_bus)
 
-
     # ========================================================================
     # 2. HARDWARE COORDINATOR
     # ========================================================================
 
+    log.info("Initializing hardware stack...")
     hardware = HardwareCoordinator(
         hardware_manager=config_manager.hardware_manager,
         gpio_manager=gpio_manager
     ).initialize(
         all_zones = zone_service.get_all()
     )
-    
-    # hardware.control_panel.event_bus = event_bus
-    
+
     control_panel_controller = ControlPanelController(
-        control_panel=hardware.control_panel, 
+        control_panel=hardware.control_panel,
         event_bus=event_bus
     )
-
+        
+        
     # ========================================================================
     # 3. FRAME MANAGER
     # ========================================================================
@@ -171,8 +183,8 @@ async def main():
     )
 
     # Register all LED strips with FrameManager
-    for gpio_pin, strip in hardware.zone_strips.items():
-        frame_manager.add_zone_strip(strip)
+    for gpio_pin, strip in hardware.led_channels.items():
+        frame_manager.add_led_channel(strip)
         # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
         log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
@@ -216,9 +228,9 @@ async def main():
 
     log.info("Initializing keyboard input...")
     keyboard_task = create_tracked_task(
-        KeyboardInputAdapter(event_bus).run(),
+        start_keyboard(event_bus),
         category=TaskCategory.INPUT,
-        description="KeyboardInputAdapter"
+        description="KeyboardInput"
     )
 
     # ========================================================================
@@ -227,6 +239,11 @@ async def main():
 
     async def hardware_polling_loop():
         """Poll hardware inputs at 50Hz"""
+        
+        if control_panel_controller is None: 
+            log.warn("Control Panel Controller is NONE")
+            return
+        
         try:
             while True:
                 try:
@@ -238,15 +255,18 @@ async def main():
             log.debug("Hardware polling loop cancelled", category=LogCategory.HARDWARE)
             raise
         
-    polling_task =  create_tracked_task(
-        hardware_polling_loop(),
-        category=TaskCategory.HARDWARE,
-        description="ControlPanel Polling Loop"
-    )
+    if control_panel_controller:
+        polling_task =  create_tracked_task(
+            hardware_polling_loop(),
+            category=TaskCategory.HARDWARE,
+            description="ControlPanel Polling Loop"
+        )
+    else:
+        polling_task = None
 
     
     log.info("Registering Socket.IO modules...")
-    await register_socketio(socketio_server, services)
+    register_socketio(socketio_server, services)
         
     # ========================================================================
     # 8. API SERVER
@@ -292,7 +312,10 @@ async def main():
     coordinator.register(IndicatorShutdownHandler(lighting_controller.selected_zone_indicator))
     coordinator.register(FrameManagerShutdownHandler(frame_manager))  # ← Frame manager cleanup (includes executor shutdown)
     coordinator.register(LEDShutdownHandler(hardware))
-    coordinator.register(TaskCancellationHandler([frame_manager_task, keyboard_task, polling_task]))  # ← Add frame manager task
+    
+    if polling_task:
+        coordinator.register(TaskCancellationHandler([frame_manager_task, keyboard_task, polling_task]))  # ← Add frame manager task
+    
     coordinator.register(AllTasksCancellationHandler([api_task]))  # ← Catch any remaining tasks (safety net)
     coordinator.register(GPIOShutdownHandler(gpio_manager))
 

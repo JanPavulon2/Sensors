@@ -4,8 +4,8 @@ Button Component - Hardware Abstraction Layer (Layer 1)
 Simple button with debouncing.
 """
 
-import RPi.GPIO as GPIO
 import time
+from hardware.gpio import IGPIOManager
 
 class Button:
     """
@@ -23,14 +23,19 @@ class Button:
                 print("Button pressed!")
     """
 
-    def __init__(self, pin: int, debounce_time: float = 0.3):
+    def __init__(
+            self, 
+            pin: int, 
+            gpio_manager: IGPIOManager,
+            debounce_time: float = 0.3
+    ):
         self.pin = pin
+        self.gpio_manager = gpio_manager
         self.debounce_time = debounce_time
 
         # State tracking
-        initial = GPIO.input(self.pin)
-        self._last_state = initial
-        self._last_press_time = 0
+        self._last_state = gpio_manager.read(pin)
+        self._last_press_time = 0.0
 
     # ---------------------------------------------------------------
     # Public API
@@ -43,16 +48,16 @@ class Button:
         Returns:
             True once per physical press (after debounce)
         """
-        current_state = GPIO.input(self.pin)
-        current_time = time.time()
+        current_state = self.gpio_manager.read(self.pin)
+        now = time.time()
 
         pressed = False
 
         # FALLING EDGE: HIGH → LOW
-        if self._last_state == GPIO.HIGH and current_state == GPIO.LOW:
-            if (current_time - self._last_press_time) >= self.debounce_time:
+        if self._last_state == self.gpio_manager.HIGH and current_state == self.gpio_manager.LOW:
+            if (now - self._last_press_time) >= self.debounce_time:
                 pressed = True
-                self._last_press_time = current_time
+                self._last_press_time = now
 
         # Update state AFTER detection
         self._last_state = current_state
@@ -65,7 +70,7 @@ class Button:
 
     def reset(self) -> None:
         """Reset internal state (useful for tests or device reconnect)."""
-        self._last_state = GPIO.input(self.pin)
+        self._last_state = self.gpio_manager.read(self.pin)
         self._last_press_time = 0.0
 
     def is_held(self) -> bool:
@@ -73,10 +78,10 @@ class Button:
         Return True if the button is currently physically held down.
         Does NOT include debouncing, purely raw state.
         """
-        return GPIO.input(self.pin) == GPIO.LOW
+        return self.gpio_manager.read(self.pin) == self.gpio_manager.LOW
 
     def __repr__(self) -> str:
-        return f"<Button pin={self.pin} debounce={self.debounce_time}s>"
+        return f"<Button pin={self.pin}>"
 
 
 

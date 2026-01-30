@@ -194,7 +194,7 @@ export function Dashboard(): JSX.Element {
       )}
 
       {/* Documentation Card */}
-      <Card className="bg-bg-elevated border border-accent-primary/20">
+      {/* <Card className="bg-bg-elevated border border-accent-primary/20">
         <CardHeader>
           <CardTitle className="text-sm">Quick Start</CardTitle>
         </CardHeader>
@@ -204,7 +204,7 @@ export function Dashboard(): JSX.Element {
           <p>3. Use zone controls to set colors and brightness</p>
           <p>4. Create animations and preview in real-time</p>
         </CardContent>
-      </Card>
+      </Card> */}
     </div>
   );
 }

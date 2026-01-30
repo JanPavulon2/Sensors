@@ -152,7 +152,7 @@ from utils.logger2 import get_logger
 log = get_logger().for_category(LogCategory.RENDER_ENGINE)
 Problem: Two different logging systems. Inconsistent. Signal: Needs cleanup. Pick one, refactor all to use it.
 4. Zone Configuration is Hardcoded
-# From zone_strip.py
+# From led_channel.py
 ZONE_CONFIG = {
     'FLOOR': (0, 11),
     'LAMP': (12, 30),

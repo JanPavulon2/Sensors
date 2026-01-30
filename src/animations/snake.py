@@ -4,16 +4,14 @@ Snake Animation
 Single or multi-pixel snake travels through all zones sequentially.
 """
 
-import asyncio
 import time
-from typing import Dict, Tuple, List, AsyncIterator
+from typing import List
 
 from animations.base import BaseAnimation
 from models.animation_params import AnimationParamID, SpeedParam, PrimaryColorHueParam, IntRangeParam
 from models.color import Color
 from models.frame import PixelFrame
-from models.domain import ZoneCombined
-from models.enums import FramePriority, FrameSource, ZoneID
+from models.enums import FramePriority, FrameSource
 from utils.colors import hue_to_rgb
 from utils.logger import get_category_logger, LogCategory
 

@@ -1,5 +1,6 @@
 # Virtual Environment
 diunaenv/
+.diunaenv/
 venv/
 env/
 ENV/
@@ -31,6 +32,7 @@ wheels/
 
 # IDE
 .vscode/
+.vs/
 .idea/
 *.swp
 *.swo

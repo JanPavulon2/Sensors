@@ -16,7 +16,9 @@ from animations.snake import SnakeAnimation
 from engine.frame_manager import FrameManager
 from models.animation_params.animation_param_id import AnimationParamID
 from models.enums import AnimationID, ZoneID
+from models.events.zone_runtime_events import AnimationStartedEvent, AnimationStoppedEvent
 from services.zone_service import ZoneService
+from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 from lifecycle.task_registry import TaskCategory, create_tracked_task
 
@@ -46,12 +48,13 @@ class AnimationEngine:
     # Registry of available animations - built dynamically from enum
     ANIMATIONS: Dict[AnimationID, Type[BaseAnimation]] = _build_animation_registry()
 
-    def __init__(self, frame_manager: FrameManager, zone_service: ZoneService):
+    def __init__(self, frame_manager: FrameManager, zone_service: ZoneService, event_bus: EventBus):
         """
         Initialize animation engine
         """
         self.frame_manager = frame_manager
         self.zone_service = zone_service
+        self.event_bus = event_bus
 
         # active tasks: zone_id → asyncio.Task
         self.tasks: Dict[ZoneID, asyncio.Task] = {}
@@ -118,6 +121,14 @@ class AnimationEngine:
             log.info(
                 f"Started animation {anim_id.name} on zone {zone_id.name}"
             )
+
+            # Publish animation started event
+            asyncio.create_task(self.event_bus.publish(
+                AnimationStartedEvent(
+                    zone_id=zone_id,
+                    animation_id=anim_id
+                )
+            ))
             
     async def stop_for_zone(self, zone_id: ZoneID):
         """Stop animation for a single zone."""
@@ -133,9 +144,9 @@ class AnimationEngine:
 
         if not task:
             return
-        
+
         task.cancel()
-        
+
         try:
             await asyncio.wait_for(task, timeout=1.0)
         except asyncio.CancelledError:
@@ -147,6 +158,11 @@ class AnimationEngine:
         async with self._lock:
             self.active_anim_ids.pop(zone_id, None)
             self.active_animations.pop(zone_id, None)
+
+        # Publish animation stopped event
+        # asyncio.create_task(self.event_bus.publish(
+        #     AnimationStoppedEvent(zone_id=zone_id)
+        # ))
 
         log.info(f"Stopped animation on zone {zone_id.name}")
             

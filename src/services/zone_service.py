@@ -8,7 +8,7 @@ from models.enums import AnimationID, ZoneID, ZoneRenderMode
 from models.domain import ZoneCombined
 from models.color import Color
 from models.events import ZoneStaticStateChangedEvent
-from models.events.zone_runtime_events import ZoneAnimationChangedEvent, ZoneRenderModeChangedEvent
+from models.events.zone_runtime_events import ZoneAnimationChangedEvent, ZoneRenderModeChangedEvent, ZoneAnimationParamChangedEvent
 from services.data_assembler import DataAssembler
 from services.application_state_service import ApplicationStateService
 from services.event_bus import EventBus
@@ -225,6 +225,15 @@ class ZoneService:
             zone=zone_id,
             animation=zone.state.animation
         )
+
+        # Publish event so AnimationModeController and SnapshotPublisher are notified
+        asyncio.create_task(self.event_bus.publish(
+            ZoneAnimationParamChangedEvent(
+                zone_id=zone_id,
+                param_id=param_id,
+                value=value
+            )
+        ))
 
     
     def set_render_mode(

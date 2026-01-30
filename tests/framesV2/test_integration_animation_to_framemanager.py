@@ -4,7 +4,7 @@ from models.enums import ZoneID, AnimationID
 
 
 @pytest.mark.asyncio
-async def test_full_animation_pipeline(engine, frame_manager, mock_zone_strip):
+async def test_full_animation_pipeline(engine, frame_manager, mock_led_channel):
     # Start breathe animation
     await engine.start_for_zone(
         ZoneID.BOTTOM,
@@ -19,4 +19,4 @@ async def test_full_animation_pipeline(engine, frame_manager, mock_zone_strip):
     assert frame_manager.frames_rendered > 0
 
     # Verify strip got updates
-    assert mock_zone_strip.show_full_pixel_frame.called
+    assert mock_led_channel.show_full_pixel_frame.called

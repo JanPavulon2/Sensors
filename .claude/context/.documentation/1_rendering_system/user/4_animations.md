@@ -426,7 +426,7 @@ animation_engine.update_parameter('primary_color', Color.new(...))  # Color chan
      if is_zone_frame(selected_frame):
        render_zone_frame(selected_frame)
 
-     zone_strip.show()
+     led_channel.show()
    ↓
 7. Result:
    - FLOOR zone displays breathing animation

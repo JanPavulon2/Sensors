@@ -70,14 +70,15 @@ class LightingController:
         self.frame_manager = service_container.frame_manager
 
         # Create and attach animation engine
-        # Use first available zone strip from FrameManager (all strips have same zone mappings)
-        if not self.frame_manager.zone_strips:
-            raise ValueError("No zone strips registered with FrameManager")
+        # Use first available led channel from FrameManager (all channels have same zone mappings)
+        if not self.frame_manager.led_channels:
+            raise ValueError("No led channels registered with FrameManager")
 
         log.info("Initializing animation engine")
         self.animation_engine = AnimationEngine(
             frame_manager=self.frame_manager,
-            zone_service=self.zone_service
+            zone_service=self.zone_service,
+            event_bus=self.event_bus
         )
 
         log.info("Initializing static mode controller")
@@ -359,7 +360,9 @@ class LightingController:
         Zone render mode is currently toggled via keyboard (Z=STATIC, X=ANIMATION).
         This method is a placeholder for per-zone mode toggle via selector.
         """
-        # TODO: Implement selector-based mode toggle if needed in future
+        if not self.app_state_service.get_state().edit_mode:
+            log.info("Selector click ignored when not in edit mode")
+            return
 
     def _handle_modulator_rotation(self, delta: int):
         """

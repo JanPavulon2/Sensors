@@ -1,2 +1,9 @@
 from .strip_interface import IPhysicalStrip
-from .ws281x_strip import WS281xStrip, WS281xConfig
+from .virtual_strip import VirtualStrip
+from .led_channel_factory import LedChannelFactory
+
+__all__ = [
+    "IPhysicalStrip",
+    "VirtualStrip",
+    "LedChannelFactory",
+]

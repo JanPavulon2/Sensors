@@ -206,9 +206,9 @@ class TemperatureModeController(BaseController):
     Hotter = more red, cooler = more blue.
     """
 
-    def __init__(self, temperature_sensor, zone_strip_controller, event_bus):
+    def __init__(self, temperature_sensor, led_channel_controller, event_bus):
         self.temperature_sensor = temperature_sensor
-        self.zone_strip_controller = zone_strip_controller
+        self.led_channel_controller = led_channel_controller
         self.event_bus = event_bus
         self.running = False
 
@@ -234,7 +234,7 @@ class TemperatureModeController(BaseController):
             # Submit frame
             zone_colors = {zone_id: color}
             frame = ZoneFrame(zones=zone_colors, priority=MANUAL)
-            await self.zone_strip_controller.frame_manager.submit_zone_frame(frame)
+            await self.led_channel_controller.frame_manager.submit_zone_frame(frame)
 
             # Update ~10 times per second
             await asyncio.sleep(0.1)
@@ -289,12 +289,12 @@ hardware = MyCustomLEDDriver(
     color_order=ColorOrder.GRB
 )
 
-zone_strip = ZoneStrip(
+led_channel = ZoneStrip(
     zones=zone_configs,
     hardware=hardware
 )
 
-frame_manager.add_main_strip(zone_strip)
+frame_manager.add_main_strip(led_channel)
 ```
 
 **Result**: Everything else unchanged. New hardware integrated seamlessly.

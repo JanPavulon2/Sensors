@@ -21,7 +21,7 @@ from models.enums import LogCategory, AnimationID, FramePriority, FrameSource, Z
 from models.events import KeyboardKeyPressEvent, EventType
 from models.frame import PixelFrame
 from models.color import Color
-from zone_layer.zone_strip import ZoneStrip
+from hardware.led.led_channel import LedChannel
 from lifecycle.task_registry import create_tracked_task, TaskCategory
 
 if TYPE_CHECKING:
@@ -228,15 +228,15 @@ class FramePlaybackController:
         """
         state = {}
 
-        # Find first ZoneStrip (skip PreviewPanel and other strip types)
+        # Find first LedChannel (skip PreviewPanel and other strip types)
         strip = None
-        for s in self.frame_manager.zone_strips:
-            if isinstance(s, ZoneStrip):
+        for s in self.frame_manager.led_channels:
+            if isinstance(s, LedChannel):
                 strip = s
                 break
 
         if not strip:
-            log.error("No ZoneStrip found in main_strips")
+            log.error("No LedChannel found in main_strips")
             return {}
 
         # Initialize all zones with black

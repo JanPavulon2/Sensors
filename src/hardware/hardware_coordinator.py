@@ -1,11 +1,11 @@
 from __future__ import annotations
-from typing import Dict, TYPE_CHECKING, List
+from typing import Dict, TYPE_CHECKING
 
-from components import ControlPanel
-from hardware.gpio.gpio_manager import GPIOManager
+from hardware.input.control_panel import ControlPanel
+from hardware.gpio import IGPIOManager
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
-from zone_layer.zone_strip import ZoneStrip
+from hardware.led.led_channel import LedChannel
 
 if TYPE_CHECKING:
     from managers.hardware_manager import HardwareManager
@@ -18,19 +18,19 @@ class HardwareCoordinator:
     Creates ALL hardware objects for the system:
 
       - ControlPanel (buttons + encoders)
-      - ZoneStrips (built via ZoneStripFactory)
+      - LedChannels (built via LedChannelFactory)
       - Provides GPIO + HardwareManager in bundle
 
     No knowledge of FrameManager, ZoneService, animations,
     or domain-level logic.
     """
 
-    def __init__(self, hardware_manager: HardwareManager, gpio_manager: GPIOManager):
+    def __init__(self, hardware_manager: HardwareManager, gpio_manager: IGPIOManager):
         self.hardware_manager = hardware_manager
         self.gpio_manager = gpio_manager
 
     def initialize(self, all_zones) -> "HardwareBundle":
-        from hardware.zone_strip_factory import ZoneStripFactory
+        from hardware.led.led_channel_factory import LedChannelFactory
 
         log.info("HardwareCoordinator: Initializing hardware layer...")
 
@@ -39,11 +39,11 @@ class HardwareCoordinator:
             self.gpio_manager
         )
 
-        zone_strips = ZoneStripFactory.create(all_zones, self.hardware_manager)
+        led_channels = LedChannelFactory.create(all_zones, self.hardware_manager)
 
         return HardwareBundle(
             control_panel=control_panel,
-            zone_strips=zone_strips,
+            led_channels=led_channels,
             gpio_manager=self.gpio_manager,
             hardware_manager=self.hardware_manager
         )
@@ -57,11 +57,11 @@ class HardwareBundle:
     def __init__(
         self, 
         control_panel: ControlPanel, 
-        zone_strips: Dict[int, ZoneStrip], 
-        gpio_manager: GPIOManager, 
+        led_channels: Dict[int, LedChannel], 
+        gpio_manager: IGPIOManager, 
         hardware_manager: HardwareManager
     ):
         self.control_panel = control_panel
-        self.zone_strips = zone_strips
+        self.led_channels = led_channels
         self.gpio_manager = gpio_manager
         self.hardware_manager = hardware_manager

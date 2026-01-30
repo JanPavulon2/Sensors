@@ -183,10 +183,7 @@ class EventBus:
         handlers = self._handlers.get(event.type, [])
         if not handlers:
             log.info(
-                "No handlers for event",
-                event_type=event.type.name,
-                event_data=event.to_data()
-            )
+                f"No event handlers registered for event {event.type.name}")
             return
 
         # Execute handlers by priority

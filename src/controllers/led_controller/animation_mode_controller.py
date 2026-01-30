@@ -79,11 +79,6 @@ class AnimationModeController:
 
         for zone in animated_zones:
             asyncio.create_task(self._start_zone_animation(zone))
-            
-        self.event_bus.subscribe(
-            event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
-            handler=self._on_zone_animation_param_changed  # type: ignore
-        )
         
     def _on_zone_animation_param_changed(self, event: ZoneAnimationParamChangedEvent) -> None:
         zone = self.zone_service.get_zone(event.zone_id)

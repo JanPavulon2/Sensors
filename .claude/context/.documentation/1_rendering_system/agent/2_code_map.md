@@ -15,7 +15,7 @@ Purpose: File locations, entry points, and key line numbers
 - **Key functions**:
   - `main()` - Application entry point
   - `_create_frame_manager()` - Creates FrameManager instance
-  - `_create_zone_strips()` - Creates WS281xStrip per GPIO
+  - `_create_led_channels()` - Creates WS281xStrip per GPIO
   - `_create_services()` - Initializes all services
   - `_create_controllers()` - Initializes all controllers
   - `_run_event_loop()` - Main async event loop
@@ -76,7 +76,7 @@ Purpose: File locations, entry points, and key line numbers
 - `wait_for_idle()` - Line ~250 - Wait for completion
 
 ### Zone Layer
-- **File**: `src/zone_layer/zone_strip.py`
+- **File**: `src/zone_layer/led_channel.py`
 - **Lines**: 250+
 - **Purpose**: Zone-to-pixel mapping and rendering
 
@@ -120,7 +120,7 @@ Purpose: File locations, entry points, and key line numbers
   - `_switch_to_selected_animation()` - Line ~220 - Switch with transition
 
 ### Zone Strip Controller
-- **File**: `src/controllers/zone_strip_controller.py`
+- **File**: `src/controllers/led_channel_controller.py`
 - **Lines**: 273
 - **Key Methods**:
   - `submit_all_zones_frame(zones_colors, priority)` - Line ~80 - Core rendering
@@ -287,7 +287,7 @@ WS281xStrip
 | How rendering works | FrameManager (frame_manager.py:200) |
 | How animations run | AnimationEngine._run_loop() (engine.py:250) |
 | How frames are selected | FrameManager._select_frame() (frame_manager.py:250) |
-| How hardware gets data | ZoneStrip.show_full_pixel_frame() (zone_strip.py:120) |
+| How hardware gets data | ZoneStrip.show_full_pixel_frame() (led_channel.py:120) |
 | How GPIO works | WS281xStrip.show() (ws281x_strip.py:180) |
 | How zones map to pixels | ZonePixelMapper (zone_pixel_mapper.py) |
 | How transitions work | TransitionService._crossfade() (transition_service.py:180) |
