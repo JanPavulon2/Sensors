@@ -1,12 +1,15 @@
 import asyncio
-from services.event_bus import EventBus
+from typing import TYPE_CHECKING
 from utils.logger import get_logger, LogCategory
 from runtime.runtime_info import RuntimeInfo
 from .adapters.base import IKeyboardAdapter
 
+if TYPE_CHECKING:
+    from services.event_bus import EventBus
+
 log = get_logger().for_category(LogCategory.HARDWARE)
 
-async def start_keyboard(event_bus: EventBus) -> None:
+async def start_keyboard(event_bus: "EventBus") -> None:
     """
     Start the first working keyboard adapter.
 

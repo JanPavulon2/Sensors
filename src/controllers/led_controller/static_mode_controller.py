@@ -88,7 +88,7 @@ class StaticModeController:
             handler=self._on_zone_static_state_changed  # type: ignore
         )
 
-        log.info(f"Rendered {len(zones_colors)} STATIC zones")
+        log.info(f"Rendered {len(zones_colors)} static zones")
 
     def enter_zone(self, zone: ZoneCombined):
         """
@@ -167,8 +167,13 @@ class StaticModeController:
             target=target.name,
         )
 
+    # ------------------------------------------------------------------
+    # Publishing zone frame
+    # ------------------------------------------------------------------
+    
     def publish_zone_frame(self, zone: ZoneCombined):
         """Submit single zone update to FrameManager"""
+        
         # Respect is_on state: show black when powered off
         if not zone.state.is_on:
             color = zone.state.color.black()
@@ -183,6 +188,7 @@ class StaticModeController:
             ttl=10.0,  # Match initialize() TTL to keep static zones persistent
         )
         asyncio.create_task(self.frame_manager.push_frame(frame))
+
 
     # ------------------------------------------------------------------
     # Event Handling

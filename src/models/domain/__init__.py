@@ -1,8 +1,9 @@
 """Domain models - Config and state objects"""
 
-from models.domain.animation import AnimationConfig, AnimationState
-from models.domain.zone import ZoneConfig, ZoneState, ZoneCombined
-from models.domain.application import ApplicationState
+from .animation import AnimationConfig, AnimationState
+from .zone import ZoneConfig, ZoneState, ZoneCombined
+from .application import ApplicationState
+from .output_frame import OutputFrame
 
 __all__ = [
     "AnimationConfig",
@@ -11,4 +12,6 @@ __all__ = [
     "ZoneState",
     "ZoneCombined",
     "ApplicationState",
+    
+    "OutputFrame"
 ]

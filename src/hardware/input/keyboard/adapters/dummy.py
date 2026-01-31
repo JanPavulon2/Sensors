@@ -4,8 +4,11 @@ Does nothing - just prevents crashes during initialization.
 """
 
 import asyncio
-from services.event_bus import EventBus
+from typing import TYPE_CHECKING
 from .base import IKeyboardAdapter
+
+if TYPE_CHECKING:
+    from services.event_bus import EventBus
 
 
 class DummyKeyboardAdapter(IKeyboardAdapter):
@@ -16,7 +19,7 @@ class DummyKeyboardAdapter(IKeyboardAdapter):
     Allows the application to start without crashing.
     """
 
-    def __init__(self, event_bus: EventBus):
+    def __init__(self, event_bus: "EventBus"):
         self.event_bus = event_bus
 
     async def run(self) -> None:

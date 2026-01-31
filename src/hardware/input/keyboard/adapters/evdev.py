@@ -1,11 +1,13 @@
 
 import asyncio
-from typing import Optional, Dict
+from typing import Optional, Dict, TYPE_CHECKING
 from evdev import InputDevice, list_devices, ecodes
 from models.events import KeyboardKeyPressEvent
-from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 from .base import IKeyboardAdapter
+
+if TYPE_CHECKING:
+    from services.event_bus import EventBus
 
 log = get_logger().for_category(LogCategory.HARDWARE)
 
@@ -20,7 +22,7 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
     - Publishes KeyboardKeyPressEvent(normalized_key, modifiers) to EventBus
     """
 
-    def __init__(self, event_bus: EventBus, device_path: Optional[str] = None):
+    def __init__(self, event_bus: "EventBus", device_path: Optional[str] = None):
         self.event_bus = event_bus
         self.device_path = device_path
         self.device: Optional[InputDevice] = None
@@ -51,6 +53,7 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
                 device=self.device.name,
                 path=self.device_path
             )
+            
         except (OSError, PermissionError) as e:
             log.info(
                 "Evdev keyboard device cannot be opened",
@@ -75,6 +78,7 @@ class EvdevKeyboardAdapter(IKeyboardAdapter):
                     log.warn(f"Temporary read error: {e}")
                     await asyncio.sleep(0.1)
                     continue  # retry after short delay
+                
                 except Exception as e:
                     log.error(f"Unexpected error in keyboard loop: {e}")
                     await asyncio.sleep(0.1)

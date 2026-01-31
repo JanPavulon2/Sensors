@@ -32,8 +32,8 @@ class LampWhiteModeController:
         self.app_state = services.app_state_service
         self.color_manager = services.color_manager
 
-        self.lamp_white_mode = self.app_state.get_state().lamp_white_mode
-        self.lamp_white_saved_state = self.app_state.get_state().lamp_white_saved_state
+        # self.lamp_white_mode = self.app_state.get_state().lamp_white_mode
+        # self.lamp_white_saved_state = self.app_state.get_state().lamp_white_saved_state
 
     async def toggle(self):
         """Toggle LAMP zone to/from warm white preset"""
@@ -76,5 +76,5 @@ class LampWhiteModeController:
             self.lamp_white_mode = False
             log.info("Lamp white mode OFF")
 
-        self.app_state.set_lamp_white_mode(self.lamp_white_mode)
-        self.app_state.set_lamp_white_saved_state(self.lamp_white_saved_state)
+        # self.app_state.set_lamp_white_mode(self.lamp_white_mode)
+        # self.app_state.set_lamp_white_saved_state(self.lamp_white_saved_state)

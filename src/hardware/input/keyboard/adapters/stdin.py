@@ -3,11 +3,13 @@ import sys
 import select
 import termios
 import tty
-from typing import Optional, List
-from services.event_bus import EventBus
+from typing import Optional, List, TYPE_CHECKING
 from models.events import KeyboardKeyPressEvent
 from utils.logger import get_logger, LogCategory
 from .base import IKeyboardAdapter
+
+if TYPE_CHECKING:
+    from services.event_bus import EventBus
 
 log = get_logger().for_category(LogCategory.HARDWARE)
 
@@ -31,7 +33,7 @@ class StdinKeyboardAdapter(IKeyboardAdapter):
     Note: Terminal must be in raw/cbreak mode. Settings are restored on exit.
     """
 
-    def __init__(self, event_bus: EventBus):
+    def __init__(self, event_bus: "EventBus"):
         self.event_bus = event_bus
         self._old_settings = None
         self._buffer = ""
