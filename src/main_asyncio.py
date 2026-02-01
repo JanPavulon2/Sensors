@@ -49,14 +49,13 @@ from hardware.hardware_coordinator import HardwareCoordinator
 from hardware.input.keyboard import start_keyboard
 
 # === Services ===
-from services.port_manager import PortManager
-from services.service_container import ServiceContainer
-from services.snapshot_publisher import SnapshotPublisher
 from services.log_broadcaster import get_broadcaster
 from services import (
     EventBus, DataAssembler, ZoneService, AnimationService,
-    ApplicationStateService, ServiceContainer
+    ApplicationStateService, ServiceContainer, SnapshotPublisher, PortManager
 )
+from services.app_clock import AppClock
+from services.frame_streamer import FrameStreamer
 from services.middleware import log_middleware
 from services.transition_service import TransitionService
 
@@ -171,16 +170,25 @@ async def main():
         
         
     # ========================================================================
-    # 3. FRAME MANAGER
+    # 3. APP CLOCK & FRAME MANAGER
     # ========================================================================
 
+    log.info("Initializing AppClock...")
+    app_clock = AppClock()
+    log.info("AppClock initialized", t=app_clock.now())
+
     log.info("Initializing FrameManager...")
-    frame_manager = FrameManager(fps=60)
+    frame_manager = FrameManager(fps=60, app_clock=app_clock)
     frame_manager_task = create_tracked_task(
         frame_manager.start(),
         category=TaskCategory.RENDER,
         description="Frame Manager render loop"
     )
+
+    log.info("Initializing FrameStreamer...")
+    frame_streamer = FrameStreamer(sio=socketio_server, target_fps=30)
+    frame_manager.frame_streamer = frame_streamer
+    log.info("FrameStreamer initialized", target_fps=30)
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.led_channels.items():
@@ -193,7 +201,7 @@ async def main():
     # ========================================================================
     # 4. SERVICE CONTAINER
     # ========================================================================
-
+ 
     services = ServiceContainer(
         event_bus=event_bus,
         zone_service=zone_service,
@@ -202,7 +210,9 @@ async def main():
         frame_manager=frame_manager,
         color_manager=config_manager.color_manager,
         config_manager=config_manager,
-        data_assembler=assembler
+        data_assembler=assembler,
+        app_clock=app_clock, 
+        frame_streamer=frame_streamer
     )
     
     snapshot_publisher = SnapshotPublisher(

@@ -19,16 +19,21 @@ rendering automatically falls back to lower priorities.
 from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque, cast
+from typing import Dict, List, Optional, Deque, Tuple, cast, TYPE_CHECKING
 from collections import deque
 # from concurrent.futures import ThreadPoolExecutor  # TODO: Re-enable for async rendering
 
+from models.domain.output_frame import OutputFrame
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
 from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripFrame, ZoneUpdateValue
 from hardware.led.led_channel import LedChannel
 from engine.zone_render_state import ZoneRenderState
+
+if TYPE_CHECKING:
+    from services.app_clock import AppClock
+    from services.frame_streamer import FrameStreamer
 
 log = get_logger().for_category(LogCategory.FRAME_MANAGER)
 
@@ -73,15 +78,24 @@ class FrameManager:
     - Performance metrics
     """
 
-    def __init__(self, fps: int = 60):
+    def __init__(
+        self,
+        fps: int = 60,
+        app_clock: Optional["AppClock"] = None,
+        frame_streamer: Optional["FrameStreamer"] = None
+    ):
         """
         Initialize FrameManager.
 
         Args:
             fps: Target render frequency (1-240, default 60)
+            app_clock: Global application clock for time synchronization
+            frame_streamer: Frame streamer for Socket.IO output
         """
 
         self.fps = max(1, min(fps, 240))
+        self.app_clock = app_clock
+        self.frame_streamer = frame_streamer
 
         # Dual queue system (separate for main led_channel and preview)
         # maxlen=10 allows all zones to queue frames before draining
@@ -315,8 +329,7 @@ class FrameManager:
                 if frame:
                     if frame is not self.last_rendered_frame:
                         # Frame changed (different object) → do full render with hardware DMA
-                        # TODO: Replace with async wrapper after debugging executor issues
-                        self._render_atomic(frame)
+                        await self._render_atomic(frame)
                         self.last_rendered_frame = frame
                         self.frames_rendered += 1
                         self.frame_times.append(time.perf_counter())
@@ -447,6 +460,29 @@ class FrameManager:
 
         return None
 
+    def _build_output_frame(self) -> OutputFrame:
+        """
+        Build an immutable OutputFrame representing the current rendered state.
+        Must be called AFTER merge + normalization.
+        """
+        # Use global app clock for time synchronization
+        t = self.app_clock.now() if self.app_clock else time.perf_counter()
+
+        # Build snapshot - create NEW lists (immutable)
+        zones: Dict[ZoneID, List[Color]] = {
+            zone_id: list(state.pixels)
+            for zone_id, state in self.zone_render_states.items()
+        }
+
+        return OutputFrame(t=t, zones=zones)
+
+    async def _emit_output_frame(self, output_frame: OutputFrame) -> None:
+        """
+        Emit output frame to registered consumers (streaming, recording, etc.).
+        """
+        if self.frame_streamer:
+            await self.frame_streamer.emit(output_frame)
+
     # === Rendering ===
 
     # TODO: Uncomment and fix these when re-enabling async rendering with executor
@@ -478,18 +514,18 @@ class FrameManager:
     #     """
     #     self._render_atomic(main_frame)
 
-    def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
+    async def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
         """
         Render frames to all registered strips atomically.
         """
         # Render main strip
         if main_frame:
             # log.debug(f"_render_atomic: rendering frame with {len(getattr(main_frame, 'updates', {}))} zone updates")
-            self._render_frame(main_frame)
+            await self._render_frame(main_frame)
         # else:
             # log.debug(f"_render_atomic: no frame to render")
 
-    def _render_frame(self, frame: MainStripFrame) -> None:
+    async def _render_frame(self, frame: MainStripFrame) -> None:
         """High-level render pipeline."""
         updates = frame.as_zone_update()
         merged = self._merge_updates(frame, updates)
@@ -497,10 +533,14 @@ class FrameManager:
         if self._should_skip_dma(merged):
             return
 
-        self._render_to_all_led_channels(merged)
+        self._render_to_hardware(merged)
 
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
+
+        # Build output frame for streaming/recording
+        output_frame = self._build_output_frame()
+        await self._emit_output_frame(output_frame)
         
     def _merge_updates(self, frame: MainStripFrame, updates):
         """Dispatch merging strategy."""
@@ -545,7 +585,7 @@ class FrameManager:
         self.last_rendered_frame_hash = frame_hash
         return False
     
-    def _render_to_all_led_channels(self, merged):
+    def _render_to_hardware(self, merged):
         """Render merged frame to every registered LedChannel."""
         for led_channel in self.led_channels:
             try:
@@ -606,6 +646,7 @@ class FrameManager:
             
         led_channel.show_full_pixel_frame(led_channel_frame)
         # log.debug(f"show_full_pixel_frame completed on {led_channel}")
+    
     
     # ============================================================
     # Helpers

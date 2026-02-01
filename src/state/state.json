@@ -31,25 +31,22 @@
     "pixel2": {
       "color": {
         "mode": "HUE",
-        "hue": 109
+        "hue": 169
       },
       "brightness": 100,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {
-          "length": 15,
-          "speed": 100
-        }
+        "parameters": {}
       }
     },
     "circle": {
       "color": {
         "mode": "HUE",
-        "hue": 97
+        "hue": 50
       },
-      "brightness": 100,
+      "brightness": 97,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -62,14 +59,14 @@
     },
     "matrix": {
       "color": {
-        "mode": "HUE",
-        "hue": 39
+        "mode": "PRESET",
+        "preset_name": "mint"
       },
       "brightness": 100,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
-        "id": "SNAKE",
+        "id": "COLOR_SNAKE",
         "parameters": {}
       }
     }
@@ -85,7 +82,7 @@
   "application": {
     "edit_mode_on": false,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 3,
+    "selected_zone_index": 1,
     "selected_zone_edit_target": "COLOR_HUE",
     "frame_by_frame_mode": false,
     "save_on_change": true
