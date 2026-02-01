@@ -55,11 +55,11 @@ class FrameStreamer:
                 namespace="/frames"
             )
             
-            log.debug(
-                "Streaming frame",
-                t=frame.t,
-                zones=len(frame.zones)
-            )
+            # log.debug(
+            #     "Streaming frame",
+            #     t=frame.t,
+            #     zones=len(frame.zones)
+            # )
         except Exception as e:
             log.error(f"Failed to emit output frame: {e}", exc_info=True)
 

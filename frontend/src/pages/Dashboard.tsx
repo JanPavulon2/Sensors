@@ -14,6 +14,7 @@ import { Button } from '@/shared/ui/button';
 import { useCheckBackendConnection } from '@/shared/hooks';
 import { useZones } from '@/features/zones/hooks';
 import { ZonesGrid, ZoneEditPanel } from '@/features/zones/components';
+import { FrameVisualizer } from '@/features/frames/components/FrameVisualizer';
 
 export function Dashboard(): JSX.Element {
   // Real-time zone updates via Socket.IO
@@ -168,6 +169,19 @@ export function Dashboard(): JSX.Element {
             </p>
           </div>
           <ZonesGrid onSelectZone={setSelectedZoneId} />
+        </div>
+      )}
+
+      {/* Live Frame Stream */}
+      {isConnected && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Real-Time Output</h2>
+            <p className="text-text-secondary text-sm mt-1">
+              Live visualization of LED frame output (30 fps)
+            </p>
+          </div>
+          <FrameVisualizer />
         </div>
       )}
 

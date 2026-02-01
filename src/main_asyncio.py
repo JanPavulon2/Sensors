@@ -192,11 +192,12 @@ async def main():
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.led_channels.items():
-        frame_manager.add_led_channel(strip)
-        # Create TransitionService for this strip (used by FrameManager internally)
-        transition_service = TransitionService(strip, frame_manager)
+        frame_manager.register_led_channel(strip)
         log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
 
+        # Create TransitionService for this strip (used by FrameManager internally)
+        transition_service = TransitionService(strip, frame_manager)
+        
     
     # ========================================================================
     # 4. SERVICE CONTAINER

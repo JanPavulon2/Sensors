@@ -46,6 +46,7 @@ def register_on_connect(sio, services):
         except Exception as e:
             log.error(f"Failed to send initial logs to {sid}: {e}")
 
+            
     @sio.event
     async def disconnect(sid):
         """Handle client disconnection"""

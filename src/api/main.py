@@ -34,7 +34,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import zones, logger as logger_routes, system, animations
+from api.routes import zones, logger as logger_routes, system, animations, frames
 from api.middleware.error_handler import register_exception_handlers
 from utils.logger import get_logger, LogCategory
 from models.enums import LogCategory
@@ -140,8 +140,9 @@ def create_app(
     app.include_router(logger_routes.router, prefix="/api/v1")
     app.include_router(system.router, prefix="/api/v1")
     app.include_router(animations.router, prefix="/api/v1")
+    app.include_router(frames.router, prefix="/api/v1")
 
-    log.debug("Routes registered: zones, logger, system, animations (all under /api/v1)")
+    log.debug("Routes registered: zones, logger, system, animations, frames (all under /api/v1)")
 
     # =========================================================================
     # Health Check Endpoint

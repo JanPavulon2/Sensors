@@ -2,8 +2,8 @@
 FrameManager — Centralized rendering system with priority queues and dual led_channel support.
 
 Architecture:
-  - Collects frames from multiple sources (animations, transitions, static, preview)
-  - Maintains separate priority queues for main led_channel and preview panel
+  - Collects frames from multiple sources (animations, transitions, static)
+  - Maintains separate priority queues for led channel
   - Selects highest-priority frame each render tick
   - Renders atomically to all registered led_channels
   - Supports pause/step/FPS control for debugging
@@ -19,15 +19,17 @@ rendering automatically falls back to lower priorities.
 from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque, Tuple, cast, TYPE_CHECKING
+from typing import Dict, List, Optional, Deque, cast, TYPE_CHECKING
 from collections import deque
-# from concurrent.futures import ThreadPoolExecutor  # TODO: Re-enable for async rendering
 
 from models.domain.output_frame import OutputFrame
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
-from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripFrame, ZoneUpdateValue
+from models.frame import (
+    SingleZoneFrame, MultiZoneFrame, 
+    PixelFrame, MainStripFrame, ZoneUpdateValue
+)
 from hardware.led.led_channel import LedChannel
 from engine.zone_render_state import ZoneRenderState
 
@@ -69,10 +71,9 @@ class FrameManager:
     Centralized frame rendering manager.
 
     Manages:
-    - Dual priority queues (main_queues, preview_queues)
-    - Frame submission from multiple sources
     - Priority-based frame selection
-    - Atomic rendering to multiple led_channels
+    - Frame submission from multiple sources
+    - Atomic rendering to multiple led channels
     - Pause/step/FPS control
     - Frame expiration (TTL)
     - Performance metrics
@@ -97,18 +98,17 @@ class FrameManager:
         self.app_clock = app_clock
         self.frame_streamer = frame_streamer
 
-        # Dual queue system (separate for main led_channel and preview)
+        # DQueue system
         # maxlen=10 allows all zones to queue frames before draining
         # (we have max 10 zones, some animating concurrently)
-        self.main_queues: Dict[int, Deque[MainStripFrame]] = {
+        self.priority_queues: Dict[int, Deque[MainStripFrame]] = {
             p.value: deque(maxlen=10)
             for p in FramePriority
             if isinstance(p.value, int)
         }
 
         # Registered render targets
-        self.led_channels: List[LedChannel] = []  # LedChannel instances
-
+        self.led_channels: List[LedChannel] = [] 
         self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
         # Runtime state
@@ -125,15 +125,10 @@ class FrameManager:
         self.dma_skipped = 0  # Count of DMA transfers skipped due to frame match
 
         self.last_rendered_frame: Optional[MainStripFrame] = None
-
         self.last_rendered_frame_hash = None
 
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
-
-        # Note: Hardware executor commented out for now due to compatibility issues
-        # Will use loop.run_in_executor(None, ...) with default executor instead
-        # self._hw_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="FrameMgr-HW")
 
         log.info(
             "FrameManager initialized",
@@ -143,7 +138,7 @@ class FrameManager:
 
     # === Led Channel Registration (for controllers) ===
 
-    def add_led_channel(self, led_channel: LedChannel) -> None:
+    def register_led_channel(self, led_channel: LedChannel) -> None:
         """Register a led channel."""
 
         if led_channel in self.led_channels:
@@ -220,7 +215,7 @@ class FrameManager:
         else:
             raise TypeError(f"Unsupported frame type: {type(frame)}")
  
-        self.main_queues[msf.priority.value].append(msf)
+        self.priority_queues[msf.priority.value].append(msf)
 
     # === Control API ===
 
@@ -251,9 +246,12 @@ class FrameManager:
         """Stop the render loop."""
         if not self.running:
             return
+        
         self.running = False
+        
         if self.render_task:
             self.render_task.cancel()
+            
             try:
                 await self.render_task
             except asyncio.CancelledError:
@@ -288,17 +286,23 @@ class FrameManager:
 
     def get_metrics(self) -> Dict:
         """Get performance metrics."""
+        
         return {
             "fps_target": self.fps,
             "fps_actual": self.get_actual_fps(),
             "frames_rendered": self.frames_rendered,
             "dropped_frames": self.dropped_frames,
             "dma_skipped": self.dma_skipped,
-            "pending_main": sum(len(q) for q in self.main_queues.values()),
-            # "pending_preview": sum(len(q) for q in self.preview_queues.values()),
+            "pending": sum(len(q) for q in self.priority_queues.values()),
         }
 
     # === Core Render Loop ===
+
+    async def _wait_for_next_frame(self):
+        elapsed = time.perf_counter() - self.last_show_time
+        min_dt = WS2811Timing.MIN_FRAME_TIME_MS / 1000
+        if elapsed < min_dt:
+            await asyncio.sleep(min_dt - elapsed)
 
     async def _render_loop(self) -> None:
         """Main render loop @ target FPS."""
@@ -312,18 +316,12 @@ class FrameManager:
                 await asyncio.sleep(0.01)
                 continue
 
-            # Enforce WS2811 timing constraints
-            elapsed = time.perf_counter() - self.last_show_time
-            if elapsed < WS2811Timing.MIN_FRAME_TIME_MS / 1000:
-                await asyncio.sleep(
-                    (WS2811Timing.MIN_FRAME_TIME_MS / 1000) - elapsed
-                )
+            await self._wait_for_next_frame()
 
             # Select and render frames
             try:
-                # frame = await self._select_frame_by_priority()
-                frame = await self._drain_frames()
-
+                frame = await self._build_composite_frame()
+                
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
                 if frame:
@@ -331,12 +329,8 @@ class FrameManager:
                         # Frame changed (different object) → do full render with hardware DMA
                         await self._render_atomic(frame)
                         self.last_rendered_frame = frame
-                        self.frames_rendered += 1
                         self.frame_times.append(time.perf_counter())
-                        # log.debug(
-                        #     f"Frame rendered (DMA)",
-                        #     frame_type=type(frame).__name__ if frame else None,
-                        # )
+
                     else:
                         # Frame unchanged (same object) → skip DMA, LEDs already have correct pixels
                         self.dma_skipped += 1
@@ -354,7 +348,7 @@ class FrameManager:
 
     # === Frame Selection ===
 
-    async def _drain_frames(self) -> Optional[MainStripFrame]:
+    async def _build_composite_frame(self) -> Optional[MainStripFrame]:
         """
         Drain and merge frames from all priority queues.
 
@@ -368,10 +362,10 @@ class FrameManager:
         async with self._lock:
             queues_snapshot = {
                 priority: deque(queue)
-                for priority, queue in self.main_queues.items()
+                for priority, queue in self.priority_queues.items()
             }
             
-            for queue in self.main_queues.values():
+            for queue in self.priority_queues.values():
                 queue.clear()
             
         merged_updates = {}
@@ -450,8 +444,8 @@ class FrameManager:
         """
         async with self._lock:
             # Iterate from highest to lowest priority
-            for priority_value in sorted(self.main_queues.keys(), reverse=True):
-                queue = self.main_queues[priority_value]
+            for priority_value in sorted(self.priority_queues.keys(), reverse=True):
+                queue = self.priority_queues[priority_value]
                 while queue:
                     frame = queue.popleft()
                     if not frame.is_expired():
@@ -548,32 +542,15 @@ class FrameManager:
             return self._merge_partial_update(updates)
         return self._merge_full_update(updates)    
     
-    def _merge_full_update(self, updates):
-        """Merge full-frame updates into new zone_render_states."""
-        merged = {}
+    # def _expand_or_trim_zone(self, val, expected_len):
+    #     """Normalize Color or list[Color] to exact pixel count."""
+    #     if isinstance(val, Color):
+    #         return [val] * expected_len
 
-        for zone_id, state in self.zone_render_states.items():
-            if zone_id in updates:
-                new_val = updates[zone_id]
-                merged[zone_id] = self._expand_or_trim_zone(new_val, len(state.pixels))
-            else:
-                merged[zone_id] = list(state.pixels)
-
-        # update zone render state
-        for zid, pix in merged.items():
-            self.zone_render_states[zid].pixels = pix
-
-        return merged
-    
-    def _expand_or_trim_zone(self, val, expected_len):
-        """Normalize Color or list[Color] to exact pixel count."""
-        if isinstance(val, Color):
-            return [val] * expected_len
-
-        pix = list(val[:expected_len])
-        if len(pix) < expected_len:
-            pix += [Color.black()] * (expected_len - len(pix))
-        return pix
+    #     pix = list(val[:expected_len])
+    #     if len(pix) < expected_len:
+    #         pix += [Color.black()] * (expected_len - len(pix))
+    #     return pix
     
     def _should_skip_dma(self, merged):
         """Compute hash of merged frame to skip redundant DMA transfers."""
@@ -652,6 +629,34 @@ class FrameManager:
     # Helpers
     # ============================================================
 
+    def _normalize_zone_pixels(self, val, expected_len) -> List[Color]:
+        if isinstance(val, Color):
+            return [val] * expected_len
+        pix = list(val[:expected_len])
+        if len(pix) < expected_len:
+            pix += [Color.black()] * (expected_len - len(pix))
+        return pix
+
+    def _merge_full_update(self, updates):
+        """Merge full-frame updates into new zone_render_states."""
+        merged = {}
+
+        for zone_id, state in self.zone_render_states.items():
+            if zone_id in updates:
+                new_val = updates[zone_id]
+                # merged[zone_id] = self._expand_or_trim_zone(new_val, len(state.pixels))
+                merged[zone_id] = self._normalize_zone_pixels(new_val, len(state.pixels))
+                
+                # _expand_or_trim_zone(new_val, len(state.pixels))
+            else:
+                merged[zone_id] = list(state.pixels)
+
+        # update zone render state
+        for zid, pix in merged.items():
+            self.zone_render_states[zid].pixels = pix
+
+        return merged
+    
     def _merge_partial_update(self, updates):
         """
         Łączy częściową ramkę z pełnym stanem stref.
@@ -660,14 +665,15 @@ class FrameManager:
 
         for zone_id, state in self.zone_render_states.items():
             if zone_id in updates:
-                new_val = updates[zone_id]
-                if isinstance(new_val, Color):
-                    merged[zone_id] = [new_val] * len(state.pixels)
-                else:
-                    pix = list(new_val[:len(state.pixels)])
-                    if len(pix) < len(state.pixels):
-                        pix += [Color.black()] * (len(state.pixels) - len(pix))
-                    merged[zone_id] = pix
+                merged[zone_id] = self._normalize_zone_pixels(updates[zone_id], len(state.pixels))
+                # new_val = updates[zone_id]
+                # if isinstance(new_val, Color):
+                #     merged[zone_id] = [new_val] * len(state.pixels)
+                # else:
+                #     pix = list(new_val[:len(state.pixels)])
+                #     if len(pix) < len(state.pixels):
+                #         pix += [Color.black()] * (len(state.pixels) - len(pix))
+                #     merged[zone_id] = pix
             else:
                 merged[zone_id] = list(state.pixels)
 
@@ -691,54 +697,11 @@ class FrameManager:
                 h = (h * 1315423911) ^ hash(c.to_rgb())
         return h
 
-    # ============================================================
-    # Tools
-    # ============================================================
-                  
-    def _apply_zone_state(self, normalized_frame, source):
-        """
-        Update ZoneRenderState with the full normalized per-zone pixel lists.
-        """
-        for zone_id, pixels in normalized_frame.items():
-            zr = self.zone_render_states.get(zone_id)
-            if zr:
-                zr.update_pixels(pixels, source)
-
-    def _normalize_to_zone_lengths(self, updates, mapper):
-        """
-        Normalize logical frame updates into full pixel lists based on actual
-        physical zone lengths from mapper.
-
-        updates:
-            ZoneID -> Color   (FullStripFrame / ZoneFrame)
-            ZoneID -> [Color] (PixelFrame)
-        """
-        expanded = {}
-
-        for zone_id, value in updates.items():
-            length = mapper.get_zone_length(zone_id)
-
-            if length == 0:
-                continue
-
-            if isinstance(value, Color):
-                # Logical single color → expand to full zone
-                expanded[zone_id] = [value] * length
-
-            else:
-                # List of Colors → trim or pad
-                pix = list(value[:length])
-                if len(pix) < length:
-                    pix += [Color.black()] * (length - len(pix))
-                expanded[zone_id] = pix
-
-        return expanded
-
     # === Cleanup ===
 
     def clear_all(self) -> None:
         """Clear all pending frames."""
-        for queue in self.main_queues.values():
+        for queue in self.priority_queues.values():
             queue.clear()
         log.info("FrameManager queues cleared")
 
@@ -755,11 +718,10 @@ class FrameManager:
         min_value = min_priority.value if isinstance(min_priority.value, int) else 0
 
         cleared_count = 0
-        for priority_value, queue in list(self.main_queues.items()):
+        for priority_value, queue in list(self.priority_queues.items()):
             if priority_value < min_value:
                 cleared_count += len(queue)
                 queue.clear()
-
 
         if cleared_count > 0:
             log.debug(f"Cleared {cleared_count} frames below priority {min_priority.name}")

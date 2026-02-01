@@ -9,7 +9,7 @@ def register_socketio(sio, services):
     """
     Registers all Socket.IO handlers and EventBus subscriptions.
     """
-    # Connection lifecycle - sends initial state (zones, tasks, logs)
+    # Connection lifecycle - sends initial state (zones, tasks, logs, frames)
     register_on_connect(sio, services)
 
     # EventBus subscriptions for real-time updates
