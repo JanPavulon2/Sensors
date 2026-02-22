@@ -215,9 +215,9 @@ class AnimationEngine:
                 now = time.monotonic()
                 if now - last_log >= 1.0:
                     # log.warn(
-                    #     "ANIM FPS",
+                    #     "ANIM PUSH",
                     #     zone=zone_id.name,
-                    #     fps=frames_sent 
+                    #     fps=frames_sent
                     # )
                     frames_sent = 0
                     last_log = now
@@ -225,8 +225,11 @@ class AnimationEngine:
                 if frame is not None:
                     await self.frame_manager.push_frame(frame)
                     frames_sent += 1
-                
-                await asyncio.sleep(1 / self.frame_manager.fps)
+
+                # Yield to event loop only — FrameManager._render_loop controls FPS.
+                # Do NOT sleep(1/fps) here: asyncio.sleep overshoots badly on RPi
+                # (kernel timer ~10ms granularity), which would cap throughput to ~17 FPS.
+                await asyncio.sleep(0)
         except asyncio.CancelledError:
             log.debug(f"Animation task for {zone_id.name} canceled")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

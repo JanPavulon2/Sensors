@@ -1,5 +1,7 @@
 """Frame streaming service for Socket.IO output."""
 
+import asyncio
+from collections import deque
 from socketio import AsyncServer
 
 from models.domain.output_frame import OutputFrame
@@ -29,9 +31,40 @@ class FrameStreamer:
         """
         self._sio = sio
         self.target_fps = target_fps
+        self._interval = 1.0 / target_fps
+        self._queue: deque[OutputFrame] = deque(maxlen=2)
+        self._task: asyncio.Task | None = None
+        self._running = False
         self._frame_counter = 0
-        self._emit_interval = 60 // target_fps  # Emit every Nth frame
+        
+        log.info(f"FrameStreamer streaming loop started @ {self.target_fps} FPS")
 
+    async def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._loop())
+    
+    async def stop(self):
+        self._running = False
+        if self._task:
+            self._task.cancel()
+    
+    async def _loop(self):
+        while self._running:
+            if self._queue:
+                frame = self._queue.pop()  # latest only    
+                await self._sio.emit(
+                    "output_frame",
+                    self._serialize(frame), 
+                    namespace="/frames",
+                )
+            await asyncio.sleep(self._interval)
+            
+    def push(self, frame: OutputFrame) -> None:
+        self._queue.append(frame)
+        # OLD: asyncio.create_task(self.emit(frame))
+        
     async def emit(self, frame: OutputFrame) -> None:
         """
         Emit OutputFrame to all clients on /frames namespace.
@@ -44,8 +77,8 @@ class FrameStreamer:
         """
         # Throttle to target FPS
         self._frame_counter += 1
-        if self._frame_counter % self._emit_interval != 0:
-            return
+        # if self._frame_counter % self._emit_interval != 0:
+        #     return
 
         try:
             payload = self._serialize(frame)

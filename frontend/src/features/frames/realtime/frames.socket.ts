@@ -5,7 +5,8 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:8000';
 
 export const framesSocket = io(`${SOCKET_URL}/frames`, {
   transports: ['websocket'],
-  autoConnect: false,  // Manual control
+  autoConnect: true,  // Auto-connects on module load; zone cards + edit panel use live pixels
+  // OLD: autoConnect: false,
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 500,

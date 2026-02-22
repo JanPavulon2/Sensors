@@ -1,7 +1,9 @@
 """
 Snake Animation
 
-Single or multi-pixel snake travels through all zones sequentially.
+Single or multi-pixel snake travels through a zone.
+Fully deterministic: position is derived from elapsed wall-clock time,
+independent of frame rate or CPU speed.
 """
 
 import time
@@ -12,17 +14,20 @@ from models.animation_params import AnimationParamID, SpeedParam, PrimaryColorHu
 from models.color import Color
 from models.frame import PixelFrame
 from models.enums import FramePriority, FrameSource
-from utils.colors import hue_to_rgb
-from utils.logger import get_category_logger, LogCategory
-
-log = get_category_logger(LogCategory.ANIMATION)
-
 
 
 class SnakeAnimation(BaseAnimation):
     """
     Pixel-level snake animation inside a single zone.
+
+    Movement is time-based: speed parameter controls pixels-per-second.
+    Rendering always reflects the current wall-clock position regardless
+    of how often step() is called.
     """
+
+    # Speed range: 0 → MIN_PPS, 100 → MAX_PPS (pixels per second)
+    _MIN_PPS = 2.0
+    _MAX_PPS = 60.0
 
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
@@ -38,9 +43,12 @@ class SnakeAnimation(BaseAnimation):
 
     def __init__(self, zone, params):
         super().__init__(zone, params)
+        self._start_time = time.monotonic()
 
-        self._position = 0
-        self._last_step_time = time.monotonic()
+    def _speed_to_pps(self, speed: int) -> float:
+        """Convert speed parameter (0-100) to pixels per second."""
+        t = speed / 100.0
+        return self._MIN_PPS + t * (self._MAX_PPS - self._MIN_PPS)
 
     async def step(self) -> PixelFrame | None:
         speed = self.get_param(AnimationParamID.SPEED, 50)
@@ -53,16 +61,10 @@ class SnakeAnimation(BaseAnimation):
 
         length = max(1, min(length, pixel_count))
 
-        # speed → delay
-        min_delay = 0.01
-        max_delay = 0.1
-        delay = max_delay - (speed / 100.0) * (max_delay - min_delay)
-
-        now = time.monotonic()
-        if now - self._last_step_time < delay:
-            return None
-
-        self._last_step_time = now
+        # Deterministic position from elapsed time
+        elapsed = time.monotonic() - self._start_time
+        pps = self._speed_to_pps(speed)
+        position = int(elapsed * pps) % pixel_count
 
         # Base color for snake
         base_color = Color.from_hue(hue)
@@ -70,22 +72,18 @@ class SnakeAnimation(BaseAnimation):
         # Start with all pixels off
         pixels: List[Color] = [Color.black() for _ in range(pixel_count)]
 
-        # Draw snake
+        # Draw snake with fading tail
         for i in range(length):
-            pos = (self._position - i) % pixel_count
+            pos = (position - i) % pixel_count
             fade = max(0.0, 1.0 - i * 0.2)
-
             pixels[pos] = base_color.with_brightness(
                 int(self.base_brightness * fade)
             )
-
-        self._position = (self._position + 1) % pixel_count
 
         return PixelFrame(
             zone_pixels={self.zone_id: pixels},
             priority=FramePriority.ANIMATION,
             source=FrameSource.ANIMATION,
-            ttl=delay * 2,
+            ttl=0.12,
             partial=False,
         )
-        

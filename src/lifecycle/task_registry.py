@@ -42,6 +42,7 @@ class TaskCategory(Enum):
     TRANSITION = auto()
     SYSTEM = auto()
     BACKGROUND = auto()
+    SOCKETIO = auto()
     GENERAL = auto()
 
 

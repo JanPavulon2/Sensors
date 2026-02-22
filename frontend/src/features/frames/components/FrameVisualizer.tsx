@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+// OLD: import { useEffect, useState } from 'react';
 import { Play, Pause, Square, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { connectFrameStream, disconnectFrameStream } from '../realtime/frames.socket';
+import '../realtime/frames.socket'; // side-effect: socket auto-connects (autoConnect: true)
+// OLD: import { connectFrameStream, disconnectFrameStream } from '../realtime/frames.socket';
 import { FrameMetadata } from './FrameMetadata';
 import { AllZonesView } from './AllZonesView';
 import { FpsControl } from './FpsControl';
@@ -14,14 +16,16 @@ export function FrameVisualizer() {
   const [streamState, setStreamState] = useState<StreamState>('stopped');
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  useEffect(() => {
-    if (streamState === 'playing') {
-      connectFrameStream();
-    } else {
-      disconnectFrameStream();
-    }
-    return () => disconnectFrameStream();
-  }, [streamState]);
+  // OLD: connection managed here — now auto-connected via frames.socket.ts autoConnect: true
+  // Play/Pause/Stop only control visibility of AllZonesView below
+  // useEffect(() => {
+  //   if (streamState === 'playing') {
+  //     connectFrameStream();
+  //   } else {
+  //     disconnectFrameStream();
+  //   }
+  //   return () => disconnectFrameStream();
+  // }, [streamState]);
 
   const handlePlay = () => {
     setStreamState('playing');

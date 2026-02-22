@@ -1,7 +1,7 @@
 # Frame Rendering Flow - Diuna System
 
-**Date:** 2026-01-31
-**Status:** Post-refactor (MainStrip → LedChannel rename)
+**Date:** 2026-02-12
+**Status:** Current (FrameManager V3 + FrameStreamer + AppClock)
 **Version:** FrameManager V3
 
 ---
@@ -16,8 +16,8 @@ BaseFrame (abstract)
     ├── MultiZoneFrame   - many zones → one Color each
     └── PixelFrame       - many zones → List[Color] each
 
-MainStripFrame (internal)  - unified internal representation
-OutputFrame (output)       - final frame for streaming
+CompositeFrame (internal)  - unified internal representation used by FrameManager
+OutputFrame (output)       - immutable snapshot for streaming/recording
 ```
 
 ### 1.2 Frame Metadata
@@ -25,16 +25,18 @@ OutputFrame (output)       - final frame for streaming
 Every frame (BaseFrame) contains:
 - `priority: FramePriority` - rendering priority (0-50)
 - `source: FrameSource` - frame source (ANIMATION, STATIC, TRANSITION, etc.)
-- `timestamp: float` - creation time (time.time())
+- `timestamp: float` - creation time (time.time()) — note: unused, see Known Issues
 - `ttl: float` - frame lifetime in seconds (default: 0.1s)
 - `partial: bool` - whether frame is partial (merge with previous state)
+
+CompositeFrame uses `time.monotonic()` for `created_at` and TTL expiration.
 
 ### 1.3 OutputFrame (final frame)
 
 ```python
 @dataclass
 class OutputFrame:
-    t: float                              # global animation time (seconds)
+    t: float                              # global animation time from AppClock
     zones: Dict[ZoneID, List[Color]]      # full state of all zones (pixel-level)
 ```
 
@@ -42,7 +44,7 @@ class OutputFrame:
 - **Immutable** - represents state snapshot at time `t`
 - **Complete** - contains ALL zones from all LedChannels
 - **Pixel-level** - each zone is a full List[Color] for every pixel
-- **Streaming-ready** - ready for serialization and transmission to frontend/file
+- **Streaming-ready** - serialized and emitted via FrameStreamer to Socket.IO
 
 ---
 
@@ -52,24 +54,30 @@ class OutputFrame:
 
 ```
 Animation.step() → SingleZoneFrame/PixelFrame
-    ├─ priority = ANIMATION (30)
+    ├─ priority = ANIMATION (20)
     ├─ source = ANIMATION
-    └─ partial = True
+    ├─ partial = False (snake, color_snake) or True (color_fade)
+    └─ ttl = 0.12s (pixel) or 0.2s (zone-level)
 
-StaticModeController → SingleZoneFrame
+StaticModeController → SingleZoneFrame / MultiZoneFrame
     ├─ priority = MANUAL (10)
     ├─ source = STATIC
-    └─ partial = True
+    └─ ttl = 10.0s (long-lived, persistent)
 
 TransitionService → PixelFrame
     ├─ priority = TRANSITION (40)
     ├─ source = TRANSITION
-    └─ partial = True
+    └─ ttl = 0.1s (default)
 
 SelectedZoneIndicator → SingleZoneFrame
-    ├─ priority = PULSE (20)
-    ├─ source = SELECTED_ZONE
-    └─ partial = True
+    ├─ priority = PULSE (30)
+    ├─ source = PULSE
+    └─ ttl = 0.15-0.25s
+
+FramePlaybackController → PixelFrame
+    ├─ priority = DEBUG (50)
+    ├─ source = DEBUG
+    └─ ttl = 10.0s (manual stepping)
 ```
 
 ### Phase 2: Submission (QUEUE)
@@ -80,19 +88,19 @@ await frame_manager.push_frame(frame)
 
 **What happens:**
 1. `push_frame()` receives `SingleZoneFrame | MultiZoneFrame | PixelFrame`
-2. Converts to `MainStripFrame`:
-   - `SingleZoneFrame` → `MainStripFrame(updates={zone_id: color})`
-   - `MultiZoneFrame` → `MainStripFrame(updates=zone_colors)`
-   - `PixelFrame` → `MainStripFrame(updates=zone_pixels)`
-3. Appends to priority queue: `self.main_queues[priority.value].append(msf)`
+2. Converts to `CompositeFrame`:
+   - `SingleZoneFrame` → `CompositeFrame(updates={zone_id: color})`
+   - `MultiZoneFrame` → `CompositeFrame(updates=zone_colors)`
+   - `PixelFrame` → `CompositeFrame(updates=zone_pixels)`
+3. Appends to priority queue: `self.priority_queues[priority.value].append(cf)`
 
 **Priority queues:**
 ```
-main_queues = {
+priority_queues = {
     0: deque(maxlen=10),   # IDLE
     10: deque(maxlen=10),  # MANUAL (static)
-    20: deque(maxlen=10),  # PULSE (indicators)
-    30: deque(maxlen=10),  # ANIMATION
+    20: deque(maxlen=10),  # ANIMATION
+    30: deque(maxlen=10),  # PULSE (indicators)
     40: deque(maxlen=10),  # TRANSITION
     50: deque(maxlen=10),  # DEBUG
 }
@@ -102,57 +110,81 @@ main_queues = {
 
 ```python
 async def _render_loop(self):
+    frame_period = 1.0 / self.fps  # 16.67ms
+    min_frame_time = max(frame_period, WS2811Timing.MIN_FRAME_TIME_MS / 1000)
+    next_frame_time = time.perf_counter()  # Absolute timeline
+
     while self.running:
-        # 1. Enforce WS2811 timing (min 2.75ms between frames)
-        await asyncio.sleep(min_frame_delay)
+        # Handle pause/step (for frame-by-frame debug)
+        if self.paused and not self.step_requested:
+            await asyncio.sleep(0.01)
+            continue
 
-        # 2. Drain + merge frames
-        frame = await self._drain_frames()
+        # === RPi-OPTIMIZED SMART SLEEP ===
+        while True:
+            now = time.perf_counter()
+            remaining = next_frame_time - now
 
-        # 3. Render atomically
-        if frame:
-            self._render_atomic(frame)
+            if remaining <= 0:
+                break  # Frame due (or overdue)
+            elif remaining > 0.003:
+                await asyncio.sleep(0.001)  # Far: 1ms chunks
+            elif remaining > 0.001:
+                await asyncio.sleep(0)       # Close: yield to event loop
+            else:
+                while time.perf_counter() < next_frame_time:
+                    pass                     # Final 1ms: busy-wait
+                break
 
-        # 4. Frame rate control
-        await asyncio.sleep(frame_delay)
+        # === BUILD + RENDER ===
+        composite_frame = await self._build_composite_frame()
+        if composite_frame is not None:
+            await self._render_frame(composite_frame)
+
+        # Advance absolute timeline (no drift accumulation)
+        next_frame_time += min_frame_time
 ```
 
-### Phase 4: Frame Draining (MERGE)
+**Why 3-stage sleep?**
+- `asyncio.sleep()` on RPi has ~10ms kernel timer granularity
+- Sleeping 16.67ms would actually sleep ~20ms → capping at ~17 FPS
+- 1ms chunks keep us close, yield lets animations run, busy-wait gives precision
+
+### Phase 4: Frame Building (MERGE)
 
 ```python
-async def _drain_frames() -> Optional[MainStripFrame]:
+async def _build_composite_frame() -> Optional[CompositeFrame]:
 ```
 
-**Merge strategy:**
+**3-phase merge strategy:**
 
-1. **Collect ANIMATION base layer** (priority=30)
-   - All frames from ANIMATION queue
-   - Merge updates: `merged_updates[zone_id] = value`
+1. **Collect ANIMATION base layer** (priority=20)
+   - All non-expired frames from ANIMATION queue
+   - Merge updates: `merged_updates.update(frame.updates)`
    - This is the continuous base layer
 
-2. **Overlay higher priorities** (40, 50)
+2. **Overlay higher priorities** (30, 40, 50)
+   - PULSE (30) - selected zone indicator
    - TRANSITION (40) - fade/crossfade transitions
    - DEBUG (50) - frame-by-frame playback
-   - Overwrite ANIMATION for their zones
+   - Override animation zones: `merged_updates.update(frame.updates)`
 
-3. **Fill gaps with lower priorities** (0, 10, 20)
+3. **Fill gaps with lower priorities** (0, 10)
    - MANUAL (10) - static zones
-   - PULSE (20) - selected zone indicator
    - IDLE (0) - fallback (black)
-   - Fill only zones without animations
+   - Fill only zones without updates: `merged_updates.setdefault(zid, val)`
 
 **Result:**
 ```python
-MainStripFrame(
+CompositeFrame(
     priority=highest_priority,
     source=first_source,
     ttl=max(all_ttls),
-    partial=True,
     updates={
-        FLOOR: Color(...),      # from ANIMATION
-        CIRCLE: [Color, ...],   # from ANIMATION (pixel-level)
-        LAMP: Color(...),       # from PULSE (overlay)
-        GATE: Color(...),       # from MANUAL (gap fill)
+        FLOOR: [Color, ...],   # from ANIMATION (pixel-level snake)
+        CIRCLE: Color(...),    # from ANIMATION (zone-level breathe)
+        LAMP: Color(...),      # from PULSE (overlay - edit indicator)
+        GATE: Color(...),      # from MANUAL (gap fill - static zone)
     }
 )
 ```
@@ -160,140 +192,171 @@ MainStripFrame(
 ### Phase 5: Render Pipeline
 
 ```python
-def _render_atomic(frame: MainStripFrame):
-    self._render_frame(frame)
-
-def _render_frame(frame: MainStripFrame):
-    # 1. Extract updates
-    updates = frame.as_zone_update()  # Dict[ZoneID, Color | List[Color]]
-
-    # 2. Merge with zone_render_states
-    merged = self._merge_updates(frame, updates)
+async def _render_frame(frame: CompositeFrame):
+    # 1. Merge with zone_render_states (normalize all to List[Color])
+    merged = self._merge_updates(frame, frame.updates)
     # Result: Dict[ZoneID, List[Color]] - all zones, pixel-level
 
-    # 3. Check if frame changed (skip redundant DMA)
+    # 2. Check if frame changed (skip redundant DMA)
     if self._should_skip_dma(merged):
-        return
+        return  # LEDs already have correct pixels
 
-    # 4. Render to hardware
+    # 3. Render to hardware
     self._render_to_hardware(merged)
 
-    # 5. Build + emit OutputFrame
-    current_time = time.perf_counter()  # TODO: use global app clock
-    output_frame = self._build_output_frame(t=current_time)
-    self._emit_output_frame(output_frame)
+    # 4. Track metrics
+    self.frames_rendered += 1
+    self.frame_times.append(time.perf_counter())
+
+    # 5. Build + push OutputFrame to FrameStreamer
+    output_frame = self._build_output_frame()  # Uses AppClock for timestamp
+    self.frame_streamer.push(output_frame)      # Queued for 30 FPS streaming
 ```
 
-### Phase 6: Merge Strategies
-
-#### A) Partial Update (default)
+### Phase 6: Merge Strategy
 
 ```python
-def _merge_partial_update(updates):
+def _merge_updates(frame, updates):
+    """Normalize all zone updates to List[Color] and update zone_render_states."""
     merged = {}
 
     for zone_id, state in zone_render_states.items():
         if zone_id in updates:
-            # New value - expand to pixel count
-            new_val = updates[zone_id]
-            if isinstance(new_val, Color):
-                merged[zone_id] = [new_val] * len(state.pixels)
-            else:
-                merged[zone_id] = list(new_val[:len(state.pixels)])
+            merged[zone_id] = _normalize_zone_pixels(updates[zone_id], len(state.pixels))
         else:
-            # No update - preserve previous state
-            merged[zone_id] = list(state.pixels)
+            merged[zone_id] = list(state.pixels)  # Preserve previous state
 
-    # Update zone_render_states
+    # Update zone_render_states (source of truth)
     for zone_id, pixels in merged.items():
         zone_render_states[zone_id].pixels = pixels
 
     return merged
+
+def _normalize_zone_pixels(val, expected_len) -> List[Color]:
+    """Color → repeated list, List[Color] → trimmed/padded to exact length."""
+    if isinstance(val, Color):
+        return [val] * expected_len
+    pix = list(val[:expected_len])
+    if len(pix) < expected_len:
+        pix += [Color.black()] * (expected_len - len(pix))
+    return pix
 ```
 
-#### B) Full Update (rare)
+**Why there's no partial/full distinction here:**
 
-```python
-def _merge_full_update(updates):
-    # Similar to partial, but missing zones → BLACK
-    merged = {}
+The `partial` flag on `BaseFrame` is **not propagated** to `CompositeFrame` — it's lost during `push_frame()` conversion. But this is correct by design: by the time `_merge_updates()` is called, `_build_composite_frame()` has already composed all sources (animation + static + overlays) into a single frame via the 3-phase merge. The result is always effectively "full" — every active zone has a value. Missing zones mean no source produced a frame for them this tick, so preserving previous render state is the correct behavior.
 
-    for zone_id, state in zone_render_states.items():
-        if zone_id in updates:
-            merged[zone_id] = expand(updates[zone_id])
-        else:
-            merged[zone_id] = [Color.black()] * len(state.pixels)
-
-    return merged
-```
+The old `_merge_partial_update` method was removed as dead code — it was identical to `_merge_full_update` and unreachable (CompositeFrame has no `partial` field).
 
 ### Phase 7: DMA Skip Optimization
 
 ```python
 def _should_skip_dma(merged):
-    # Hash frame
-    frame_hash = hash(merged)
+    frame_hash = _hash_merged_frame(merged)
 
-    # Compare with previous
     if frame_hash == last_rendered_frame_hash:
         dma_skipped += 1
         return True  # Skip DMA - LEDs already have correct pixels
 
     last_rendered_frame_hash = frame_hash
     return False
+
+@staticmethod
+def _hash_merged_frame(merged):
+    """Fast multiplicative hash over all zone pixels."""
+    h = 0
+    for zone_id, pix in merged.items():
+        for c in pix:
+            h = (h * 1315423911) ^ hash(c.to_rgb())
+    return h
 ```
 
-**Savings:** 95% DMA transfer reduction in static-only mode
+**Savings:** ~95% DMA transfer reduction in static-only mode
 
 ### Phase 8: Hardware Rendering
 
 ```python
 def _render_to_hardware(merged):
-    # merged: Dict[ZoneID, List[Color]] - full state of all zones
-
     for led_channel in self.led_channels:
         # 1. Extract zones belonging to this LedChannel
-        led_channel_frame = self._prepare_led_channel_frame(led_channel, merged)
-        # Result: Dict[ZoneID, List[Color]] - only zones for this channel
+        led_channel_frame = _prepare_led_channel_frame(led_channel, merged)
 
         # 2. Validate lengths + mapping
-        self._validate_led_channel_frame(led_channel, led_channel_frame)
+        _validate_led_channel_frame(led_channel, led_channel_frame)
 
         # 3. Send to hardware (DMA transfer)
-        self._apply_led_channel_frame(led_channel, led_channel_frame)
+        _apply_led_channel_frame(led_channel, led_channel_frame)
 ```
 
 **LedChannel rendering:**
 ```python
-def _apply_led_channel_frame(led_channel, frame):
-    # frame: Dict[ZoneID, List[Color]]
+def show_full_pixel_frame(zone_pixels_dict):
+    # 1. Read current hardware buffer
+    full_frame = hardware.get_frame()
 
-    # Send full pixel frame to hardware
-    led_channel.show_full_pixel_frame(frame)
-    # ↓
-    # LedChannel converts zones → physical pixel indices
-    # ↓
-    # Hardware DMA transfer to WS2811 strip
+    # 2. Map logical zone pixels → physical strip indices
+    for zone_id, pixels in zone_pixels_dict.items():
+        indices = mapper.get_indices(zone_id)  # Handles reversal
+        for logical_idx, color in enumerate(pixels):
+            phys_idx = indices[logical_idx]
+            full_frame[phys_idx] = color
+
+    # 3. Atomic DMA transfer (single strip.show() call)
+    hardware.apply_frame(full_frame)
 ```
 
-### Phase 9: OutputFrame Creation + Emission
+### Phase 9: OutputFrame Streaming
 
 ```python
-def _build_output_frame(t: float) -> OutputFrame:
-    zones = {}
+def _build_output_frame() -> OutputFrame:
+    t = self.app_clock.now()  # Global synchronized clock
 
-    # Copy current state of ALL zones
-    for zone_id, state in zone_render_states.items():
-        zones[zone_id] = state.pixels  # List[Color]
+    zones = {
+        zone_id: list(state.pixels)  # Immutable copy
+        for zone_id, state in zone_render_states.items()
+    }
 
     return OutputFrame(t=t, zones=zones)
+```
 
-def _emit_output_frame(output_frame: OutputFrame):
-    # TODO: Implement consumers
-    # - Socket.IO streaming to frontend
-    # - Recording buffer for replay
-    # - File export (sequence recording)
-    pass
+**FrameStreamer** (`src/services/frame_streamer.py`):
+```python
+class FrameStreamer:
+    """Throttled Socket.IO output at 30 FPS."""
+
+    def __init__(self, sio, target_fps=30):
+        self._queue: deque[OutputFrame] = deque(maxlen=2)  # Latest-only buffer
+        self._interval = 1.0 / target_fps
+
+    def push(self, frame: OutputFrame):
+        self._queue.append(frame)  # Non-blocking, drops old frames
+
+    async def _loop(self):
+        while self._running:
+            if self._queue:
+                frame = self._queue.pop()  # Latest frame only
+                await sio.emit("output_frame", self._serialize(frame), namespace="/frames")
+            await asyncio.sleep(self._interval)
+
+    def _serialize(self, frame) -> dict:
+        return {
+            "t": frame.t,
+            "zones": {
+                zone_id.name: [list(c.to_rgb()) for c in pixels]
+                for zone_id, pixels in frame.zones.items()
+            }
+        }
+```
+
+**Frontend receives:**
+```json
+{
+  "t": 123.456,
+  "zones": {
+    "FLOOR": [[255, 0, 0], [255, 0, 0], ...],
+    "CIRCLE": [[0, 255, 0], ...]
+  }
+}
 ```
 
 ---
@@ -301,41 +364,74 @@ def _emit_output_frame(output_frame: OutputFrame):
 ## 3. Rendering Priorities
 
 ```python
-class FramePriority(IntEnum):
+class FramePriority(Enum):
     IDLE = 0          # Fallback (black)
     MANUAL = 10       # Static colors set by user
-    PULSE = 20        # Selected zone indicator
-    ANIMATION = 30    # Running animations (BASE LAYER)
+    ANIMATION = 20    # Running animations (BASE LAYER)
+    PULSE = 30        # Selected zone indicator (edit mode)
     TRANSITION = 40   # Fade/crossfade effects
     DEBUG = 50        # Frame-by-frame playback (highest)
 ```
 
-**Rules:**
-- Higher priority wins
-- Animations (30) are BASE LAYER - always collected first
-- Overlays (40, 50) overwrite base layer for their zones
-- Gap fills (0, 10, 20) fill zones without animations
+**Merge rules:**
+- ANIMATION (20) is the BASE LAYER — always collected first
+- PULSE (30) overlays on specific zones (edit indicator overrides animation)
+- TRANSITION (40) overrides everything except DEBUG
+- MANUAL (10) fills gaps for zones without animations
+- IDLE (0) fallback for zones with no source at all
 
 ---
 
-## 4. Zone Render State
+## 4. Animation Production Model
+
+### Per-Zone Architecture
+
+Each animation is one instance per zone, running in its own asyncio.Task:
+
+```python
+# AnimationEngine._run_loop()
+async def _run_loop(zone_id, animation):
+    while True:
+        frame = await animation.step()
+        if frame is not None:
+            await frame_manager.push_frame(frame)
+        await asyncio.sleep(0)  # Yield only — no FPS throttling here
+```
+
+**Key design:** Animations produce frames as fast as possible. FrameManager controls the actual render rate at 60 FPS. The `deque(maxlen=10)` queue acts as a latest-frame buffer — when full, oldest frames are silently dropped.
+
+### Animation Types
+
+| Animation | Returns | Movement Model | Notes |
+|-----------|---------|----------------|-------|
+| BreatheAnimation | `SingleZoneFrame` | Time-based (`sin(elapsed/period)`) | Speed param controls period |
+| ColorFadeAnimation | `SingleZoneFrame` | Time-based (`elapsed/period % 1.0`) | Speed param controls period |
+| SnakeAnimation | `PixelFrame` | Position-based (`_position += 1` per step) | Speed param NOT used (known issue) |
+| ColorSnakeAnimation | `PixelFrame` | Position-based (`_position += 1` per step) | Speed param NOT used (known issue) |
+
+---
+
+## 5. Zone Render State
 
 ```python
 @dataclass
 class ZoneRenderState:
     zone_id: ZoneID
-    pixels: List[Color]  # Current pixel state
+    pixels: List[Color]            # Currently rendered pixel state
+    source: Optional[FrameSource]  # Which source last updated
+    last_update_ts: float          # When last rendered
 ```
 
-**Characteristics:**
-- Stores **current rendered state** of each zone
-- Used for partial merge (missing zones preserve previous state)
-- Initialized to BLACK when LedChannel is added
-- Updated after each render
+**Purpose:**
+- Stores **current rendered state** of each zone (ephemeral, not persisted)
+- Used for merge (missing zones preserve previous state from render buffer)
+- Initialized to BLACK when LedChannel is registered
+- Updated after each render by `_merge_updates()`
+- Separate from domain `ZoneState` (persisted in `state.json`)
 
 ---
 
-## 5. Timing & Performance
+## 6. Timing & Performance
 
 ### WS2811 Constraints
 
@@ -345,21 +441,33 @@ class WS2811Timing:
     BIT_TIME_US = 1.25
     RESET_TIME_US = 50
     BITS_PER_PIXEL = 24
-    PIXEL_COUNT = 90
+    PIXEL_COUNT = 90          # Note: hardcoded, should be dynamic
 
-    DMA_TRANSFER_MS = 2.7      # DMA transfer time
-    RESET_TIME_MS = 0.05       # Protocol reset time
-    MIN_FRAME_TIME_MS = 2.75   # Minimum between show() calls
+    DMA_TRANSFER_MS = 2.7     # DMA transfer time for 90 pixels
+    RESET_TIME_MS = 0.05      # Protocol reset time
+    MIN_FRAME_TIME_MS = 2.75  # Minimum between show() calls
 
     TARGET_FPS = 60
+    PRACTICAL_MAX_FPS = 150
+    THEORETICAL_MAX_FPS = ~363
 ```
 
-**Enforcement:**
-```python
-# Before render
-elapsed = time.perf_counter() - last_show_time
-if elapsed < MIN_FRAME_TIME_MS / 1000:
-    await asyncio.sleep((MIN_FRAME_TIME_MS / 1000) - elapsed)
+**Enforcement:** The render loop uses absolute timeline with `min_frame_time = max(frame_period, MIN_FRAME_TIME_MS / 1000)` to ensure WS2811 timing constraints are never violated.
+
+### Performance Budget (per frame @ 60 FPS)
+
+```
+Total budget: 16.67ms (1/60s)
+
+Typical breakdown (from PERF log):
+  build:  0.15ms  - Drain priority queues, merge frames
+  merge:  0.08ms  - Normalize zones, update render states
+  hw:     2.80ms  - Zone mapping + DMA transfer
+  emit:   0.05ms  - Build OutputFrame, push to streamer
+  ──────────────
+  Total:  3.08ms  (18.5% of budget)
+
+  Remaining: ~13.6ms for event loop, animation tasks, API handlers
 ```
 
 ### Metrics
@@ -369,133 +477,31 @@ get_metrics() -> {
     "fps_target": 60,
     "fps_actual": 59.8,
     "frames_rendered": 3580,
-    "dropped_frames": 0,
-    "dma_skipped": 3420,  # 95% reduction in static mode
-    "pending_main": 0,
+    "dropped_frames": 0,       # Note: counter exists but never incremented
+    "dma_skipped": 3420,       # 95% reduction in static mode
+    "pending": 0,
 }
 ```
 
 ---
 
-## 6. Issues After MainStrip → LedChannel Refactor
+## 7. Known Issues
 
-### Found Bugs (FIXED)
+### Active Bugs
 
-1. ✅ `current_time` undefined in `_render_frame()` (line 521)
-   - **Fix:** `current_time = time.perf_counter()`
-   - **TODO:** Replace with global app clock
+1. **Clock mismatch**: `BaseFrame` uses `time.time()`, `CompositeFrame` uses `time.monotonic()` — should standardize on monotonic
+2. **Snake speed uncontrolled**: `_position += 1` per step() call regardless of speed parameter — runs at thousands of positions/sec
+3. **Frame overproduction**: Animations produce ~1000+ frames/sec per zone, only ~60 consumed — wastes CPU
+4. **`dropped_frames` never incremented**: Counter initialized but no code increments it
+5. **`_perf_frames` undercounted**: Not incremented when DMA is skipped (early return)
+6. **Dead code in `_apply_led_channel_frame`**: Extracts first pixel RGB but never uses it
 
-2. ✅ `_emit_output_frame()` did not exist
-   - **Fix:** Added placeholder method
-   - **TODO:** Implement Socket.IO streaming
+### Design Gaps
 
-### Remaining TODOs
-
-1. **Global App Clock**
-   - Current: `t = time.perf_counter()` (time since process start)
-   - Should be: `t = app_clock.now()` (global synchronized clock)
-   - Needed for: multi-entity sync, deterministic replay
-
-2. **OutputFrame Emission**
-   - Current: `_emit_output_frame()` is empty
-   - Should emit to:
-     - Socket.IO clients (frontend visualization)
-     - Recording buffer (replay system)
-     - File writer (sequence export)
-
-3. **Frame TTL Cleanup**
-   - TTL is used in `_drain_frames()` for expiration
-   - But for streaming, TTL doesn't make sense (we stream live state)
-   - Consider removing TTL from OutputFrame flow
-
-4. **Deterministic Animations**
-   - Current: animations have internal state (stateful)
-   - Plan: refactor to `render(t, params) -> Frame`
-   - Requires: global clock, time parameterization
-
----
-
-## 7. Streaming Architecture (TODO)
-
-### Planned Flow
-
-```
-FrameManager._render_frame()
-    ↓
-_build_output_frame(t)
-    ↓
-OutputFrame(t, zones)
-    ↓
-_emit_output_frame(output_frame)
-    ↓
-┌─────────────────────────────────────┐
-│  OutputFrameEmitter (new service)   │
-├─────────────────────────────────────┤
-│ - Socket.IO streaming (30 fps)      │
-│ - Recording buffer (replay)         │
-│ - File writer (sequence export)     │
-└─────────────────────────────────────┘
-```
-
-### Socket.IO Streaming
-
-```python
-# Server side
-async def _emit_output_frame(output_frame: OutputFrame):
-    # Throttle to 30 fps (vs 60 fps render)
-    if not self._should_emit_frame():
-        return
-
-    # Serialize to JSON
-    payload = {
-        "t": output_frame.t,
-        "zones": {
-            zone_id.name: [c.to_rgb() for c in pixels]
-            for zone_id, pixels in output_frame.zones.items()
-        }
-    }
-
-    # Emit via Socket.IO
-    await sio.emit("output_frame", payload)
-
-# Frontend
-socket.on("output_frame", (data) => {
-    // Update virtual LED visualization
-    renderVirtualLEDs(data.zones)
-})
-```
-
-### Recording/Replay
-
-```python
-# Record
-class FrameRecorder:
-    def __init__(self):
-        self.buffer: List[OutputFrame] = []
-
-    def record(self, frame: OutputFrame):
-        self.buffer.append(frame)
-
-    def save(self, filename: str):
-        # Serialize to file (pickle, msgpack, or custom format)
-        with open(filename, "wb") as f:
-            pickle.dump(self.buffer, f)
-
-# Replay
-class FrameReplayer:
-    def __init__(self, frames: List[OutputFrame]):
-        self.frames = frames
-        self.index = 0
-
-    def step_forward(self) -> OutputFrame:
-        frame = self.frames[self.index]
-        self.index = min(self.index + 1, len(self.frames) - 1)
-        return frame
-
-    def step_backward(self) -> OutputFrame:
-        self.index = max(self.index - 1, 0)
-        return self.frames[self.index]
-```
+1. **No production metrics**: Cannot track how many frames each source produces or drops
+2. **No runtime FPS control API**: Render and stream FPS only configurable at init time
+3. **No streaming backpressure**: FrameStreamer serializes even with no connected clients
+4. **WS2811Timing hardcoded pixel count**: Should be dynamic per LED channel
 
 ---
 
@@ -503,61 +509,25 @@ class FrameReplayer:
 
 ### What Works
 
-✅ Priority-based frame queues
-✅ Drain + merge strategy (base layer + overlays)
-✅ Partial/full frame updates
-✅ DMA skip optimization
-✅ Multi-LedChannel rendering
-✅ WS2811 timing enforcement
-✅ OutputFrame creation
+- Priority-based frame queues with 3-phase merge (base + overlay + gap fill)
+- DMA skip optimization (~95% reduction in static mode)
+- RPi-optimized absolute-timeline render loop with 3-stage sleep
+- Multi-LedChannel rendering with zone-to-pixel mapping
+- WS2811 timing enforcement (min 2.75ms between DMA transfers)
+- OutputFrame creation with AppClock timestamps
+- Socket.IO streaming via FrameStreamer at 30 FPS
+- Frame-by-frame debug mode (pause/step with DEBUG priority)
 
 ### What Needs Implementation
 
-🔨 Global app clock
-🔨 OutputFrame emission (streaming)
-🔨 Socket.IO integration
-🔨 Recording/replay system
-🔨 Deterministic animations
-🔨 Multi-entity synchronization (future)
-
-### Code Status
-
-- **Compiles:** ✅ (after fixes)
-- **Runs:** ✅ (requires sudo for WS2811)
-- **Renders frames:** ✅
-- **Streams:** ❌ (TODO)
-- **Records:** ❌ (TODO)
+- RenderMetrics system (per-stage frame counting and FPS tracking)
+- Runtime FPS control API (render + stream targets)
+- Animation speed decoupling from frame rate (snake animations)
+- Animation production throttle (reduce CPU waste)
+- Streaming backpressure (skip when no clients)
 
 ---
 
-## 9. Next Steps
-
-### Immediate (pre-streaming)
-1. ✅ Fix `current_time` undefined
-2. ✅ Add `_emit_output_frame()` placeholder
-3. Test render loop with OutputFrame creation
-4. Verify frame hash correctness
-
-### Short-term (streaming MVP)
-1. Add global AppClock service
-2. Implement Socket.IO streaming
-3. Add frame throttling (60 fps render → 30 fps stream)
-4. Build frontend visualization receiver
-
-### Medium-term (recording/replay)
-1. Build FrameRecorder service
-2. Build FrameReplayer service
-3. Add file export (msgpack/pickle)
-4. Add frame-by-frame controls
-
-### Long-term (deterministic system)
-1. Refactor animations to pure functions `f(t) -> Frame`
-2. Remove internal animation state
-3. Implement animation parameter system
-4. Build animation preview system
-
----
-
-**Last Updated:** 2026-01-31
+**Last Updated:** 2026-02-12
 **Author:** Claude + JP2
-**Status:** Post-refactor, pre-streaming
+**Status:** Current — streaming implemented, metrics system planned

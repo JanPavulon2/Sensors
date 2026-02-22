@@ -90,8 +90,8 @@ class PixelFrame(BaseFrame):
         return self.zone_pixels
     
 
-@dataclass
-class MainStripFrame:
+@dataclass(slots=True)
+class CompositeFrame:
     """
     Unified frame used internally by FrameManager V3.
 
@@ -106,30 +106,14 @@ class MainStripFrame:
     """
 
     priority: FramePriority
+    ttl: float
     source: FrameSource
-
     updates: Dict[ZoneID, ZoneUpdateValue]
 
-    # Metadata
-    ttl: float = 0.1
-    partial: bool = False
-    timestamp: float = field(default_factory=time.time)
-
-    # ------------------------------------------------------------
-    # TTL handling
-    # ------------------------------------------------------------
+    created_at: float = field(default_factory=time.monotonic)
+    
     def is_expired(self) -> bool:
-        return (time.time() - self.timestamp) > self.ttl
-
-    # ------------------------------------------------------------
-    # FrameManager interface
-    # ------------------------------------------------------------
-    def as_zone_update(self) -> Dict[ZoneID, ZoneUpdateValue]:
-        """
-        Returns the raw update dict without interpretation.
-        FrameManager processes merging + normalization.
-        """
-        return self.updates
-
+        return (time.monotonic() - self.created_at) > self.ttl
+    
 
 

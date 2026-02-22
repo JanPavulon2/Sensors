@@ -1,11 +1,11 @@
 """
-FrameManager — Centralized rendering system with priority queues and dual led_channel support.
+FrameManager — Centralized rendering system with priority queues and multiple led channel support.
 
 Architecture:
   - Collects frames from multiple sources (animations, transitions, static)
-  - Maintains separate priority queues for led channel
+  - Maintains separate priority queues for led channels
   - Selects highest-priority frame each render tick
-  - Renders atomically to all registered led_channels
+  - Renders atomically to all registered led channels
   - Supports pause/step/FPS control for debugging
 
 Priority System:
@@ -15,12 +15,11 @@ Only the highest-priority frame is rendered. When high-priority sources stop,
 rendering automatically falls back to lower priorities.
 """
 
-
 from __future__ import annotations
 import asyncio
 import time
-from typing import Dict, List, Optional, Deque, cast, TYPE_CHECKING
 from collections import deque
+from typing import Dict, List, Optional, Deque, cast, TYPE_CHECKING
 
 from models.domain.output_frame import OutputFrame
 from utils.logger import get_logger
@@ -28,10 +27,11 @@ from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
 from models.frame import (
     SingleZoneFrame, MultiZoneFrame, 
-    PixelFrame, MainStripFrame, ZoneUpdateValue
+    PixelFrame, CompositeFrame, ZoneUpdateValue
 )
 from hardware.led.led_channel import LedChannel
 from engine.zone_render_state import ZoneRenderState
+from time import perf_counter
 
 if TYPE_CHECKING:
     from services.app_clock import AppClock
@@ -101,7 +101,7 @@ class FrameManager:
         # DQueue system
         # maxlen=10 allows all zones to queue frames before draining
         # (we have max 10 zones, some animating concurrently)
-        self.priority_queues: Dict[int, Deque[MainStripFrame]] = {
+        self.priority_queues: Dict[int, Deque[CompositeFrame]] = {
             p.value: deque(maxlen=10)
             for p in FramePriority
             if isinstance(p.value, int)
@@ -124,11 +124,21 @@ class FrameManager:
         self.frames_rendered = 0
         self.dma_skipped = 0  # Count of DMA transfers skipped due to frame match
 
-        self.last_rendered_frame: Optional[MainStripFrame] = None
+        self.last_rendered_frame: Optional[CompositeFrame] = None
         self.last_rendered_frame_hash = None
 
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
+
+        self._perf_acc = {
+            "build": 0.0,
+            "merge": 0.0,
+            "hw": 0.0,
+            "emit": 0.0,
+        }
+        self._perf_frames = 0
+        self._perf_last_log = perf_counter()
+
 
         log.info(
             "FrameManager initialized",
@@ -142,7 +152,7 @@ class FrameManager:
         """Register a led channel."""
 
         if led_channel in self.led_channels:
-            log.warn(f"Skipping registering zone led_channel in FrameManager - already registered")
+            log.warn(f"Skipping registering led channel in FrameManager - already registered")
             return
 
         self.led_channels.append(led_channel)
@@ -160,23 +170,22 @@ class FrameManager:
                 )
                 log.debug(f"Initialized black render state for zone {zone_id.name} ({zone_length} pixels)")
 
-        log.info(f"Added led_channel: {led_channel} (total zone_render_states now has {len(self.zone_render_states)} zones)")
+        log.info(f"Registered led channel: {led_channel} (total zone_render_states now has {len(self.zone_render_states)} zones)")
         
-    def remove_led_channel(self, led_channel: LedChannel) -> None:
-        """Unregister a led_channel."""
+    def unregister_led_channel(self, led_channel: LedChannel) -> None:
+        """Unregister a led channel."""
         
         if led_channel in self.led_channels:
             self.led_channels.remove(led_channel)
-            log.debug(f"Removed main led_channel: {led_channel}")
+            log.debug(f"Removed led channel: {led_channel}")
 
     # === Frame Submission API (Type-Specific) ===
-
     
     async def push_frame(self, frame):
         """
         Unified API endpoint.
         Accepts SingleZoneFrame / MultiZoneFrame / PixelFrame
-        and wraps them into MainStripFrame for the queue system.
+        and wraps them into CompositeFrame for the queue system.
         """
 
         # log.debug(f"FrameManager.push_frame: received {type(frame).__name__} from {getattr(frame, 'source', '?')} "
@@ -184,31 +193,28 @@ class FrameManager:
 
         # --- SingleZoneFrame ----------------------------------
         if isinstance(frame, SingleZoneFrame):
-            msf = MainStripFrame(
+            msf = CompositeFrame(
                 priority=frame.priority,
                 ttl=frame.ttl,
                 source=frame.source,
-                partial=True,
                 updates=cast(Dict[ZoneID, ZoneUpdateValue], {frame.zone_id: frame.color}),
             )
             
         # --- MultiZoneFrame -----------------------------------
         elif isinstance(frame, MultiZoneFrame):
-            msf = MainStripFrame(
+            msf = CompositeFrame(
                 priority=frame.priority,
                 ttl=frame.ttl,
                 source=frame.source,
-                partial=True,
                 updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_colors),     # dict[ZoneID, Color]
             )
         
         # --- PixelFrame --------------------------------------
         elif isinstance(frame, PixelFrame):
-            msf = MainStripFrame(
+            msf = CompositeFrame(
                 priority=frame.priority,
                 ttl=frame.ttl,
                 source=frame.source,
-                partial=True,
                 updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_pixels),
             )
         
@@ -219,16 +225,20 @@ class FrameManager:
 
     # === Control API ===
 
-    def pause(self) -> None: self.paused = True
+    def pause(self) -> None: 
+        self.paused = True
 
-    def resume(self) -> None: self.paused = False
+    def resume(self) -> None: 
+        self.paused = False
 
-    def step_frame(self) -> None: self.step_requested = True
+    def step_frame(self) -> None: 
+        self.step_requested = True
 
     def set_fps(self, fps: int) -> None:
         """Change FPS at runtime."""
         self.fps = max(1, min(fps, 240))
         log.info(f"FrameManager FPS set to {self.fps}")
+
 
     # === Lifecycle ===
 
@@ -266,11 +276,7 @@ class FrameManager:
     async def shutdown(self) -> None:
         """Cleanup and shutdown FrameManager resources."""
         await self.stop()
-
-        # TODO: Re-enable executor shutdown when executor approach is debugged
-        # Shutdown hardware executor gracefully
-        # self._hw_executor.shutdown(wait=True)
-
+        
         log.info("FrameManager shutdown complete")
 
     # === Metrics ===
@@ -296,59 +302,88 @@ class FrameManager:
             "pending": sum(len(q) for q in self.priority_queues.values()),
         }
 
-    # === Core Render Loop ===
 
-    async def _wait_for_next_frame(self):
-        elapsed = time.perf_counter() - self.last_show_time
-        min_dt = WS2811Timing.MIN_FRAME_TIME_MS / 1000
-        if elapsed < min_dt:
-            await asyncio.sleep(min_dt - elapsed)
+    # === Core Render Loop ===
 
     async def _render_loop(self) -> None:
         """Main render loop @ target FPS."""
-        frame_delay = 1.0 / self.fps
-        
-        log.info(f"Render loop @ {self.fps} FPS (delay={frame_delay*1000:.2f}ms)")
+        log.info(f"Render loop @ {self.fps} FPS (delay={1000/self.fps:.2f}ms)")
 
-        while self.running:                        
+        frame_period = 1.0 / self.fps
+        min_frame_time = max(frame_period, WS2811Timing.MIN_FRAME_TIME_MS / 1000)
+
+        # Absolute timeline: each frame targets an exact time, not relative to previous frame end
+        next_frame_time = time.perf_counter()
+
+        while self.running:
             # Handle pause/step
             if self.paused and not self.step_requested:
                 await asyncio.sleep(0.01)
                 continue
 
-            await self._wait_for_next_frame()
+            # === SLEEP UNTIL NEXT FRAME (RPi-optimized) ===
+            while True:
+                now = time.perf_counter()
+                remaining = next_frame_time - now
 
-            # Select and render frames
+                if remaining <= 0:
+                    break  # Frame is due (or overdue)
+                elif remaining > 0.003:
+                    # Far from target: sleep 1ms chunks
+                    await asyncio.sleep(0.001)
+                elif remaining > 0.001:
+                    # Close: yield to event loop (let animations run!)
+                    await asyncio.sleep(0)
+                else:
+                    # Final 1ms: minimal busy-wait for precision
+                    # (longer busy-wait blocks event loop → starves animation tasks)
+                    while time.perf_counter() < next_frame_time:
+                        pass
+                    break
+
+            # === RENDER FRAME ===
             try:
-                frame = await self._build_composite_frame()
-                
+                t0 = perf_counter()
+                composite_frame = await self._build_composite_frame()
+                t1 = perf_counter()
+                self._perf_acc["build"] += (t1 - t0)
+
                 # Render atomically, but skip DMA if main frame hasn't changed
                 # (Phase 2 optimization: 95% DMA reduction in static-only mode)
-                if frame:
-                    if frame is not self.last_rendered_frame:
-                        # Frame changed (different object) → do full render with hardware DMA
-                        await self._render_atomic(frame)
-                        self.last_rendered_frame = frame
-                        self.frame_times.append(time.perf_counter())
-
-                    else:
-                        # Frame unchanged (same object) → skip DMA, LEDs already have correct pixels
-                        self.dma_skipped += 1
-                        log.debug("Frame unchanged, skipping DMA transfer")
+                if composite_frame is not None:
+                    # Frame changed (different object) → do full render with hardware DMA
+                    await self._render_frame(composite_frame)
 
             except Exception as e:
                 log.error(f"Render error: {e}", exc_info=True)
 
-            # Reset step flag
-            self.step_requested = False
-            self.last_show_time = time.perf_counter()
+            finally:
+                self.step_requested = False
 
-            # Frame rate control
-            await asyncio.sleep(frame_delay)
+                # Advance to next frame on absolute timeline (no drift accumulation)
+                next_frame_time += min_frame_time
+
+                # Update last_show_time for compatibility (e.g., metrics, external readers)
+                self.last_show_time = time.perf_counter()
+                
+                now = perf_counter()
+                if now - self._perf_last_log >= 1.0 and self._perf_frames > 0:
+                    f = self._perf_frames
+                    log.warn(
+                        message="PERF 1s | fps=%d | build=%.2fms | merge=%.2fms | hw=%.2fms | emit=%.2fms",
+                        f=f,
+                        build=(self._perf_acc["build"] / f) * 1000,
+                        merge=(self._perf_acc["merge"] / f) * 1000,
+                        hw=(self._perf_acc["hw"] / f) * 1000,
+                        emit=(self._perf_acc["emit"] / f) * 1000,
+                    )
+                    self._perf_acc = {k: 0.0 for k in self._perf_acc}
+                    self._perf_frames = 0
+                    self._perf_last_log = now
 
     # === Frame Selection ===
 
-    async def _build_composite_frame(self) -> Optional[MainStripFrame]:
+    async def _build_composite_frame(self) -> Optional[CompositeFrame]:
         """
         Drain and merge frames from all priority queues.
 
@@ -368,10 +403,10 @@ class FrameManager:
             for queue in self.priority_queues.values():
                 queue.clear()
             
-        merged_updates = {}
-        highest_priority = None
+        merged_updates: Dict[ZoneID, ZoneUpdateValue] = {}
+        highest_priority: Optional[FramePriority] = None
         ttl = 0.0
-        source = None
+        source: Optional[FrameSource] = None
 
         # 1. Always collect ANIMATION first (base layer - continuous animations)
         anim_queue = queues_snapshot.get(FramePriority.ANIMATION.value)
@@ -380,8 +415,8 @@ class FrameManager:
                 frame = anim_queue.popleft()
                 if frame.is_expired():
                     continue
-                for zid, val in frame.updates.items():
-                    merged_updates[zid] = val
+                
+                merged_updates.update(frame.updates)
                 ttl = max(ttl, frame.ttl)
                 source = source or frame.source
                 highest_priority = FramePriority.ANIMATION
@@ -396,8 +431,8 @@ class FrameManager:
                 frame = queue.popleft()
                 if frame.is_expired():
                     continue
-                for zid, val in frame.updates.items():
-                    merged_updates[zid] = val  # Override ANIMATION for this zone
+                
+                merged_updates.update(frame.updates) # Override ANIMATION for this zone
                 ttl = max(ttl, frame.ttl)
                 source = source or frame.source
                 highest_priority = frame.priority
@@ -412,35 +447,35 @@ class FrameManager:
                 frame = queue.popleft()
                 if frame.is_expired():
                     continue
+                
                 # Only fill zones that don't have updates yet
                 for zid, val in frame.updates.items():
-                    if zid not in merged_updates:
-                        merged_updates[zid] = val
+                    merged_updates.setdefault(zid, val)
+                    
+                    # if zid not in merged_updates:
+                    #     merged_updates[zid] = val
                 ttl = max(ttl, frame.ttl)
-                if source is None:
-                    source = frame.source
+                source = source or frame.source
                 # Update highest_priority if this is our first frame
-                if highest_priority is None:
-                    highest_priority = frame.priority
+                highest_priority = highest_priority or frame.priority
 
         if not merged_updates or not source:
             return None
 
-        return MainStripFrame(
+        return CompositeFrame(
             priority=highest_priority or FramePriority.ANIMATION,
             ttl=ttl or 0.1,
             source=source,
-            partial=True,
             updates=merged_updates,
         )        
 
-    async def _select_frame_by_priority(self) -> Optional[MainStripFrame]:
+    async def _select_frame_by_priority(self) -> Optional[CompositeFrame]:
         """
         Select highest-priority non-expired frame from main queues.
         Priority order: DEBUG > TRANSITION > PULSE > ANIMATION > MANUAL > IDLE
 
         Returns:
-            MainStripFrame with highest priority, or None if all expired/empty
+            CompositeFrame with highest priority, or None if all expired/empty
         """
         async with self._lock:
             # Iterate from highest to lowest priority
@@ -479,68 +514,44 @@ class FrameManager:
 
     # === Rendering ===
 
-    # TODO: Uncomment and fix these when re-enabling async rendering with executor
-    # async def _render_atomic_async(self, main_frame: Optional[MainStripFrame]) -> None:
-    #     """
-    #     Async wrapper for atomic frame rendering.
-    #
-    #     Offloads blocking hardware DMA operations to thread pool executor,
-    #     preventing event loop blocking.
-    #     """
-    #     loop = asyncio.get_running_loop()
-    #
-    #     try:
-    #         await loop.run_in_executor(
-    #             self._hw_executor,
-    #             self._render_atomic_blocking,
-    #             main_frame
-    #         )
-    #     except Exception as e:
-    #         log.error(f"Hardware render error: {e}", exc_info=True)
-    #         raise
-    #
-    # def _render_atomic_blocking(self, main_frame: Optional[MainStripFrame]) -> None:
-    #     """
-    #     Blocking hardware rendering (runs in executor thread).
-    #
-    #     Safe to block here - executor thread handles DMA operations
-    #     without blocking the event loop.
-    #     """
-    #     self._render_atomic(main_frame)
-
-    async def _render_atomic(self, main_frame: Optional[MainStripFrame]) -> None:
-        """
-        Render frames to all registered strips atomically.
-        """
-        # Render main strip
-        if main_frame:
-            # log.debug(f"_render_atomic: rendering frame with {len(getattr(main_frame, 'updates', {}))} zone updates")
-            await self._render_frame(main_frame)
-        # else:
-            # log.debug(f"_render_atomic: no frame to render")
-
-    async def _render_frame(self, frame: MainStripFrame) -> None:
+    async def _render_frame(self, frame: CompositeFrame) -> None:
         """High-level render pipeline."""
-        updates = frame.as_zone_update()
+        t_merge0 = perf_counter()
+        updates = frame.updates
         merged = self._merge_updates(frame, updates)
+        t_merge1 = perf_counter()
+        self._perf_acc["merge"] += (t_merge1 - t_merge0)
+        
 
         if self._should_skip_dma(merged):
             return
 
+
+        t_hw0 = perf_counter()
         self._render_to_hardware(merged)
+        t_hw1 = perf_counter()
+        self._perf_acc["hw"] += (t_hw1 - t_hw0)
 
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
 
-        # Build output frame for streaming/recording
+
+        t_emit0 = perf_counter()
         output_frame = self._build_output_frame()
-        await self._emit_output_frame(output_frame)
+        if self.frame_streamer:
+            self.frame_streamer.push(output_frame)
+        t_emit1 = perf_counter()
+        self._perf_acc["emit"] += (t_emit1 - t_emit0)
         
-    def _merge_updates(self, frame: MainStripFrame, updates):
-        """Dispatch merging strategy."""
-        if getattr(frame, "partial", False):
-            return self._merge_partial_update(updates)
-        return self._merge_full_update(updates)    
+        # Build output frame for streaming/recording
+        # output_frame = self._build_output_frame()
+        #await self._emit_output_frame(output_frame)
+        
+        self._perf_frames += 1
+        
+    def _merge_updates(self, frame: CompositeFrame, updates: Dict[ZoneID, ZoneUpdateValue]):
+        """Merge frame updates into zone_render_states."""
+        return self._merge_full_update(updates)
     
     # def _expand_or_trim_zone(self, val, expected_len):
     #     """Normalize Color or list[Color] to exact pixel count."""
@@ -617,7 +628,7 @@ class FrameManager:
             if not pixels:
                 continue
 
-            # weź pierwszy pixel ze strefy
+            # take first pixel from zone
             c = pixels[0]
             (r, g, b) = c.to_rgb()
             
@@ -638,53 +649,32 @@ class FrameManager:
         return pix
 
     def _merge_full_update(self, updates):
-        """Merge full-frame updates into new zone_render_states."""
-        merged = {}
-
-        for zone_id, state in self.zone_render_states.items():
-            if zone_id in updates:
-                new_val = updates[zone_id]
-                # merged[zone_id] = self._expand_or_trim_zone(new_val, len(state.pixels))
-                merged[zone_id] = self._normalize_zone_pixels(new_val, len(state.pixels))
-                
-                # _expand_or_trim_zone(new_val, len(state.pixels))
-            else:
-                merged[zone_id] = list(state.pixels)
-
-        # update zone render state
-        for zid, pix in merged.items():
-            self.zone_render_states[zid].pixels = pix
-
-        return merged
-    
-    def _merge_partial_update(self, updates):
         """
-        Łączy częściową ramkę z pełnym stanem stref.
+        Merge updates into zone_render_states, preserving previous state for missing zones.
+
+        Note: By the time this is called, _build_composite_frame() has already composed
+        all sources (animation + static + overlays) into a single CompositeFrame.
+        The frame is effectively "full" by construction — missing zones mean no source
+        produced a frame for them this tick, so preserving previous state is correct.
+
+        The partial/full distinction from BaseFrame is lost during CompositeFrame
+        conversion (CompositeFrame has no partial field) and is irrelevant here
+        because the 3-phase merge in _build_composite_frame already handles
+        source priority and gap filling.
         """
         merged = {}
 
         for zone_id, state in self.zone_render_states.items():
             if zone_id in updates:
                 merged[zone_id] = self._normalize_zone_pixels(updates[zone_id], len(state.pixels))
-                # new_val = updates[zone_id]
-                # if isinstance(new_val, Color):
-                #     merged[zone_id] = [new_val] * len(state.pixels)
-                # else:
-                #     pix = list(new_val[:len(state.pixels)])
-                #     if len(pix) < len(state.pixels):
-                #         pix += [Color.black()] * (len(state.pixels) - len(pix))
-                #     merged[zone_id] = pix
             else:
                 merged[zone_id] = list(state.pixels)
 
-        # Debug: log which zones are in merged
-        # log.debug(f"_merge_partial_update: updates has {len(updates)} zones {list(updates.keys())}, merged has {len(merged)} zones {list(merged.keys())}")
-
-        # Aktualizujemy ZoneRenderState
-        for zone_id, pix in merged.items():
-            self.zone_render_states[zone_id].pixels = pix
+        for zid, pix in merged.items():
+            self.zone_render_states[zid].pixels = pix
 
         return merged
+    
 
     @staticmethod
     def _hash_merged_frame(merged):

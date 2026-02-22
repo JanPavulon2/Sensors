@@ -2,9 +2,10 @@
 Color Snake Animation
 
 Multi-pixel rainbow snake moving across a single zone.
+Fully deterministic: position and hue drift are derived from elapsed
+wall-clock time, independent of frame rate or CPU speed.
 """
 
-import asyncio
 import time
 from typing import List
 
@@ -21,7 +22,11 @@ class ColorSnakeAnimation(BaseAnimation):
 
     A multi-pixel snake travels through the zone pixels.
     Each segment has a shifted hue, forming a rainbow tail.
-    Base hue slowly rotates over time.
+    Base hue slowly drifts over time.
+
+    Movement is time-based: speed parameter controls pixels-per-second.
+    Rendering always reflects the current wall-clock position regardless
+    of how often step() is called.
 
     Supported parameters:
     - SPEED: Snake movement speed
@@ -29,9 +34,13 @@ class ColorSnakeAnimation(BaseAnimation):
     - PRIMARY_COLOR_HUE: Starting hue for the snake head
     """
 
-    # ============================================================
-    # Animation parameters (user-editable)
-    # ============================================================
+    # Speed range: 0 → MIN_PPS, 100 → MAX_PPS (pixels per second)
+    _MIN_PPS = 2.0
+    _MAX_PPS = 60.0
+
+    # Hue tuning constants
+    _HUE_STEP_PER_SEGMENT = 25        # hue offset between snake segments
+    _HUE_DRIFT_PER_SECOND = 30.0      # degrees per second of rainbow rotation
 
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
@@ -39,75 +48,47 @@ class ColorSnakeAnimation(BaseAnimation):
         AnimationParamID.PRIMARY_COLOR_HUE: PrimaryColorHueParam(),
     }
 
-    # ============================================================
-    # Internal tuning constants (NOT user parameters)
-    # ============================================================
-
-    _HUE_STEP_PER_SEGMENT = 25        # hue offset between snake segments
-    _HUE_DRIFT_PER_FRAME = 1          # how fast rainbow slowly rotates
-    _MIN_DELAY = 0.01                 # fastest movement
-    _MAX_DELAY = 0.10                 # slowest movement
-
     def __init__(self, zone, params):
         super().__init__(zone, params)
-
-        self._position = 0
-        self._base_hue = self.get_param(
-            AnimationParamID.PRIMARY_COLOR_HUE, 0
-        )
-
+        self._start_time = time.monotonic()
+        self._initial_hue = self.get_param(AnimationParamID.PRIMARY_COLOR_HUE, 0)
         self._pixel_count = self.pixel_count
 
-    # ============================================================
-    # Helpers
-    # ============================================================
+    def _speed_to_pps(self, speed: int) -> float:
+        """Convert speed parameter (0-100) to pixels per second."""
+        t = speed / 100.0
+        return self._MIN_PPS + t * (self._MAX_PPS - self._MIN_PPS)
 
-    def _calculate_delay(self) -> float:
-        """Convert SPEED parameter to frame delay."""
-        speed = self.get_param(AnimationParamID.SPEED, 50)
-        return self._MAX_DELAY - (speed / 100) * (self._MAX_DELAY - self._MIN_DELAY)
-
-    def _snake_pixels(self) -> List[Color]:
-        """
-        Build full pixel buffer for the zone.
-
-        Returns:
-            List[Color] of length = pixel_count
-        """
+    def _snake_pixels(self, position: int, base_hue: float) -> List[Color]:
+        """Build full pixel buffer for the zone."""
         pixels = [Color.black()] * self._pixel_count
 
         length = self.get_param(AnimationParamID.LENGTH, 5)
-        base_hue = self._base_hue
 
         for i in range(length):
-            pos = (self._position - i) % self._pixel_count
+            pos = (position - i) % self._pixel_count
             hue = (base_hue + i * self._HUE_STEP_PER_SEGMENT) % 360
-            # pixels[pos] = Color.from_hue(hue, brightness=self.base_brightness)
             pixels[pos] = Color.from_hue(hue)
 
         return pixels
 
-    # ============================================================
-    # Animation step
-    # ============================================================
-
     async def step(self) -> PixelFrame:
-        """
-        Generate a single animation frame.
-        """
-        pixels = self._snake_pixels()
+        """Generate a single animation frame from wall-clock time."""
+        speed = self.get_param(AnimationParamID.SPEED, 50)
 
-        frame = PixelFrame(
+        elapsed = time.monotonic() - self._start_time
+        pps = self._speed_to_pps(speed)
+
+        # Deterministic position and hue from elapsed time
+        position = int(elapsed * pps) % self._pixel_count
+        base_hue = (self._initial_hue + elapsed * self._HUE_DRIFT_PER_SECOND) % 360
+
+        pixels = self._snake_pixels(position, base_hue)
+
+        return PixelFrame(
             zone_pixels={self.zone_id: pixels},
             priority=FramePriority.ANIMATION,
             source=FrameSource.ANIMATION,
             ttl=0.12,
             partial=False,
         )
-
-        # Advance snake
-        self._position = (self._position + 1) % self._pixel_count
-        self._base_hue = (self._base_hue + self._HUE_DRIFT_PER_FRAME) % 360
-
-        await asyncio.sleep(self._calculate_delay())
-        return frame

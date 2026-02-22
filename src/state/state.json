@@ -2,53 +2,55 @@
   "zones": {
     "floor": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "yellow"
+        "mode": "HUE",
+        "hue": 111
       },
-      "brightness": 37,
+      "brightness": 23,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "BREATHE",
+        "id": "COLOR_SNAKE",
         "parameters": {
-          "speed": 1
+          "speed": 41,
+          "length": 5
         }
       }
     },
     "pixel": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 270
       },
-      "brightness": 100,
-      "is_on": false,
+      "brightness": 46,
+      "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
-        "parameters": {
-          "speed": 100
-        }
+        "id": "COLOR_FADE",
+        "parameters": {}
       }
     },
     "pixel2": {
       "color": {
-        "mode": "HUE",
-        "hue": 169
+        "mode": "PRESET",
+        "preset_name": "red"
       },
-      "brightness": 100,
-      "is_on": false,
-      "mode": "STATIC",
+      "brightness": 80,
+      "is_on": true,
+      "mode": "ANIMATION",
       "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {}
+        "parameters": {
+          "speed": 16,
+          "length": 5
+        }
       }
     },
     "circle": {
       "color": {
         "mode": "HUE",
-        "hue": 239
+        "hue": 176
       },
-      "brightness": 97,
+      "brightness": 33,
       "is_on": true,
       "mode": "STATIC",
       "animation": {
@@ -58,17 +60,15 @@
     },
     "matrix": {
       "color": {
-        "mode": "PRESET",
-        "preset_name": "red"
+        "mode": "HUE",
+        "hue": 329
       },
-      "brightness": 100,
-      "is_on": false,
+      "brightness": 11,
+      "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
-        "parameters": {
-          "length": 3
-        }
+        "id": "COLOR_FADE",
+        "parameters": {}
       }
     }
   },
@@ -82,7 +82,7 @@
   },
   "application": {
     "edit_mode_on": false,
-    "selected_animation_param_id": "HUE",
+    "selected_animation_param_id": "SPEED",
     "selected_zone_index": 0,
     "selected_zone_edit_target": "COLOR_HUE",
     "frame_by_frame_mode": false,

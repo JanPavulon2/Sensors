@@ -14,6 +14,7 @@ import { Button } from '@/shared/ui/button';
 import { FullLEDPreview } from '../preview';
 import { LEDPreviewSettings } from '@/features/zones/components/preview/LEDPreviewSettings';
 import { colorToRGB } from '@/shared/utils/colorConvert';
+import { useOutputFrame } from '@/features/frames/realtime/frames.store';
 
 interface ZoneEditPanelPreviewProps {
   zone: ZoneSnapshot;
@@ -21,11 +22,16 @@ interface ZoneEditPanelPreviewProps {
 }
 
 export function ZoneEditPanelPreview({ zone, useSettings = false }: ZoneEditPanelPreviewProps) {
-  // Mock pixel data - convert zone color to RGB
+  const frame = useOutputFrame();
+  const livePixels = frame?.zones[zone.id];
+
+  // Live from output_frame stream; fallback to static single-color fill
   const zoneRGB = colorToRGB(zone.color);
-  const mockPixels = Array(zone.pixel_count)
-    .fill(null)
-    .map(() => zoneRGB as [number, number, number]);
+  const pixels = livePixels
+    ?? Array(zone.pixel_count).fill(zoneRGB as [number, number, number]);
+
+  // OLD: static only
+  // const mockPixels = Array(zone.pixel_count).fill(null).map(() => zoneRGB as [number, number, number]);
 
   return (
     <div className="sticky top-[88px] z-10 p-4">
@@ -51,9 +57,9 @@ export function ZoneEditPanelPreview({ zone, useSettings = false }: ZoneEditPane
       </div>
 
       <FullLEDPreview
-        pixels={mockPixels}
+        pixels={pixels}
         pixelCount={zone.pixel_count}
-        brightness={zone.brightness || 255}
+        brightness={livePixels ? 100 : (zone.brightness || 100)}
         animationMode={zone.render_mode}
         useSettings={useSettings}
       />

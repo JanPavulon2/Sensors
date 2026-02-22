@@ -187,6 +187,12 @@ async def main():
 
     log.info("Initializing FrameStreamer...")
     frame_streamer = FrameStreamer(sio=socketio_server, target_fps=30)
+    frame_streamer_task = create_tracked_task(
+        frame_streamer.start(),
+        category=TaskCategory.SOCKETIO,
+        description="FrameStreamer streaming loop"
+    )
+    
     frame_manager.frame_streamer = frame_streamer
     log.info("FrameStreamer initialized", target_fps=30)
 
@@ -220,8 +226,7 @@ async def main():
         zone_service=zone_service,
         event_bus=event_bus,
     )
-
-
+    
     # Register service container with API for dependency injection
     set_service_container(services)
     log.info("Service container registered")
