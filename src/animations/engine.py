@@ -12,6 +12,7 @@ from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.color_snake import ColorSnakeAnimation
+from animations.rainbow import RainbowAnimation
 from animations.snake import SnakeAnimation
 from engine.frame_manager import FrameManager
 from models.animation_params.animation_param_id import AnimationParamID
@@ -30,7 +31,8 @@ def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
         AnimationID.BREATHE: BreatheAnimation,
         AnimationID.SNAKE: SnakeAnimation,
         AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
-        AnimationID.COLOR_FADE: ColorFadeAnimation
+        AnimationID.COLOR_FADE: ColorFadeAnimation,
+        AnimationID.RAINBOW: RainbowAnimation
     }
 
     # Convert enum to string keys using .name

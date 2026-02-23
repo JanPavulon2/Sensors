@@ -5,14 +5,15 @@
         "mode": "HUE",
         "hue": 111
       },
-      "brightness": 23,
-      "is_on": true,
-      "mode": "ANIMATION",
+      "brightness": 82,
+      "is_on": false,
+      "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
         "parameters": {
-          "speed": 41,
-          "length": 5
+          "speed": 15,
+          "primary_color_hue": 230,
+          "length": 3
         }
       }
     },
@@ -22,7 +23,7 @@
         "hue": 270
       },
       "brightness": 46,
-      "is_on": true,
+      "is_on": false,
       "mode": "ANIMATION",
       "animation": {
         "id": "COLOR_FADE",
@@ -35,24 +36,23 @@
         "preset_name": "red"
       },
       "brightness": 80,
-      "is_on": true,
+      "is_on": false,
       "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
+        "id": "RAINBOW",
         "parameters": {
-          "speed": 16,
-          "length": 5
+          "speed": 100
         }
       }
     },
     "circle": {
       "color": {
         "mode": "HUE",
-        "hue": 176
+        "hue": 11
       },
-      "brightness": 33,
-      "is_on": true,
-      "mode": "STATIC",
+      "brightness": 100,
+      "is_on": false,
+      "mode": "ANIMATION",
       "animation": {
         "id": "BREATHE",
         "parameters": {}
@@ -61,13 +61,13 @@
     "matrix": {
       "color": {
         "mode": "HUE",
-        "hue": 329
+        "hue": 79
       },
-      "brightness": 11,
-      "is_on": true,
-      "mode": "ANIMATION",
+      "brightness": 99,
+      "is_on": false,
+      "mode": "STATIC",
       "animation": {
-        "id": "COLOR_FADE",
+        "id": "COLOR_SNAKE",
         "parameters": {}
       }
     }

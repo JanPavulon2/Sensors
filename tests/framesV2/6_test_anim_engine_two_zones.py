@@ -4,6 +4,7 @@ from models.enums import ZoneID, AnimationID, FramePriority, FrameSource
 from models.color import Color
 from engine.frame_manager import FrameManager
 from animations.engine import AnimationEngine
+from services.event_bus import EventBus
 
 class DummyZone:
     """Minimal stub for ZoneCombined"""
@@ -36,14 +37,22 @@ class DummyStrip:
     def show_full_pixel_frame(self, frame):
         self.shown = frame
 
+class DummyLedChannel:
+    def __init__(self):
+        self.mapper = DummyMapper()
+        self.shown = None
+    def show_full_pixel_frame(self, frame):
+        self.shown = frame
+
 @pytest.mark.asyncio
 async def test_animation_engine_starts_two_zones_and_both_emit_frames():
     fm = FrameManager(fps=240)
-    strip = DummyStrip()
-    fm.add_led_channel(strip)
+    eb = EventBus()
+    led_channel = DummyLedChannel()
+    fm.register_led_channel(led_channel)
 
     zs = DummyZoneService()
-    engine = AnimationEngine(fm, zs)
+    engine = AnimationEngine(fm, zs, eb)
 
     # Start animations
     await engine.start_for_zone(

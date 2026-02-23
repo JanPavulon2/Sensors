@@ -33,7 +33,7 @@ def zone_service():
 
     def make_zone(zid, color=(255, 255, 255)):
         cfg = ZoneConfig(id=zid, display_name=zid.name, start_index=0, end_index=4)
-        st = ZoneState(color=Color.from_rgb(*color), brightness=100)
+        st = ZoneState(id=ZoneID.BOTTOM, color=Color.from_rgb(*color), brightness=100, is_on=True)
         return ZoneCombined(config=cfg, state=st)
 
     service.get_zone.side_effect = lambda zid: make_zone(zid)
@@ -52,5 +52,5 @@ def frame_manager(mock_led_channel):
 
 
 @pytest.fixture
-def engine(frame_manager, zone_service):
-    return AnimationEngine(frame_manager, zone_service)
+def engine(frame_manager, zone_service, event_bus):
+    return AnimationEngine(frame_manager, zone_service, event_bus)

@@ -75,7 +75,7 @@ class LEDStripID(Enum):
 
 
 class LEDStripType(Enum):
-    """Typ fizycznego paska LED — używamy enumów, nie stringów."""
+    """Physical LED strip type"""
     WS2811_12V = "WS2811_12V"
     WS2812_5V = "WS2812_5V"
     WS2813 = "WS2813"
@@ -88,6 +88,7 @@ class AnimationID(str, Enum):
     COLOR_FADE = "COLOR_FADE"
     SNAKE = "SNAKE"
     COLOR_SNAKE = "COLOR_SNAKE"
+    RAINBOW = "RAINBOW"
     COLOR_CYCLE = "COLOR_CYCLE"
     MATRIX = "MATRIX"
 

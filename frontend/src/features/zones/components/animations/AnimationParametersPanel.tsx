@@ -8,152 +8,7 @@
 import React from 'react';
 import { Slider } from '@/shared/ui/slider';
 import { Label } from '@/shared/ui/label';
-import type { AnimationID } from './AnimationSelector';
-
-// Parameter specs for each animation
-// Backend ranges are documented below for reference:
-// - SPEED: 1-100 (percentage, backend dependent)
-// - INTENSITY: 0.0-1.0 (normalized float, displayed as 0-100%)
-// - PRIMARY_COLOR_HUE: 0-359 (degrees)
-// - HUE_OFFSET: 0-360 (degrees)
-// - LENGTH: per-animation (SNAKE: 1-10px, COLOR_SNAKE: 3-15px)
-const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
-  STATIC: [],
-  BREATHE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'intensity',
-      label: 'Intensity',
-      type: 'range',
-      min: 0,
-      max: 100,
-      step: 10,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  COLOR_FADE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  COLOR_CYCLE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  SNAKE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'length',
-      label: 'Length',
-      type: 'range',
-      min: 1,
-      max: 10,
-      step: 1,
-      unit: 'px',
-      default: 5,
-    },
-    {
-      id: 'primary_color_hue',
-      label: 'Color Hue',
-      type: 'range',
-      min: 0,
-      max: 359,
-      step: 10,
-      unit: '°',
-      default: 30,
-    },
-  ],
-  COLOR_SNAKE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'length',
-      label: 'Length',
-      type: 'range',
-      min: 3,
-      max: 15,
-      step: 1,
-      unit: 'px',
-      default: 7,
-    },
-    {
-      id: 'primary_color_hue',
-      label: 'Color Hue',
-      type: 'range',
-      min: 0,
-      max: 359,
-      step: 10,
-      unit: '°',
-      default: 30,
-    },
-  ],
-  MATRIX: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-};
-
-interface ParameterDef {
-  id: string;
-  label: string;
-  type: 'range' | 'enum' | 'bool';
-  min?: number;
-  max?: number;
-  step?: number;
-  unit?: string;
-  options?: string[];
-  default?: number | string | boolean;
-}
+import { ANIMATION_PARAMETERS, type AnimationID } from './animations.config';
 
 /**
  * Convert backend value to display value
@@ -161,12 +16,7 @@ interface ParameterDef {
  */
 function toDisplayValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
-
-  if (parameterId === 'intensity') {
-    // Backend: 0.0-1.0, Display: 0-100%
-    return value * 100;
-  }
-
+  if (parameterId === 'intensity') return value * 100;
   return value;
 }
 
@@ -176,12 +26,7 @@ function toDisplayValue(parameterId: string, value: number | string | boolean): 
  */
 function toBackendValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
-
-  if (parameterId === 'intensity') {
-    // Display: 0-100%, Backend: 0.0-1.0
-    return value / 100;
-  }
-
+  if (parameterId === 'intensity') return value / 100;
   return value;
 }
 
@@ -204,7 +49,6 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 }) => {
   const parameterDefs = ANIMATION_PARAMETERS[animationId] || [];
 
-  // If no parameters, show message
   if (parameterDefs.length === 0) {
     return (
       <div className="p-3 bg-bg-elevated rounded-md text-center">
@@ -221,7 +65,6 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 
         return (
           <div key={paramDef.id} className="space-y-2">
-            {/* Label */}
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium text-text-primary">{paramDef.label}</Label>
               <span className="text-sm font-mono text-accent-primary">
@@ -230,7 +73,6 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
               </span>
             </div>
 
-            {/* Control */}
             {paramDef.type === 'range' && (
               <>
                 <Slider
@@ -245,7 +87,6 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
                   disabled={disabled}
                   className="w-full"
                 />
-                {/* Range indicator */}
                 <div className="text-xs text-text-tertiary flex justify-between">
                   <span>{paramDef.min ?? 0}</span>
                   <span>{paramDef.max ?? 100}</span>

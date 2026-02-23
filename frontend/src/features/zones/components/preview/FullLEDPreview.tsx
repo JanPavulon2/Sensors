@@ -153,7 +153,7 @@ const StripPreview: React.FC<{
         return (
           <div
             key={index}
-            className={`${getShapeClass(shape)} transition-all duration-150 flex-shrink-0`}
+            className={`${getShapeClass(shape)} transition-opacity duration-150 flex-shrink-0`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,
@@ -230,7 +230,7 @@ const CirclePreview: React.FC<{
         return (
           <div
             key={index}
-            className={`absolute ${getShapeClass(shape)} transition-all duration-150`}
+            className={`absolute ${getShapeClass(shape)} transition-opacity duration-150`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,
@@ -312,7 +312,7 @@ const MatrixPreview: React.FC<{
         return (
           <div
             key={index}
-            className={`${getShapeClass(shape)} transition-all duration-150`}
+            className={`${getShapeClass(shape)} transition-opacity duration-150`}
             style={{
               width: `${ledSize}px`,
               height: `${ledSize}px`,

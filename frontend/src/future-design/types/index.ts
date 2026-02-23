@@ -84,6 +84,7 @@ export const RenderMode = {
   COLOR_CYCLE: 'COLOR_CYCLE',
   SNAKE: 'SNAKE',
   COLOR_SNAKE: 'COLOR_SNAKE',
+  RAINBOW: 'RAINBOW',
   MATRIX: 'MATRIX',
 } as const;
 
@@ -96,6 +97,7 @@ export type AnimationID =
   | 'COLOR_CYCLE'
   | 'SNAKE'
   | 'COLOR_SNAKE'
+  | 'RAINBOW'
   | 'MATRIX';
 
 export const ParamID = {

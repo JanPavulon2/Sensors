@@ -368,15 +368,15 @@ class FrameManager:
                 
                 now = perf_counter()
                 if now - self._perf_last_log >= 1.0 and self._perf_frames > 0:
-                    f = self._perf_frames
-                    log.warn(
-                        message="PERF 1s | fps=%d | build=%.2fms | merge=%.2fms | hw=%.2fms | emit=%.2fms",
-                        f=f,
-                        build=(self._perf_acc["build"] / f) * 1000,
-                        merge=(self._perf_acc["merge"] / f) * 1000,
-                        hw=(self._perf_acc["hw"] / f) * 1000,
-                        emit=(self._perf_acc["emit"] / f) * 1000,
-                    )
+                    # f = self._perf_frames
+                    # log.warn(
+                    #     message=f"PERF 1s | fps=%d | build=%.2fms | merge=%.2fms | hw=%.2fms | emit=%.2fms",
+                    #     f=f,
+                    #     build=(self._perf_acc["build"] / f) * 1000,
+                    #     merge=(self._perf_acc["merge"] / f) * 1000,
+                    #     hw=(self._perf_acc["hw"] / f) * 1000,
+                    #     emit=(self._perf_acc["emit"] / f) * 1000,
+                    # )
                     self._perf_acc = {k: 0.0 for k in self._perf_acc}
                     self._perf_frames = 0
                     self._perf_last_log = now
