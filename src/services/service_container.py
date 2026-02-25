@@ -11,6 +11,7 @@ from managers.color_manager import ColorManager
 from services.data_assembler import DataAssembler
 from services.app_clock import AppClock
 from services.frame_streamer import FrameStreamer
+from services.metrics_streamer import MetricsStreamer
 
 @dataclass
 class ServiceContainer:
@@ -70,3 +71,4 @@ class ServiceContainer:
 
     app_clock: AppClock
     frame_streamer: FrameStreamer
+    metrics_streamer: MetricsStreamer
