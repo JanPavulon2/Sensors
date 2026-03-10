@@ -18,7 +18,7 @@ export function RenderControls() {
 
   async function handleResetCounters() {
     try {
-      await api.post('/api/v1/metrics/reset');
+      await api.post('/v1/metrics/reset');
     } catch (error) {
       console.error('Failed to reset metrics:', error);
     }
@@ -28,7 +28,7 @@ export function RenderControls() {
     const fps = values[0];
     setRenderFps(fps);
     try {
-      await api.put('/api/v1/metrics/render-fps', { fps });
+      await api.put('/v1/metrics/render-fps', { fps });
     } catch (error) {
       console.error('Failed to set render FPS:', error);
     }
@@ -37,7 +37,7 @@ export function RenderControls() {
   async function handleIntervalChange(interval: number) {
     setMetricsInterval(interval);
     try {
-      await api.put('/api/v1/metrics/interval', { interval });
+      await api.put('/v1/metrics/interval', { interval });
     } catch (error) {
       console.error('Failed to set metrics interval:', error);
     }
