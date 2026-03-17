@@ -3,14 +3,16 @@
     "floor": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "warm_white"
+        "preset_name": "orange"
       },
-      "brightness": 4,
+      "brightness": 67,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
-        "parameters": {}
+        "id": "SNAKE",
+        "parameters": {
+          "speed": 1
+        }
       }
     },
     "pixel": {
