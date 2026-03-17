@@ -5,7 +5,7 @@
  * Supports: Range sliders, Enum dropdowns, Boolean toggles
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Slider } from '@/shared/ui/slider';
 import { Label } from '@/shared/ui/label';
 import { ANIMATION_PARAMETERS, type AnimationID } from './animations.config';
@@ -40,6 +40,13 @@ interface AnimationParametersPanelProps {
 /**
  * AnimationParametersPanel Component
  * Renders dynamic controls based on animation parameters
+ * 
+ * Behavior:
+ * - Slider updates UI immediately (responsive, follows cursor)
+ * - Animation updates in real-time from backend (while dragging)
+ * - Param save is debounced 300ms after last change
+ * - While dragging: uses local UI value (ignores backend updates)
+ * - After release: accepts backend value if it arrived while dragging
  */
 export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> = ({
   animationId,
@@ -48,6 +55,53 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
   disabled = false,
 }) => {
   const parameterDefs = ANIMATION_PARAMETERS[animationId] || [];
+
+  // Local optimistic values while user is dragging (for responsive UI)
+  const [localValues, setLocalValues] = useState<Record<string, number | string | boolean>>({});
+
+  // Track which parameters are currently being dragged
+  const draggingRef = useRef<Set<string>>(new Set());
+
+  // Track pending parameter changes and debounce timers
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Handle range slider changes with debouncing
+  const handleRangeChange = (paramId: string, displayValue: number) => {
+    // Mark as dragging
+    draggingRef.current.add(paramId);
+
+    // Update local UI immediately for responsiveness
+    setLocalValues(prev => ({ ...prev, [paramId]: displayValue }));
+
+    // Debounce the API call (and stop dragging on completion)
+    const backendValue = toBackendValue(paramId, displayValue);
+
+    if (debounceTimersRef.current[paramId]) {
+      clearTimeout(debounceTimersRef.current[paramId]);
+    }
+
+    debounceTimersRef.current[paramId] = setTimeout(() => {
+      onParameterChange?.(paramId, backendValue);
+      // Don't immediately remove from dragging - let parent updates take effect
+    }, 300);
+  };
+
+  // When user releases slider, stop local override
+  const handleRangeEnd = (paramId: string) => {
+    draggingRef.current.delete(paramId);
+    setLocalValues(prev => {
+      const updated = { ...prev };
+      delete updated[paramId];
+      return updated;
+    });
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   if (parameterDefs.length === 0) {
     return (
@@ -60,7 +114,11 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
   return (
     <div className="space-y-4">
       {parameterDefs.map((paramDef) => {
-        const rawValue = parameters[paramDef.id] ?? paramDef.default ?? 0;
+        // Use local value if dragging, otherwise use prop value from backend
+        const isCurrentlyDragging = draggingRef.current.has(paramDef.id);
+        const rawValue = isCurrentlyDragging
+          ? localValues[paramDef.id]
+          : (parameters[paramDef.id] ?? paramDef.default ?? 0);
         const displayValue = toDisplayValue(paramDef.id, rawValue);
 
         return (
@@ -78,9 +136,10 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
                 <Slider
                   value={[typeof displayValue === 'number' ? displayValue : 0]}
                   onValueChange={(value) => {
-                    const backendValue = toBackendValue(paramDef.id, value[0]);
-                    onParameterChange?.(paramDef.id, backendValue);
+                    handleRangeChange(paramDef.id, value[0]);
                   }}
+                  onMouseUp={() => handleRangeEnd(paramDef.id)}
+                  onTouchEnd={() => handleRangeEnd(paramDef.id)}
                   min={paramDef.min ?? 0}
                   max={paramDef.max ?? 100}
                   step={paramDef.step ?? 1}
@@ -113,11 +172,10 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
               <button
                 onClick={() => onParameterChange?.(paramDef.id, !rawValue)}
                 disabled={disabled}
-                className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${
-                  rawValue
+                className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${rawValue
                     ? 'bg-accent-primary text-bg-app border-accent-primary'
                     : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
-                }`}
+                  }`}
               >
                 {rawValue ? '✓ Enabled' : '✕ Disabled'}
               </button>

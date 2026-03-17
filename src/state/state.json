@@ -6,7 +6,7 @@
         "preset_name": "orange"
       },
       "brightness": 67,
-      "is_on": true,
+      "is_on": false,
       "mode": "ANIMATION",
       "animation": {
         "id": "SNAKE",
@@ -21,7 +21,7 @@
         "hue": 310
       },
       "brightness": 94,
-      "is_on": true,
+      "is_on": false,
       "mode": "STATIC",
       "animation": {
         "id": "RAINBOW",
@@ -33,16 +33,16 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "cool_white"
+        "preset_name": "amber"
       },
       "brightness": 100,
-      "is_on": true,
+      "is_on": false,
       "mode": "ANIMATION",
       "animation": {
         "id": "SNAKE",
         "parameters": {
-          "length": 1,
-          "speed": 6
+          "length": 5,
+          "primary_color_hue": 240
         }
       }
     },
@@ -53,7 +53,7 @@
       },
       "brightness": 100,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "RAINBOW",
         "parameters": {}
