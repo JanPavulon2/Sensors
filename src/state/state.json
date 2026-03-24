@@ -3,15 +3,15 @@
     "floor": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "orange"
+        "preset_name": "indigo"
       },
       "brightness": 67,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
-        "id": "SNAKE",
+        "id": "RAINBOW",
         "parameters": {
-          "speed": 1
+          "speed": 74
         }
       }
     },
@@ -21,7 +21,7 @@
         "hue": 310
       },
       "brightness": 94,
-      "is_on": false,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "RAINBOW",
@@ -33,14 +33,16 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "pink"
+        "preset_name": "amber"
       },
-      "brightness": 73,
+      "brightness": 29,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
         "id": "RAINBOW",
-        "parameters": {}
+        "parameters": {
+          "speed": 93
+        }
       }
     },
     "circle": {
@@ -59,10 +61,10 @@
     "matrix": {
       "color": {
         "mode": "HUE",
-        "hue": 79
+        "hue": 118
       },
-      "brightness": 99,
-      "is_on": false,
+      "brightness": 100,
+      "is_on": true,
       "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
@@ -79,9 +81,9 @@
     }
   },
   "application": {
-    "edit_mode_on": false,
+    "edit_mode_on": true,
     "selected_animation_param_id": "HUE",
-    "selected_zone_index": 1,
+    "selected_zone_index": 0,
     "selected_zone_edit_target": "COLOR_PRESET",
     "frame_by_frame_mode": false,
     "save_on_change": true
