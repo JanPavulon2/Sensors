@@ -6,7 +6,7 @@
         "preset_name": "orange"
       },
       "brightness": 67,
-      "is_on": false,
+      "is_on": true,
       "mode": "ANIMATION",
       "animation": {
         "id": "SNAKE",
@@ -33,17 +33,14 @@
     "pixel2": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "amber"
+        "preset_name": "pink"
       },
-      "brightness": 100,
-      "is_on": false,
-      "mode": "ANIMATION",
+      "brightness": 73,
+      "is_on": true,
+      "mode": "STATIC",
       "animation": {
-        "id": "SNAKE",
-        "parameters": {
-          "length": 5,
-          "primary_color_hue": 240
-        }
+        "id": "RAINBOW",
+        "parameters": {}
       }
     },
     "circle": {

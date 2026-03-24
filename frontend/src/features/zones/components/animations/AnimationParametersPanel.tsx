@@ -13,10 +13,18 @@ import { ANIMATION_PARAMETERS, type AnimationID } from './animations.config';
 /**
  * Convert backend value to display value
  * Handles special cases like intensity (0.0-1.0 → 0-100%)
+ * Note: Detects scale mismatch (old state might have 0-100, new state 0.0-1.0)
  */
 function toDisplayValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
-  if (parameterId === 'intensity') return value * 100;
+  if (parameterId === 'intensity') {
+    // Detect scale: if > 1, assume it's already 0-100 (old state format)
+    // If <= 1, assume it's 0.0-1.0 (correct backend format)
+    if (value > 1) {
+      return value;  // Already in 0-100 scale
+    }
+    return value * 100;  // Convert 0.0-1.0 → 0-100
+  }
   return value;
 }
 
@@ -173,8 +181,8 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
                 onClick={() => onParameterChange?.(paramDef.id, !rawValue)}
                 disabled={disabled}
                 className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${rawValue
-                    ? 'bg-accent-primary text-bg-app border-accent-primary'
-                    : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
+                  ? 'bg-accent-primary text-bg-app border-accent-primary'
+                  : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
                   }`}
               >
                 {rawValue ? '✓ Enabled' : '✕ Disabled'}

@@ -84,7 +84,7 @@ class ColorSnakeAnimation(BaseAnimation):
         fractional_offset = position % 1.0
         head_index = int(position) % self._pixel_count
 
-        for pixel_offset in range(-1, length + 1):
+        for pixel_offset in range(-1, length):
             pixel_index = (head_index - pixel_offset) % self._pixel_count
 
             if pixel_offset == -1:

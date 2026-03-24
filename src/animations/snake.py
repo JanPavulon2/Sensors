@@ -40,7 +40,7 @@ class SnakeAnimation(BaseAnimation):
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
         AnimationParamID.PRIMARY_COLOR_HUE: PrimaryColorHueParam(),
-        AnimationParamID.LENGTH: LengthParam(default=1, min_value=1, max_value=10, step=1,)
+        AnimationParamID.LENGTH: LengthParam(default=5, min_value=3, max_value=15, step=1,)
     }
 
     def __init__(self, zone, params):
@@ -66,8 +66,8 @@ class SnakeAnimation(BaseAnimation):
         fractional_offset = position % 1.0
         head_index = int(position) % pixel_count
 
-        # Draw snake: leading pixel (-1), body (0..length)
-        for pixel_offset in range(-1, length + 1):
+        # Draw snake: leading pixel (-1), body (0..length-1)
+        for pixel_offset in range(-1, length):
             pixel_index = (head_index - pixel_offset) % pixel_count
 
             if pixel_offset == -1:

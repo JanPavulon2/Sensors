@@ -28,11 +28,35 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
   disabled = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const pendingHueRef = useRef<number | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 280, height: 280 });
 
-  // Render wheel
+  // Responsive sizing: use container width up to max, or min for compact
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      // Use container size, minimum 140px for compact, 240px for full
+      const size = Math.max(compact ? 140 : 240, Math.min(width, height));
+      setCanvasSize({ width: size, height: size });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(updateSize);
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, [compact]);
+
+  // Render wheel with device pixel ratio for crisp rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -40,85 +64,114 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    // Set canvas resolution for high DPI displays
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvasSize.width * dpr;
+    canvas.height = canvasSize.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
     const radius = Math.min(centerX, centerY) - 10;
+    const innerRadius = radius * 0.35;
 
-    // Clear canvas
-    ctx.fillStyle = 'rgba(10, 14, 20, 0.95)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Clear canvas with transparent background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // Draw hue wheel
-    for (let angle = 0; angle < 360; angle += 2) {
+    // Draw hue wheel as smooth gradient segments (no dark spots)
+    for (let angle = 0; angle < 360; angle++) {
       const rad = ((angle - 90) * Math.PI) / 180;
-      const x1 = centerX + Math.cos(rad) * (radius * 0.4);
-      const y1 = centerY + Math.sin(rad) * (radius * 0.4);
-      const x2 = centerX + Math.cos(rad) * radius;
-      const y2 = centerY + Math.sin(rad) * radius;
+      const nextRad = ((angle + 1 - 90) * Math.PI) / 180;
 
-      // Create color from hue
+      // Create gradient for smooth color transition
+      const gradient = ctx.createLinearGradient(
+        centerX + Math.cos(rad) * innerRadius,
+        centerY + Math.sin(rad) * innerRadius,
+        centerX + Math.cos(rad) * radius,
+        centerY + Math.sin(rad) * radius
+      );
+
       const hsvColor = hslToRGB(angle, 100, 50);
-      ctx.strokeStyle = `rgb(${hsvColor[0]}, ${hsvColor[1]}, ${hsvColor[2]})`;
-      ctx.lineWidth = 3;
+      gradient.addColorStop(0, `rgba(${hsvColor[0]}, ${hsvColor[1]}, ${hsvColor[2]}, 0.2)`);
+      gradient.addColorStop(1, `rgb(${hsvColor[0]}, ${hsvColor[1]}, ${hsvColor[2]})`);
+
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      ctx.moveTo(centerX + Math.cos(rad) * innerRadius, centerY + Math.sin(rad) * innerRadius);
+      ctx.lineTo(centerX + Math.cos(rad) * radius, centerY + Math.sin(rad) * radius);
+      ctx.lineTo(centerX + Math.cos(nextRad) * radius, centerY + Math.sin(nextRad) * radius);
+      ctx.lineTo(centerX + Math.cos(nextRad) * innerRadius, centerY + Math.sin(nextRad) * innerRadius);
+      ctx.fill();
     }
 
-    // Draw center circle with glow
-    ctx.fillStyle = 'rgba(20, 25, 35, 0.9)';
+    // Draw outer ring border for definition
+    ctx.strokeStyle = 'rgba(232, 234, 237, 0.3)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.3, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw inner ring border
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw center circle with subtle background
+    ctx.fillStyle = 'rgba(20, 25, 35, 0.6)';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius * 0.95, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw current hue indicator
+    // Draw current hue indicator (larger for easier dragging)
     const currentRad = ((hue - 90) * Math.PI) / 180;
-    const indicatorX = centerX + Math.cos(currentRad) * radius;
-    const indicatorY = centerY + Math.sin(currentRad) * radius;
+    const indicatorX = centerX + Math.cos(currentRad) * (radius + 5);
+    const indicatorY = centerY + Math.sin(currentRad) * (radius + 5);
 
-    // Outer glow
-    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+    // Outer glow ring
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(indicatorX, indicatorY, 16, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(indicatorX, indicatorY, 18, 0, Math.PI * 2);
+    ctx.stroke();
 
-    // Indicator dot
+    // Indicator dot (larger, 14px → easier to drag)
     const indicatorColor = hslToRGB(hue, 100, 50);
     ctx.fillStyle = `rgb(${indicatorColor[0]}, ${indicatorColor[1]}, ${indicatorColor[2]})`;
     ctx.beginPath();
-    ctx.arc(indicatorX, indicatorY, 10, 0, Math.PI * 2);
+    ctx.arc(indicatorX, indicatorY, 14, 0, Math.PI * 2);
     ctx.fill();
 
     // White border on indicator
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
     // Draw hue value in center
-    ctx.fillStyle = 'rgba(232, 234, 237, 0.8)';
-    ctx.font = 'bold 20px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(232, 234, 237, 0.9)';
+    ctx.font = 'bold 24px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${Math.round(hue)}°`, centerX, centerY);
-  }, [hue]);
+  }, [hue, canvasSize]);
 
   // Calculate hue from mouse position
-  const calculateHueFromEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const calculateHueFromEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement> | MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e as any).clientX - rect.left;
+    const y = (e as any).clientY - rect.top;
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    // Use canvasSize (CSS size) not canvas.width (scaled by DPR) for calculation
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
 
     const angle = Math.atan2(y - centerY, x - centerX);
     const hueValue = (angle * 180) / Math.PI + 90;
     return ((hueValue % 360) + 360) % 360;
-  }, []);
+  }, [canvasSize]);
 
   // Throttled update during drag using RAF
   const updateHueThrottled = useCallback((newHue: number) => {
@@ -153,44 +206,54 @@ export const HueWheelPicker: React.FC<HueWheelPickerProps> = ({
     handleCanvasClick(e);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || disabled) return;
-    const newHue = calculateHueFromEvent(e);
-    if (newHue !== null) {
-      updateHueThrottled(newHue);
-    }
-  };
+  // Global drag tracking (works outside canvas bounds)
+  useEffect(() => {
+    if (!isDragging) return;
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    // Flush any pending update
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    if (pendingHueRef.current !== null) {
-      onChange(pendingHueRef.current);
-      pendingHueRef.current = null;
-    }
-  };
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const newHue = calculateHueFromEvent(e as any);
+      if (newHue !== null) {
+        updateHueThrottled(newHue);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      // Flush any pending update
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (pendingHueRef.current !== null) {
+        onChange(pendingHueRef.current);
+        pendingHueRef.current = null;
+      }
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging, calculateHueFromEvent, updateHueThrottled, onChange]);
 
   const size = compact ? 140 : 280;
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div ref={containerRef} className="w-full aspect-square max-h-96 flex flex-col items-center gap-2">
       <canvas
         ref={canvasRef}
-        width={size}
-        height={size}
-        className={`rounded-lg border border-border-default transition-opacity ${
-          disabled ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
+        style={{
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
+          cursor: disabled ? 'not-allowed' : 'crosshair'
+        }}
+        className={`rounded-lg transition-opacity ${disabled ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         onClick={handleCanvasClick}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        style={{ cursor: disabled ? 'not-allowed' : 'crosshair' }}
       />
       <p className="text-xs text-text-tertiary hidden">← Click or drag to select hue →</p>
     </div>
