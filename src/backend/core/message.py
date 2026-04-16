@@ -4,18 +4,19 @@
 # =========================================================
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, Any
+from enum import auto
+
+from core.primitives import AutoSnakeStrEnum, JsonObject
 
 
-class MessageType(str, Enum):
-    EVENT = "event"
-    COMMAND = "command"
+class MessageType(AutoSnakeStrEnum):
+    EVENT = auto()
+    COMMAND = auto()
 
 
 @dataclass
 class Message:
     type: MessageType
     name: str
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: JsonObject = field(default_factory=dict)
 
