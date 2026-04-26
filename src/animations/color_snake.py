@@ -34,17 +34,10 @@ class ColorSnakeAnimation(BaseAnimation):
     - PRIMARY_COLOR_HUE: Starting hue for the snake head
     """
 
-    # Speed range: 0 → MIN_PPS, 100 → MAX_PPS (pixels per second)
-    _MIN_PPS = 2.0
-    _MAX_PPS = 60.0
+    # ============================================================
+    # Animation parameters (user-editable)
+    # ============================================================
 
-    # Hue tuning constants
-    _HUE_STEP_PER_SEGMENT = 25        # hue offset between snake segments
-    _HUE_DRIFT_PER_SECOND = 30.0      # degrees per second of rainbow rotation
-
-    # Below this brightness (%) pixels are invisible on WS281x and cause flicker
-    _MIN_VISIBLE_BRIGHTNESS = 2
-    
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
         AnimationParamID.LENGTH: LengthParam(default=7, min_value=3, max_value=15),
@@ -57,69 +50,40 @@ class ColorSnakeAnimation(BaseAnimation):
         self._initial_hue = self.get_param(AnimationParamID.PRIMARY_COLOR_HUE, 0)
         self._pixel_count = self.pixel_count
 
-    def _speed_to_pps(self, speed: int) -> float:
-        """Convert speed parameter (0-100) to pixels per second."""
-        normalized_speed = speed / 100.0
-        return self._MIN_PPS + normalized_speed * (self._MAX_PPS - self._MIN_PPS)
+    # ============================================================
+    # Helpers
+    # ============================================================
 
+    def _calculate_delay(self) -> float:
+        """Convert SPEED parameter to frame delay."""
+        speed = self.get_param(AnimationParamID.SPEED, 50)
+        return self._MAX_DELAY - (speed / 100) * (self._MAX_DELAY - self._MIN_DELAY)
 
-    def _snake_pixels(self, position: float, base_hue: float, length: int) -> List[Color]:
+    def _snake_pixels(self) -> List[Color]:
         """
-        Build full pixel buffer with smooth brightness on both head and tail.
+        Build full pixel buffer for the zone.
 
-        The snake spans from a leading pixel (the one the head is entering)
-        through the body to a fading tail. Both edges use smooth brightness
-        transitions so the snake appears to swim continuously.
-
-        Pixel layout relative to head_index (the last fully-entered pixel):
-          pixel_offset = -1  →  leading pixel (head entering, fades IN)
-          pixel_offset =  0  →  head pixel (brightest body pixel)
-          pixel_offset =  N  →  Nth body pixel behind head (fading out)
-
-        Leading pixel brightness = fractional_offset² (0 at entry, 100% when fully entered).
-        Body/tail brightness = quadratic falloff from head to tail tip.
+        Returns:
+            List[Color] of length = pixel_count
         """
         pixels = [Color.black()] * self._pixel_count
 
-        fractional_offset = position % 1.0
-        head_index = int(position) % self._pixel_count
+        length = self.get_param(AnimationParamID.LENGTH, 5)
+        base_hue = self._base_hue
 
-        for pixel_offset in range(-1, length):
-            pixel_index = (head_index - pixel_offset) % self._pixel_count
-
-            if pixel_offset == -1:
-                # Leading pixel: the head is entering this pixel.
-                # fractional_offset = how far the head has moved into it (0→1).
-                brightness_percent = int(fractional_offset ** 2 * 100)
-                hue_distance = 0.0
-            else:
-                # Body and tail: standard quadratic falloff from head.
-                distance_from_head = fractional_offset + pixel_offset
-                normalized_distance = distance_from_head / length
-                brightness_percent = int(max(0.0, 1.0 - normalized_distance) ** 2 * 100)
-                hue_distance = distance_from_head
-
-            if brightness_percent < self._MIN_VISIBLE_BRIGHTNESS:
-                continue
-
-            hue = int((base_hue + hue_distance * self._HUE_STEP_PER_SEGMENT) % 360)
-            pixels[pixel_index] = Color.from_hue(hue).with_brightness(brightness_percent)
+        for i in range(length):
+            pos = (self._position - i) % self._pixel_count
+            hue = (base_hue + i * self._HUE_STEP_PER_SEGMENT) % 360
+            # pixels[pos] = Color.from_hue(hue, brightness=self.base_brightness)
+            pixels[pos] = Color.from_hue(hue)
 
         return pixels
 
     async def step(self) -> PixelFrame:
-        """Generate a single animation frame from wall-clock time."""
-        speed = self.get_param(AnimationParamID.SPEED, 50)
-        length = self.get_param(AnimationParamID.LENGTH, 5)
-
-        elapsed = time.monotonic() - self._start_time
-        pixels_per_second = self._speed_to_pps(speed)
-
-        # Fractional position for smooth sub-pixel movement
-        position = (elapsed * pixels_per_second) % self._pixel_count
-        base_hue = (self._initial_hue + elapsed * self._HUE_DRIFT_PER_SECOND) % 360
-
-        pixels = self._snake_pixels(position, base_hue, length)
+        """
+        Generate a single animation frame.
+        """
+        pixels = self._snake_pixels()
 
         return PixelFrame(
             zone_pixels={self.zone_id: pixels},

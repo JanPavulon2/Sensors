@@ -17,6 +17,9 @@ import { ANIMATION_PARAMETERS, type AnimationID } from './animations.config';
  */
 function toDisplayValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
+<<<<<<< HEAD
+  if (parameterId === 'intensity') return value * 100;
+=======
   if (parameterId === 'intensity') {
     // Detect scale: if > 1, assume it's already 0-100 (old state format)
     // If <= 1, assume it's 0.0-1.0 (correct backend format)
@@ -25,6 +28,7 @@ function toDisplayValue(parameterId: string, value: number | string | boolean): 
     }
     return value * 100;  // Convert 0.0-1.0 → 0-100
   }
+>>>>>>> origin/main
   return value;
 }
 
@@ -64,6 +68,8 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 }) => {
   const parameterDefs = ANIMATION_PARAMETERS[animationId] || [];
 
+<<<<<<< HEAD
+=======
   // Local optimistic values while user is dragging (for responsive UI)
   const [localValues, setLocalValues] = useState<Record<string, number | string | boolean>>({});
 
@@ -111,6 +117,7 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
     };
   }, []);
 
+>>>>>>> origin/main
   if (parameterDefs.length === 0) {
     return (
       <div className="p-3 bg-bg-elevated rounded-md text-center">

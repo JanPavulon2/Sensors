@@ -53,6 +53,6 @@ class LEDShutdownHandler(IShutdownHandler):
             log.info("All LED channels cleared")
 
         except Exception as e:
-            log.error(f"Error during LED clearing: {e}", exc_info=True)
+            log.error(f"Error during LED channel: {e}", exc_info=True)
             raise
 

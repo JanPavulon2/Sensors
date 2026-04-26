@@ -5,7 +5,8 @@ from models.frame import SingleZoneFrame, MultiZoneFrame, CompositeFrame
 
 
 @pytest.mark.asyncio
-async def test_singlezone_partial_merge(frame_manager, mock_zone_strip):
+async def test_singlezone_merge_preserves_other_zones(frame_manager, mock_led_channel):
+    """When a CompositeFrame updates only one zone, others preserve previous state."""
     # Initial state = black
     assert all(
         all(p.to_rgb() == (0, 0, 0) for p in zs.pixels)

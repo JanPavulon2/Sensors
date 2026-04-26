@@ -223,6 +223,11 @@ class AnimationEngine:
 
                 now = time.monotonic()
                 if now - last_log >= 1.0:
+                    # log.warn(
+                    #     "ANIM FPS",
+                    #     zone=zone_id.name,
+                    #     fps=frames_sent 
+                    # )
                     frames_sent = 0
                     last_log = now
 

@@ -47,8 +47,9 @@ class DummyLedChannel:
 @pytest.mark.asyncio
 async def test_animation_engine_starts_two_zones_and_both_emit_frames():
     fm = FrameManager(fps=240)
-    strip = DummyStrip()
-    fm.add_zone_strip(strip)
+    eb = EventBus()
+    led_channel = DummyLedChannel()
+    fm.register_led_channel(led_channel)
 
     zs = DummyZoneService()
     engine = AnimationEngine(fm, zs, eb)

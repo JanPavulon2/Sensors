@@ -373,20 +373,8 @@ class ZoneState:
 
 ---
 
-#### 5. Async Patterns
-**Follow consistent async/await patterns.**
+## Persistence
 
-✅ **GOOD**:
-- Use `async def` for coroutines
-- Always `await` async calls
-- Use `asyncio.create_task()` for fire-and-forget
-- Use `async with` for context managers
-- Cancel tasks in cleanup
-
-❌ **AVOID**:
-- Mixing sync and async without clear boundaries
-- Blocking calls in async functions
-- Forgetting to await
-- Not canceling tasks on shutdown
-
-
+- **State file:** `src/state/state.json`
+- **Pattern:** Debounced saves (500ms) via `ApplicationStateService`
+- **On startup:** `DataAssembler` loads state and builds domain objects
