@@ -2,7 +2,7 @@ import pytest
 from models.enums import ZoneID, FramePriority, FrameSource
 from models.color import Color
 from engine.frame_manager import FrameManager
-from models.frame import MainStripFrame
+from models.frame import CompositeFrame
 
 @pytest.mark.asyncio
 async def test_different_zones_update_independently():
@@ -35,7 +35,7 @@ async def test_different_zones_update_independently():
     ]
 
     # --- partial update from anim1 (TOP only)
-    frame1 = MainStripFrame(
+    frame1 = CompositeFrame(
         priority=FramePriority.ANIMATION,
         ttl=2.0,
         source=FrameSource.ANIMATION,
@@ -45,7 +45,7 @@ async def test_different_zones_update_independently():
     fm._render_frame(frame1)
 
     # --- partial update from anim2 (BOTTOM only)
-    frame2 = MainStripFrame(
+    frame2 = CompositeFrame(
         priority=FramePriority.ANIMATION,
         ttl=2.0,
         source=FrameSource.ANIMATION,

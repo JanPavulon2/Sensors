@@ -4,16 +4,17 @@ from api.socketio.logs.broadcaster import register_logs
 from api.socketio.tasks.broadcaster import register_tasks
 
 
-def register_socketio(sio, services):
-    """
-    Registers all Socket.IO handlers and EventBus subscriptions.
-    """
-    # Connection lifecycle - sends initial state (zones, tasks, logs)
-    register_on_connect(sio, services)
+async def register_socketio(sio, services):
+    # Initialize main Socket.IO handler for zone snapshot updates
+    await socketio_handler.setup(sio, services)
 
-    # EventBus subscriptions for real-time updates
-    register_zone_broadcaster(sio, services)
+    register_zone_on_connect(sio, services)
 
-    # Client command handlers (for on-demand requests)
     register_logs(sio)
     register_tasks(sio)
+
+    # Frame streaming
+    register_frame_broadcaster(sio, services)
+
+    # Render metrics streaming
+    register_metrics_broadcaster(sio, services)

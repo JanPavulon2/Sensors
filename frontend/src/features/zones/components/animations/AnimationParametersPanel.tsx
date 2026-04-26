@@ -5,168 +5,26 @@
  * Supports: Range sliders, Enum dropdowns, Boolean toggles
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Slider } from '@/shared/ui/slider';
 import { Label } from '@/shared/ui/label';
-import type { AnimationID } from './AnimationSelector';
-
-// Parameter specs for each animation
-// Backend ranges are documented below for reference:
-// - SPEED: 1-100 (percentage, backend dependent)
-// - INTENSITY: 0.0-1.0 (normalized float, displayed as 0-100%)
-// - PRIMARY_COLOR_HUE: 0-359 (degrees)
-// - HUE_OFFSET: 0-360 (degrees)
-// - LENGTH: per-animation (SNAKE: 1-10px, COLOR_SNAKE: 3-15px)
-const ANIMATION_PARAMETERS: Record<AnimationID, ParameterDef[]> = {
-  STATIC: [],
-  BREATHE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'intensity',
-      label: 'Intensity',
-      type: 'range',
-      min: 0,
-      max: 100,
-      step: 10,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  COLOR_FADE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  COLOR_CYCLE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-  SNAKE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'length',
-      label: 'Length',
-      type: 'range',
-      min: 1,
-      max: 10,
-      step: 1,
-      unit: 'px',
-      default: 5,
-    },
-    {
-      id: 'primary_color_hue',
-      label: 'Color Hue',
-      type: 'range',
-      min: 0,
-      max: 359,
-      step: 10,
-      unit: '°',
-      default: 30,
-    },
-  ],
-  COLOR_SNAKE: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-    {
-      id: 'length',
-      label: 'Length',
-      type: 'range',
-      min: 3,
-      max: 15,
-      step: 1,
-      unit: 'px',
-      default: 7,
-    },
-    {
-      id: 'primary_color_hue',
-      label: 'Color Hue',
-      type: 'range',
-      min: 0,
-      max: 359,
-      step: 10,
-      unit: '°',
-      default: 30,
-    },
-  ],
-  MATRIX: [
-    {
-      id: 'speed',
-      label: 'Speed',
-      type: 'range',
-      min: 1,
-      max: 100,
-      step: 1,
-      unit: '%',
-      default: 50,
-    },
-  ],
-};
-
-interface ParameterDef {
-  id: string;
-  label: string;
-  type: 'range' | 'enum' | 'bool';
-  min?: number;
-  max?: number;
-  step?: number;
-  unit?: string;
-  options?: string[];
-  default?: number | string | boolean;
-}
+import { ANIMATION_PARAMETERS, type AnimationID } from './animations.config';
 
 /**
  * Convert backend value to display value
  * Handles special cases like intensity (0.0-1.0 → 0-100%)
+ * Note: Detects scale mismatch (old state might have 0-100, new state 0.0-1.0)
  */
 function toDisplayValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
-
   if (parameterId === 'intensity') {
-    // Backend: 0.0-1.0, Display: 0-100%
-    return value * 100;
+    // Detect scale: if > 1, assume it's already 0-100 (old state format)
+    // If <= 1, assume it's 0.0-1.0 (correct backend format)
+    if (value > 1) {
+      return value;  // Already in 0-100 scale
+    }
+    return value * 100;  // Convert 0.0-1.0 → 0-100
   }
-
   return value;
 }
 
@@ -176,12 +34,7 @@ function toDisplayValue(parameterId: string, value: number | string | boolean): 
  */
 function toBackendValue(parameterId: string, value: number | string | boolean): number | string | boolean {
   if (typeof value !== 'number') return value;
-
-  if (parameterId === 'intensity') {
-    // Display: 0-100%, Backend: 0.0-1.0
-    return value / 100;
-  }
-
+  if (parameterId === 'intensity') return value / 100;
   return value;
 }
 
@@ -195,6 +48,13 @@ interface AnimationParametersPanelProps {
 /**
  * AnimationParametersPanel Component
  * Renders dynamic controls based on animation parameters
+ * 
+ * Behavior:
+ * - Slider updates UI immediately (responsive, follows cursor)
+ * - Animation updates in real-time from backend (while dragging)
+ * - Param save is debounced 300ms after last change
+ * - While dragging: uses local UI value (ignores backend updates)
+ * - After release: accepts backend value if it arrived while dragging
  */
 export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> = ({
   animationId,
@@ -204,7 +64,53 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
 }) => {
   const parameterDefs = ANIMATION_PARAMETERS[animationId] || [];
 
-  // If no parameters, show message
+  // Local optimistic values while user is dragging (for responsive UI)
+  const [localValues, setLocalValues] = useState<Record<string, number | string | boolean>>({});
+
+  // Track which parameters are currently being dragged
+  const draggingRef = useRef<Set<string>>(new Set());
+
+  // Track pending parameter changes and debounce timers
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Handle range slider changes with debouncing
+  const handleRangeChange = (paramId: string, displayValue: number) => {
+    // Mark as dragging
+    draggingRef.current.add(paramId);
+
+    // Update local UI immediately for responsiveness
+    setLocalValues(prev => ({ ...prev, [paramId]: displayValue }));
+
+    // Debounce the API call (and stop dragging on completion)
+    const backendValue = toBackendValue(paramId, displayValue);
+
+    if (debounceTimersRef.current[paramId]) {
+      clearTimeout(debounceTimersRef.current[paramId]);
+    }
+
+    debounceTimersRef.current[paramId] = setTimeout(() => {
+      onParameterChange?.(paramId, backendValue);
+      // Don't immediately remove from dragging - let parent updates take effect
+    }, 300);
+  };
+
+  // When user releases slider, stop local override
+  const handleRangeEnd = (paramId: string) => {
+    draggingRef.current.delete(paramId);
+    setLocalValues(prev => {
+      const updated = { ...prev };
+      delete updated[paramId];
+      return updated;
+    });
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
+
   if (parameterDefs.length === 0) {
     return (
       <div className="p-3 bg-bg-elevated rounded-md text-center">
@@ -216,12 +122,15 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
   return (
     <div className="space-y-4">
       {parameterDefs.map((paramDef) => {
-        const rawValue = parameters[paramDef.id] ?? paramDef.default ?? 0;
+        // Use local value if dragging, otherwise use prop value from backend
+        const isCurrentlyDragging = draggingRef.current.has(paramDef.id);
+        const rawValue = isCurrentlyDragging
+          ? localValues[paramDef.id]
+          : (parameters[paramDef.id] ?? paramDef.default ?? 0);
         const displayValue = toDisplayValue(paramDef.id, rawValue);
 
         return (
           <div key={paramDef.id} className="space-y-2">
-            {/* Label */}
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium text-text-primary">{paramDef.label}</Label>
               <span className="text-sm font-mono text-accent-primary">
@@ -230,22 +139,21 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
               </span>
             </div>
 
-            {/* Control */}
             {paramDef.type === 'range' && (
               <>
                 <Slider
                   value={[typeof displayValue === 'number' ? displayValue : 0]}
                   onValueChange={(value) => {
-                    const backendValue = toBackendValue(paramDef.id, value[0]);
-                    onParameterChange?.(paramDef.id, backendValue);
+                    handleRangeChange(paramDef.id, value[0]);
                   }}
+                  onMouseUp={() => handleRangeEnd(paramDef.id)}
+                  onTouchEnd={() => handleRangeEnd(paramDef.id)}
                   min={paramDef.min ?? 0}
                   max={paramDef.max ?? 100}
                   step={paramDef.step ?? 1}
                   disabled={disabled}
                   className="w-full"
                 />
-                {/* Range indicator */}
                 <div className="text-xs text-text-tertiary flex justify-between">
                   <span>{paramDef.min ?? 0}</span>
                   <span>{paramDef.max ?? 100}</span>
@@ -272,11 +180,10 @@ export const AnimationParametersPanel: React.FC<AnimationParametersPanelProps> =
               <button
                 onClick={() => onParameterChange?.(paramDef.id, !rawValue)}
                 disabled={disabled}
-                className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${
-                  rawValue
-                    ? 'bg-accent-primary text-bg-app border-accent-primary'
-                    : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
-                }`}
+                className={`w-full px-3 py-2 rounded border transition-colors text-sm font-medium ${rawValue
+                  ? 'bg-accent-primary text-bg-app border-accent-primary'
+                  : 'bg-bg-elevated text-text-secondary border-border-default hover:border-accent-primary'
+                  }`}
               >
                 {rawValue ? '✓ Enabled' : '✕ Disabled'}
               </button>

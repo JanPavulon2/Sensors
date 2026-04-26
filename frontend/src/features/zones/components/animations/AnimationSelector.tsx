@@ -1,60 +1,12 @@
 /**
  * Animation Selector - Grid of available animations
  *
- * Shows all 7 animation types in a grid layout
- * Organized by category (Basic, Color, Advanced)
+ * Shows animations in a grid layout organized by category
  * Click to select animation
  */
 
 import React from 'react';
-
-export type AnimationID = 'STATIC' | 'BREATHE' | 'COLOR_FADE' | 'COLOR_CYCLE' | 'SNAKE' | 'COLOR_SNAKE' | 'MATRIX';
-
-interface Animation {
-  id: AnimationID;
-  name: string;
-  icon: string;
-  description: string;
-  category: 'basic' | 'color' | 'advanced';
-}
-
-const ANIMATIONS: Animation[] = [
-  {
-    id: 'STATIC',
-    name: 'Static',
-    icon: '📍',
-    description: 'Solid color, no animation',
-    category: 'basic',
-  },
-  {
-    id: 'BREATHE',
-    icon: '💨',
-    name: 'Breathe',
-    description: 'Smooth brightness pulsing',
-    category: 'basic',
-  },
-  {
-    id: 'COLOR_FADE',
-    icon: '🌅',
-    name: 'Fade',
-    description: 'Smooth hue fade in/out',
-    category: 'color',
-  },
-  {
-    id: 'SNAKE',
-    icon: '🐍',
-    name: 'Snake',
-    description: 'Pixels chase pattern',
-    category: 'advanced',
-  },
-  {
-    id: 'COLOR_SNAKE',
-    icon: '🌈',
-    name: 'Color Snake',
-    description: 'Rainbow chase pattern',
-    category: 'advanced',
-  },
-];
+import { ANIMATIONS, type AnimationID } from './animations.config';
 
 interface AnimationSelectorProps {
   selectedAnimation?: AnimationID;
@@ -71,7 +23,6 @@ export const AnimationSelector: React.FC<AnimationSelectorProps> = ({
   onSelect,
   disabled = false,
 }) => {
-  // Group animations by category
   const categories = Array.from(new Set(ANIMATIONS.map((a) => a.category)));
 
   return (
@@ -86,12 +37,10 @@ export const AnimationSelector: React.FC<AnimationSelectorProps> = ({
 
         return (
           <div key={category} className="space-y-3">
-            {/* Category Label */}
             <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
               {categoryLabel}
             </h4>
 
-            {/* Animation Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {categoryAnimations.map((animation) => (
                 <button
@@ -113,13 +62,8 @@ export const AnimationSelector: React.FC<AnimationSelectorProps> = ({
                   aria-pressed={selectedAnimation === animation.id}
                   aria-label={`Select ${animation.name} animation`}
                 >
-                  {/* Icon */}
                   <div className="text-2xl">{animation.icon}</div>
-
-                  {/* Name */}
                   <p className="text-sm font-medium text-text-primary">{animation.name}</p>
-
-                  {/* Description */}
                   <p className="text-xs text-text-tertiary hidden sm:block line-clamp-2">
                     {animation.description}
                   </p>

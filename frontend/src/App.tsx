@@ -3,6 +3,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { MainLayout } from '@/layout/MainLayout';
 import Dashboard from '@/pages/Dashboard';
+import Zones from '@/pages/Zones';
 import ComponentsPage from '@/pages/ComponentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { DebugPage } from '@/pages/DebugPage';
@@ -38,6 +39,7 @@ export function App(): JSX.Element {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="/zones" element={<Zones />} />
                   <Route path="/components" element={<ComponentsPage />} />
                   <Route path="/debug" element={<DebugPage />} />
                   <Route path="/settings" element={<SettingsPage />} />

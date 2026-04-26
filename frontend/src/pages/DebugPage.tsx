@@ -11,9 +11,10 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { TaskMonitor } from "@/features/tasks/components";
 import { Logger } from "@/features/logger/components";
-import { Activity, FileText, Database } from "lucide-react";
+import { RenderMetricsPanel } from "@/features/debug-metrics/components";
+import { Activity, FileText, Database, Gauge } from "lucide-react";
 
-type DebugTab = "tasks" | "logs" | "state";
+type DebugTab = "tasks" | "logs" | "state" | "render";
 
 export function DebugPage(): JSX.Element {
   const [activeTab, setActiveTab] = useState<DebugTab>("tasks");
@@ -43,6 +44,10 @@ export function DebugPage(): JSX.Element {
             <Database className="w-4 h-4" />
             State
           </TabsTrigger>
+          <TabsTrigger variant="underline" value="render" className="flex items-center justify-center gap-2">
+            <Gauge className="w-4 h-4" />
+            Render
+          </TabsTrigger>
         </TabsList>
 
         {/* Task Monitor Tab */}
@@ -53,6 +58,11 @@ export function DebugPage(): JSX.Element {
         {/* Logger Tab */}
         <TabsContent value="logs" className="space-y-4">
           <Logger />
+        </TabsContent>
+
+        {/* Render Metrics Tab */}
+        <TabsContent value="render" className="space-y-4">
+          <RenderMetricsPanel />
         </TabsContent>
       </Tabs>
     </div>

@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from models.enums import ZoneRenderMode
+from models.color import Color
+from models.enums import FramePriority, FrameSource, ZoneRenderMode
 from models.events.types import EventType
 from models.events.zone_runtime_events import AnimationStartedEvent, ZoneAnimationParamChangedEvent
+from models.events.zone_static_events import ZoneStaticStateChangedEvent
+from models.frame import SingleZoneFrame
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 from services import ServiceContainer
@@ -46,6 +49,7 @@ class AnimationModeController:
         self.zone_service = services.zone_service
         self.app_state_service = services.app_state_service
         self.animation_service = services.animation_service
+        self.frame_manager = services.frame_manager
         self.animation_engine = animation_engine
 
         self.available_animations = [
@@ -58,6 +62,10 @@ class AnimationModeController:
         self.event_bus.subscribe(
             event_type=EventType.ZONE_ANIMATION_PARAM_CHANGED,
             handler=self._on_zone_animation_param_changed  # type: ignore
+        )
+        self.event_bus.subscribe(
+            event_type=EventType.ZONE_STATIC_STATE_CHANGED,
+            handler=self._on_zone_static_state_changed  # type: ignore
         )
     # ------------------------------------------------------------------
     # Initialization
@@ -94,16 +102,46 @@ class AnimationModeController:
         if not anim:
             log.warn(f"Animation for zone {event.zone_id} not found")
             return
-        
+
+        current = anim.get_param(event.param_id)
+        if current == event.value:
+            return
+
         log.info(
-            f"Zone parameter changed, updating animation",
+            "Animation param updated",
             zone=zone.config.display_name,
             parameter=event.param_id,
-            value=event.value
+            value=f"{current} → {event.value}"
         )
-        
+
         anim.set_param(event.param_id, event.value)
 
+    async def _on_zone_static_state_changed(self, event: ZoneStaticStateChangedEvent) -> None:
+        """Handle is_on changes for animation zones.
+
+        Only reacts to power state changes (is_on). Color/brightness
+        changes are handled by StaticModeController.
+        """
+        if event.is_on is None:
+            return
+
+        zone = self.zone_service.get_zone(event.zone_id)
+        if not zone or zone.state.mode != ZoneRenderMode.ANIMATION:
+            return
+
+        if not event.is_on:
+            log.info("Animation zone powered off", zone=zone.config.display_name)
+            await self.animation_engine.stop_for_zone(zone.config.id)
+            await self.frame_manager.push_frame(SingleZoneFrame(
+                zone_id=zone.config.id,
+                color=Color.black(),
+                priority=FramePriority.ANIMATION,
+                source=FrameSource.ANIMATION,
+                ttl=10.0,
+            ))
+        else:
+            log.info("Animation zone powered on", zone=zone.config.display_name)
+            await self._start_zone_animation(zone)
 
     async def enter_zone(self, zone: ZoneCombined):
         """

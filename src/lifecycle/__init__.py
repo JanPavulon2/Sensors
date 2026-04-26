@@ -15,7 +15,8 @@ Internal modules remain private. External code should import from:
 from .shutdown_coordinator import ShutdownCoordinator
 from .task_registry import TaskRegistry, TaskCategory, TaskInfo
 from .shutdown_protocol import IShutdownHandler
-from . import handlers
+# handlers imported on-demand to avoid circular imports
+# from . import handlers
 
 __all__ = [
     "ShutdownCoordinator",
@@ -23,5 +24,4 @@ __all__ = [
     "TaskCategory",
     "TaskInfo",
     "IShutdownHandler",
-    "handlers",
 ]

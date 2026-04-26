@@ -57,6 +57,7 @@ class SingleZoneFrame(BaseFrame):
     def zone_colors(self) -> dict:
         return {self.zone_id: self.color}
 
+
 # =====================================================================
 # 2) MultiZoneFrame — many zones → one Color per zone
 # =====================================================================
@@ -71,6 +72,7 @@ class MultiZoneFrame(BaseFrame):
 
     def as_zone_update(self) -> Dict[ZoneID, Color]:
         return self.zone_colors
+
 
 # =====================================================================
 # 3) PixelFrame — many zones → List[Color]
@@ -88,8 +90,8 @@ class PixelFrame(BaseFrame):
         return self.zone_pixels
     
 
-@dataclass
-class MainStripFrame:
+@dataclass(slots=True)
+class CompositeFrame:
     """
     Unified frame used internally by FrameManager V3.
 
@@ -104,72 +106,14 @@ class MainStripFrame:
     """
 
     priority: FramePriority
+    ttl: float
     source: FrameSource
-
     updates: Dict[ZoneID, ZoneUpdateValue]
 
-    # Metadata
-    ttl: float = 0.1
-    partial: bool = False
-    timestamp: float = field(default_factory=time.time)
-
-    # ------------------------------------------------------------
-    # TTL handling
-    # ------------------------------------------------------------
+    created_at: float = field(default_factory=time.monotonic)
+    
     def is_expired(self) -> bool:
-        return (time.time() - self.timestamp) > self.ttl
-
-    # ------------------------------------------------------------
-    # FrameManager interface
-    # ------------------------------------------------------------
-    def as_zone_update(self) -> Dict[ZoneID, ZoneUpdateValue]:
-        """
-        Returns the raw update dict without interpretation.
-        FrameManager processes merging + normalization.
-        """
-        return self.updates
+        return (time.monotonic() - self.created_at) > self.ttl
+    
 
 
-@dataclass
-class PreviewFrame(BaseFrame):
-    """
-    Preview panel frame (always 8 pixels).
-
-    Use Cases:
-    - Animation preview (synchronized mini-animation)
-    - Parameter preview (brightness bar, color fill, etc.)
-    """
-
-    pixels: List[Color] = field(default_factory=list)  # Always length 8, (r, g, b) per pixel
-
-    def __post_init__(self):
-        """Validate preview frame has exactly 8 pixels."""
-        if len(self.pixels) != 8:
-            raise ValueError(f"Preview must have 8 pixels, got {len(self.pixels)}")
-
-
-@dataclass(frozen=True)
-class ZonePixelRangeFrame:
-    """
-    Frame operating on a contiguous range of pixels inside a single zone.
-
-    This is a more granular alternative to:
-    - SingleZoneFrame (whole zone)
-    - PixelFrame (full pixel arrays)
-
-    Intended future use:
-    - selected zone indicators
-    - animation cursors
-    - partial highlights
-    - zone debugging overlays
-    """
-    zone_id: ZoneID
-
-    start: int           # start index INSIDE the zone
-    length: int          # number of pixels
-
-    color: Color
-
-    priority: FramePriority
-    source: FrameSource
-    ttl: float

@@ -89,7 +89,7 @@ export const CompactLEDPreview: React.FC<CompactLEDPreviewProps> = ({
           return (
             <div
               key={index}
-              className={`${getShapeClass(shape)} transition-all duration-150`}
+              className={`${getShapeClass(shape)} transition-opacity duration-150`}
               style={{
                 width: `${ledSize}px`,
                 height: `${ledSize}px`,

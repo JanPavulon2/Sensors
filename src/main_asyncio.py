@@ -46,32 +46,11 @@ from api.socketio.registry import register_socketio
 # === Infrastructure ===
 from hardware.gpio.gpio_manager_factory import create_gpio_manager
 from hardware.hardware_coordinator import HardwareCoordinator
-from hardware.input.keyboard import start_keyboard
-
-# === Services ===
-from services.port_manager import PortManager
-from services.service_container import ServiceContainer
-from services.snapshot_publisher import SnapshotPublisher
-from services.log_broadcaster import get_broadcaster
-from services import (
-    EventBus, DataAssembler, ZoneService, AnimationService,
-    ApplicationStateService, ServiceContainer
-)
-from services.middleware import log_middleware
-from services.transition_service import TransitionService
-
-# === Managers ===
-from managers import ConfigManager
-
-# === Controllers ===
 from controllers.led_controller.lighting_controller import LightingController
 from controllers import ControlPanelController
 
 # === Engine ===
 from engine.frame_manager import FrameManager
-
-# === Runtime ===
-from runtime.runtime_info import RuntimeInfo
 
 # ---------------------------------------------------------------------------
 # LOGGER SETUP
@@ -171,29 +150,53 @@ async def main():
         
         
     # ========================================================================
-    # 3. FRAME MANAGER
+    # 3. APP CLOCK & FRAME MANAGER
     # ========================================================================
 
+    log.info("Initializing AppClock...")
+    app_clock = AppClock()
+    log.info("AppClock initialized", t=app_clock.now())
+
+    log.info("Initializing RenderMetricsCollector...")
+    metrics_collector = RenderMetricsCollector()
+
     log.info("Initializing FrameManager...")
-    frame_manager = FrameManager(fps=60)
+    frame_manager = FrameManager(fps=60, app_clock=app_clock, metrics_collector=metrics_collector)
     frame_manager_task = create_tracked_task(
         frame_manager.start(),
         category=TaskCategory.RENDER,
         description="Frame Manager render loop"
     )
 
+    log.info("Initializing FrameStreamer...")
+    frame_streamer = FrameStreamer(sio=socketio_server, target_fps=30)
+    frame_streamer_task = create_tracked_task(
+        frame_streamer.start(),
+        category=TaskCategory.SOCKETIO,
+        description="FrameStreamer streaming loop"
+    )
+    
+    frame_manager.frame_streamer = frame_streamer
+    log.info("FrameStreamer initialized", target_fps=30)
+
+    log.info("Initializing MetricsStreamer...")
+    metrics_streamer = MetricsStreamer(
+        socketio_server=socketio_server,
+        collector=metrics_collector,
+        interval=1.0,
+    )
+
     # Register all LED strips with FrameManager
-    for gpio_pin, strip in hardware.led_channels.items():
-        frame_manager.add_led_channel(strip)
+    for gpio_pin, strip in hardware.zone_strips.items():
+        frame_manager.add_zone_strip(strip)
         # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        log.info(f"Zone strip registered on GPIO {gpio_pin}", category=LogCategory.FRAME_MANAGER)
-
+        
     
     # ========================================================================
     # 4. SERVICE CONTAINER
     # ========================================================================
-
+ 
     services = ServiceContainer(
         event_bus=event_bus,
         zone_service=zone_service,
@@ -202,15 +205,17 @@ async def main():
         frame_manager=frame_manager,
         color_manager=config_manager.color_manager,
         config_manager=config_manager,
-        data_assembler=assembler
+        data_assembler=assembler,
+        app_clock=app_clock,
+        frame_streamer=frame_streamer,
+        metrics_streamer=metrics_streamer,
     )
     
     snapshot_publisher = SnapshotPublisher(
         zone_service=zone_service,
         event_bus=event_bus,
     )
-
-
+    
     # Register service container with API for dependency injection
     set_service_container(services)
     log.info("Service container registered")

@@ -206,7 +206,8 @@ class ZoneService:
 
     def set_animation_param(self, zone_id: ZoneID, param_id: AnimationParamID, value: Any) -> None:
         """
-        Set zone animation parameter value
+        Set zone animation parameter value.
+        Only saves to disk and publishes event if the value has changed.
         """
         zone = self.get_zone(zone_id)
 
@@ -216,6 +217,17 @@ class ZoneService:
         if zone.state.animation is None:
             raise ValueError("Zone has no active animation")
 
+        # Check if value has actually changed to avoid redundant saves and events
+        current_value = zone.state.animation.parameters.get(param_id)
+        if current_value == value:
+            log.debug(
+                "Animation parameter unchanged, skipping save",
+                zone=zone_id,
+                param_id=param_id,
+                value=value
+            )
+            return
+
         zone.state.animation.parameters[param_id] = value
 
         self._save_zone(zone_id)
@@ -223,7 +235,8 @@ class ZoneService:
         log.info(
             "Zone animation parameter changed",
             zone=zone_id,
-            animation=zone.state.animation
+            param_id=param_id,
+            value=value
         )
 
         # Publish event so AnimationModeController and SnapshotPublisher are notified

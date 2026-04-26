@@ -36,10 +36,18 @@ animations:
     order: 4
     parameters: []
 
+  RAINBOW:
+    name: Rainbow
+    class: RainbowAnimation
+    description: "Full spectrum rainbow scrolling across pixels"
+    enabled: true
+    order: 5
+    parameters: []
+
   COLOR_FADE:
     name: Color Fade
     class: ColorFadeAnimation
     description: "Rainbow hue cycling"
     enabled: true
-    order: 5
+    order: 6
     parameters: []

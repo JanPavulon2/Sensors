@@ -7,6 +7,8 @@ from .application_state_service import ApplicationStateService
 from .transition_service import TransitionService
 from .event_bus import EventBus
 from .service_container import ServiceContainer
+from .snapshot_publisher import SnapshotPublisher
+from .port_manager import PortManager
 
 __all__ = [
     "DataAssembler",
@@ -16,4 +18,6 @@ __all__ = [
     "TransitionService",
     "EventBus",
     "ServiceContainer",
+    "SnapshotPublisher",
+    "PortManager"
 ]

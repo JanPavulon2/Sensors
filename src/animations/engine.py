@@ -12,6 +12,7 @@ from animations.base import BaseAnimation
 from animations.breathe import BreatheAnimation
 from animations.color_fade import ColorFadeAnimation
 from animations.color_snake import ColorSnakeAnimation
+from animations.rainbow import RainbowAnimation
 from animations.snake import SnakeAnimation
 from engine.frame_manager import FrameManager
 from models.animation_params.animation_param_id import AnimationParamID
@@ -30,7 +31,8 @@ def _build_animation_registry() -> Dict[AnimationID, Type[BaseAnimation]]:
         AnimationID.BREATHE: BreatheAnimation,
         AnimationID.SNAKE: SnakeAnimation,
         AnimationID.COLOR_SNAKE: ColorSnakeAnimation,
-        AnimationID.COLOR_FADE: ColorFadeAnimation
+        AnimationID.COLOR_FADE: ColorFadeAnimation,
+        AnimationID.RAINBOW: RainbowAnimation
     }
 
     # Convert enum to string keys using .name
@@ -202,31 +204,36 @@ class AnimationEngine:
         - engine forwards frames immediately
         - renderer (FrameManager) controls FPS
         """
-        
+
         log.info(f"_run_loop started for {zone_id.name}")
-        
+
         frames_sent = 0
         last_log = time.monotonic()
-            
+        animation_name = type(animation).__name__
+        metrics_collector = self.frame_manager.metrics_collector
+
         try:
             while True:
+                step_start = time.perf_counter()
                 frame = await animation.step()
-                
+                step_elapsed = time.perf_counter() - step_start
+
+                if metrics_collector:
+                    metrics_collector.record_animation_step(zone_id, animation_name, step_elapsed)
+
                 now = time.monotonic()
                 if now - last_log >= 1.0:
-                    # log.warn(
-                    #     "ANIM FPS",
-                    #     zone=zone_id.name,
-                    #     fps=frames_sent 
-                    # )
                     frames_sent = 0
                     last_log = now
-                
+
                 if frame is not None:
                     await self.frame_manager.push_frame(frame)
                     frames_sent += 1
-                
-                await asyncio.sleep(1 / self.frame_manager.fps)
+
+                # Yield to event loop only — FrameManager._render_loop controls FPS.
+                # Do NOT sleep(1/fps) here: asyncio.sleep overshoots badly on RPi
+                # (kernel timer ~10ms granularity), which would cap throughput to ~17 FPS.
+                await asyncio.sleep(0)
         except asyncio.CancelledError:
             log.debug(f"Animation task for {zone_id.name} canceled")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

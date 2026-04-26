@@ -8,53 +8,7 @@
 import React, { useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import type { AnimationID } from './AnimationSelector';
-
-interface Animation {
-  id: AnimationID;
-  name: string;
-  icon: string;
-  description: string;
-  category: 'basic' | 'color' | 'advanced';
-}
-
-const ANIMATIONS: Animation[] = [
-  {
-    id: 'STATIC',
-    name: 'Static',
-    icon: '📍',
-    description: 'Solid color, no animation',
-    category: 'basic',
-  },
-  {
-    id: 'BREATHE',
-    icon: '💨',
-    name: 'Breathe',
-    description: 'Smooth brightness pulsing',
-    category: 'basic',
-  },
-  {
-    id: 'COLOR_FADE',
-    icon: '🌅',
-    name: 'Fade',
-    description: 'Smooth hue fade in/out',
-    category: 'color',
-  },
-  {
-    id: 'SNAKE',
-    icon: '🐍',
-    name: 'Snake',
-    description: 'Pixels chase pattern',
-    category: 'advanced',
-  },
-  {
-    id: 'COLOR_SNAKE',
-    icon: '🌈',
-    name: 'Color Snake',
-    description: 'Rainbow chase pattern',
-    category: 'advanced',
-  },
-];
+import { ANIMATIONS, type AnimationID } from './animations.config';
 
 interface AnimationCarouselProps {
   selectedAnimation?: AnimationID;
@@ -67,17 +21,14 @@ export const AnimationCarousel: React.FC<AnimationCarouselProps> = ({
   onSelect,
   disabled = false,
 }) => {
-  // Find current index
   const currentIndex = useMemo(
     () => ANIMATIONS.findIndex((a) => a.id === selectedAnimation),
     [selectedAnimation]
   );
 
-  // Visible cards (show 7 at a time with infinite loop)
   const visibleCount = 7;
   const centerOffset = Math.floor(visibleCount / 2);
 
-  // Get visible animations with wrapping for infinite loop
   const visibleAnimations = Array.from({ length: visibleCount }, (_, i) => {
     const index = (currentIndex - centerOffset + i + ANIMATIONS.length * 100) % ANIMATIONS.length;
     return ANIMATIONS[index];
@@ -95,9 +46,7 @@ export const AnimationCarousel: React.FC<AnimationCarouselProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Carousel Navigation */}
       <div className="flex items-center justify-between gap-4">
-        {/* Previous Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -109,7 +58,6 @@ export const AnimationCarousel: React.FC<AnimationCarouselProps> = ({
           <ChevronLeft className="w-5 h-5" />
         </Button>
 
-        {/* Carousel Cards */}
         <div className="flex-1 flex gap-3 justify-center items-center overflow-hidden">
           {visibleAnimations.map((animation, idx) => {
             const isCenter = idx === centerOffset;
@@ -159,7 +107,6 @@ export const AnimationCarousel: React.FC<AnimationCarouselProps> = ({
           })}
         </div>
 
-        {/* Next Button */}
         <Button
           variant="ghost"
           size="sm"

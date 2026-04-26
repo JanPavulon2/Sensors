@@ -204,6 +204,17 @@ export function useTaskWebSocket(
     setIsConnected(socket.connected);
     useTaskStreamStore.getState().setConnected(socket.connected);
 
+    // If socket is already connected when the component mounts, request initial data.
+    // This prevents the UI from appearing empty when navigating to the Debug page
+    // after the socket has already been established elsewhere in the app.
+    if (socket.connected) {
+      const store = useTaskStreamStore.getState();
+      if (store.tasks.size === 0) {
+        socket.emit("task_get_stats");
+        socket.emit("task_get_all");
+      }
+    }
+
     return () => {
       // Cleanup listeners
       socket.off("connect", handleConnect);

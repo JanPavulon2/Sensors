@@ -54,15 +54,13 @@ class ZoneID(str, Enum):
     FLOOR = "FLOOR"
     CIRCLE = "CIRCLE"
     # LEFT = auto()
-    # TOP = auto()
+    TOP = "TOP"
     # RIGHT = auto()
-    # BOTTOM = auto()
+    BOTTOM = auto()
     LAMP = "LAMP"
     GATE = "GATE"
     PIXEL = "PIXEL"        # 30-pixel custom LED strip on GPIO 19
     PIXEL2 = "PIXEL2"        # 30-pixel custom LED strip on GPIO 19
-    MATRIX = "MATRIX"        # 30-pixel custom LED strip on GPIO 19
-    MATRIX2 = "MATRIX2"        # 30-pixel custom LED strip on GPIO 19
     PREVIEW = "PREVIEW"      # 8-pixel preview panel on GPIO 19
     # BACK = auto()
     # DESK = auto()
@@ -75,7 +73,7 @@ class LEDStripID(Enum):
 
 
 class LEDStripType(Enum):
-    """Typ fizycznego paska LED — używamy enumów, nie stringów."""
+    """Physical LED strip type"""
     WS2811_12V = "WS2811_12V"
     WS2812_5V = "WS2812_5V"
     WS2813 = "WS2813"
@@ -88,6 +86,7 @@ class AnimationID(str, Enum):
     COLOR_FADE = "COLOR_FADE"
     SNAKE = "SNAKE"
     COLOR_SNAKE = "COLOR_SNAKE"
+    RAINBOW = "RAINBOW"
     COLOR_CYCLE = "COLOR_CYCLE"
     MATRIX = "MATRIX"
 
