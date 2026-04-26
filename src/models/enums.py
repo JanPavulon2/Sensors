@@ -59,11 +59,9 @@ class ZoneID(str, Enum):
     BOTTOM = auto()
     LAMP = "LAMP"
     GATE = "GATE"
-    PIXEL = "PIXEL"
-    PIXEL2 = "PIXEL2"
-    MATRIX = "MATRIX"
-    MATRIX2 = "MATRIX2"
-    PREVIEW = "PREVIEW"
+    PIXEL = "PIXEL"        # 30-pixel custom LED strip on GPIO 19
+    PIXEL2 = "PIXEL2"        # 30-pixel custom LED strip on GPIO 19
+    PREVIEW = "PREVIEW"      # 8-pixel preview panel on GPIO 19
     # BACK = auto()
     # DESK = auto()
 

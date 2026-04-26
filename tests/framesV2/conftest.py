@@ -47,7 +47,7 @@ def zone_service():
 @pytest.fixture
 def frame_manager(mock_led_channel):
     fm = FrameManager(fps=1000)  # high FPS so tests run fast
-    fm.register_led_channel(mock_led_channel)
+    fm.add_zone_strip(mock_zone_strip)
     return fm
 
 

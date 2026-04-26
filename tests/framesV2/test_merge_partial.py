@@ -26,7 +26,7 @@ async def test_merge_preserves_untouched_zones():
             self.shown = frame
 
     strip = DummyStrip()
-    fm.register_led_channel(strip)
+    fm.add_zone_strip(strip)
 
     # Set baseline state: TOP=black, BOTTOM=(5,5,5)
     fm.zone_render_states[ZoneID.TOP].pixels = [

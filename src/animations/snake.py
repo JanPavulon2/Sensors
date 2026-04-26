@@ -13,7 +13,13 @@ from animations.base import BaseAnimation
 from models.animation_params import AnimationParamID, LengthParam, SpeedParam, PrimaryColorHueParam
 from models.color import Color
 from models.frame import PixelFrame
-from models.enums import FramePriority, FrameSource
+from models.domain import ZoneCombined
+from models.enums import FramePriority, FrameSource, ZoneID
+from utils.colors import hue_to_rgb
+from utils.logger import get_category_logger, LogCategory
+
+log = get_category_logger(LogCategory.ANIMATION)
+
 
 
 class SnakeAnimation(BaseAnimation):

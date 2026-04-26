@@ -1,11 +1,11 @@
 """
-FrameManager — Centralized rendering system with priority queues and multiple led channel support.
+FrameManager — Centralized rendering system with priority queues and dual strip support.
 
 Architecture:
-  - Collects frames from multiple sources (animations, transitions, static)
-  - Maintains separate priority queues for led channels
+  - Collects frames from multiple sources (animations, transitions, static, preview)
+  - Maintains separate priority queues for main strip and preview panel
   - Selects highest-priority frame each render tick
-  - Renders atomically to all registered led channels
+  - Renders atomically to all registered strips
   - Supports pause/step/FPS control for debugging
 
 Priority System:
@@ -25,12 +25,8 @@ from models.domain.output_frame import OutputFrame
 from utils.logger import get_logger
 from models.enums import FrameSource, LogCategory, FramePriority, ZoneID
 from models.color import Color
-from models.frame import (
-    SingleZoneFrame, MultiZoneFrame, 
-    PixelFrame, CompositeFrame, ZoneUpdateValue
-)
-from hardware.led.led_channel import LedChannel
-from contextlib import contextmanager
+from models.frame import SingleZoneFrame, MultiZoneFrame, PixelFrame, MainStripFrame, ZoneUpdateValue
+from zone_layer.zone_strip import ZoneStrip
 from engine.zone_render_state import ZoneRenderState
 from engine.render_metrics import RenderMetricsCollector
 
@@ -74,7 +70,8 @@ class FrameManager:
     Manages:
     - Priority-based frame selection
     - Frame submission from multiple sources
-    - Atomic rendering to multiple led channels
+    - Priority-based frame selection
+    - Atomic rendering to multiple strips
     - Pause/step/FPS control
     - Frame expiration (TTL)
     - Performance metrics
@@ -100,7 +97,7 @@ class FrameManager:
         self.app_clock = app_clock
         self.frame_streamer = frame_streamer
 
-        # DQueue system
+        # Dual queue system (separate for main strip and preview)
         # maxlen=10 allows all zones to queue frames before draining
         # (we have max 10 zones, some animating concurrently)
         self.priority_queues: Dict[int, Deque[CompositeFrame]] = {
@@ -110,7 +107,8 @@ class FrameManager:
         }
 
         # Registered render targets
-        self.led_channels: List[LedChannel] = [] 
+        self.zone_strips: List[ZoneStrip] = []  # ZoneStrip instances
+
         self.zone_render_states: Dict[ZoneID, ZoneRenderState] = {}
 
         # Runtime state
@@ -144,11 +142,11 @@ class FrameManager:
 
     # === Led Channel Registration (for controllers) ===
 
-    def register_led_channel(self, led_channel: LedChannel) -> None:
-        """Register a led channel."""
+    def add_zone_strip(self, strip: ZoneStrip) -> None:
+        """Register a LED strip (ZoneStrip)."""
 
-        if led_channel in self.led_channels:
-            log.warn(f"Skipping registering led channel in FrameManager - already registered")
+        if strip in self.zone_strips:
+            log.warn(f"Skipping registering zone strip in FrameManager - already registered")
             return
 
         self.led_channels.append(led_channel)
@@ -168,14 +166,14 @@ class FrameManager:
                     self.metrics_collector.register_zone(zone_id)
                 log.debug(f"Initialized black render state for zone {zone_id.name} ({zone_length} pixels)")
 
-        log.info(f"Registered led channel: {led_channel} (total zone_render_states now has {len(self.zone_render_states)} zones)")
+        log.info(f"Added strip: {strip} (total zone_render_states now has {len(self.zone_render_states)} zones)")
         
-    def unregister_led_channel(self, led_channel: LedChannel) -> None:
-        """Unregister a led channel."""
+    def remove_zone_strip(self, strip: ZoneStrip) -> None:
+        """Unregister a LED strip."""
         
-        if led_channel in self.led_channels:
-            self.led_channels.remove(led_channel)
-            log.debug(f"Removed led channel: {led_channel}")
+        if strip in self.zone_strips:
+            self.zone_strips.remove(strip)
+            log.debug(f"Removed main strip: {strip}")
 
     # === Frame Submission API (Type-Specific) ===
     
@@ -189,48 +187,46 @@ class FrameManager:
         # log.debug(f"FrameManager.push_frame: received {type(frame).__name__} from {getattr(frame, 'source', '?')} "
         #    f"priority={getattr(frame, 'priority', '?')} zone={getattr(frame, 'zone_id', '?')}")
 
-        # --- SingleZoneFrame ----------------------------------
-        if isinstance(frame, SingleZoneFrame):
-            msf = CompositeFrame(
-                priority=frame.priority,
-                ttl=frame.ttl,
-                source=frame.source,
-                updates=cast(Dict[ZoneID, ZoneUpdateValue], {frame.zone_id: frame.color}),
-            )
-            
-        # --- MultiZoneFrame -----------------------------------
-        elif isinstance(frame, MultiZoneFrame):
-            msf = CompositeFrame(
-                priority=frame.priority,
-                ttl=frame.ttl,
-                source=frame.source,
-                updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_colors),     # dict[ZoneID, Color]
-            )
-        
-        # --- PixelFrame --------------------------------------
-        elif isinstance(frame, PixelFrame):
-            msf = CompositeFrame(
-                priority=frame.priority,
-                ttl=frame.ttl,
-                source=frame.source,
-                updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_pixels),
-            )
-        
-        else:
-            raise TypeError(f"Unsupported frame type: {type(frame)}")
- 
-        self.priority_queues[msf.priority.value].append(msf)
-
-        # Track frame submission per zone
-        if self.metrics_collector:
+            # --- SingleZoneFrame ----------------------------------
             if isinstance(frame, SingleZoneFrame):
-                self.metrics_collector.record_frame_submitted(frame.zone_id, frame.source)
-            elif isinstance(frame, MultiZoneFrame):
-                for zid in frame.zone_colors:
-                    self.metrics_collector.record_frame_submitted(zid, frame.source)
-            elif isinstance(frame, PixelFrame):
-                for zid in frame.zone_pixels:
-                    self.metrics_collector.record_frame_submitted(zid, frame.source)
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], {frame.zone_id: frame.color}),
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                # log.debug(f"Queued SingleZoneFrame: {frame.zone_id.name} (priority={msf.priority.name})")
+                return
+
+            # --- MultiZoneFrame -----------------------------------
+            if isinstance(frame, MultiZoneFrame):
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_colors),     # dict[ZoneID, Color]
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                log.debug(f"QueuedMultiZoneFrame: {ZoneUpdateValue} (priority={msf.priority.name})")
+                
+                return
+
+            # --- PixelFrame --------------------------------------
+            if isinstance(frame, PixelFrame):
+                msf = MainStripFrame(
+                    priority=frame.priority,
+                    ttl=frame.ttl,
+                    source=frame.source,
+                    partial=True,
+                    updates=cast(Dict[ZoneID, ZoneUpdateValue], frame.zone_pixels),
+                )
+                self.main_queues[msf.priority.value].append(msf)
+                return
+
+            raise TypeError(f"Unsupported frame type: {type(frame)}")
 
     # === Control API ===
 
@@ -388,82 +384,71 @@ class FrameManager:
         Result: Complete frame with animations, overlays, and fallbacks merged intelligently.
         """
         async with self._lock:
-            queues_snapshot = {
-                priority: deque(queue)
-                for priority, queue in self.priority_queues.items()
-            }
-            
-            for queue in self.priority_queues.values():
-                queue.clear()
-            
-        merged_updates: Dict[ZoneID, ZoneUpdateValue] = {}
-        highest_priority: Optional[FramePriority] = None
-        ttl = 0.0
-        source: Optional[FrameSource] = None
+            merged_updates = {}
+            highest_priority = None
+            ttl = 0.0
+            source = None
 
-        # 1. Always collect ANIMATION first (base layer - continuous animations)
-        anim_queue = queues_snapshot.get(FramePriority.ANIMATION.value)
-        if anim_queue:
-            while anim_queue:
-                frame = anim_queue.popleft()
-                if frame.is_expired():
-                    self._metrics_record_frame_expired()
-                    continue
-
-                merged_updates.update(frame.updates)
-                ttl = max(ttl, frame.ttl)
-                source = source or frame.source
-                highest_priority = FramePriority.ANIMATION
+            # 1. Always collect ANIMATION first (base layer - continuous animations)
+            anim_queue = self.main_queues.get(FramePriority.ANIMATION.value)
+            if anim_queue:
+                while anim_queue:
+                    frame = anim_queue.popleft()
+                    if frame.is_expired():
+                        continue
+                    for zid, val in frame.updates.items():
+                        merged_updates[zid] = val
+                    ttl = max(ttl, frame.ttl)
+                    source = source or frame.source
+                    highest_priority = FramePriority.ANIMATION
 
         # 2. Apply overlays (PULSE, DEBUG, TRANSITION - higher priority than ANIMATION)
         for priority_value in sorted(queues_snapshot.keys(), reverse=True):
             if priority_value <= FramePriority.ANIMATION.value:
                 continue  # Will handle lower priorities separately
 
-            queue = queues_snapshot[priority_value]
-            while queue:
-                frame = queue.popleft()
-                if frame.is_expired():
-                    self._metrics_record_frame_expired()
-                    continue
-
-                merged_updates.update(frame.updates) # Override ANIMATION for this zone
-                ttl = max(ttl, frame.ttl)
-                source = source or frame.source
-                highest_priority = frame.priority
+                queue = self.main_queues[priority_value]
+                while queue:
+                    frame = queue.popleft()
+                    if frame.is_expired():
+                        continue
+                    for zid, val in frame.updates.items():
+                        merged_updates[zid] = val  # Override ANIMATION for this zone
+                    ttl = max(ttl, frame.ttl)
+                    source = source or frame.source
+                    highest_priority = frame.priority
 
         # 3. Fill gaps with lower priorities (MANUAL for static zones, IDLE fallback)
         for priority_value in sorted(queues_snapshot.keys()):
             if priority_value >= FramePriority.ANIMATION.value:
                 continue  # Already handled above
 
-            queue = queues_snapshot[priority_value]
-            while queue:
-                frame = queue.popleft()
-                if frame.is_expired():
-                    self._metrics_record_frame_expired()
-                    continue
-
-                # Only fill zones that don't have updates yet
-                for zid, val in frame.updates.items():
-                    merged_updates.setdefault(zid, val)
-                    
-                    # if zid not in merged_updates:
-                    #     merged_updates[zid] = val
-                ttl = max(ttl, frame.ttl)
-                source = source or frame.source
-                # Update highest_priority if this is our first frame
-                highest_priority = highest_priority or frame.priority
+                queue = self.main_queues[priority_value]
+                while queue:
+                    frame = queue.popleft()
+                    if frame.is_expired():
+                        continue
+                    # Only fill zones that don't have updates yet
+                    for zid, val in frame.updates.items():
+                        if zid not in merged_updates:
+                            merged_updates[zid] = val
+                    ttl = max(ttl, frame.ttl)
+                    if source is None:
+                        source = frame.source
+                    # Update highest_priority if this is our first frame
+                    if highest_priority is None:
+                        highest_priority = frame.priority
 
         if not merged_updates or not source:
             return None
 
-        return CompositeFrame(
-            priority=highest_priority or FramePriority.ANIMATION,
-            ttl=ttl or 0.1,
-            source=source,
-            updates=merged_updates,
-        )        
+            return MainStripFrame(
+                priority=highest_priority or FramePriority.ANIMATION,
+                ttl=ttl or 0.1,
+                source=source,
+                partial=True,
+                updates=merged_updates,
+            )        
 
     async def _select_frame_by_priority(self) -> Optional[CompositeFrame]:
         """
@@ -555,8 +540,7 @@ class FrameManager:
         if self._should_skip_dma(merged):
             return
 
-        with self._metrics_measure_write_to_hardware():
-            self._render_to_hardware(merged)
+        self._render_to_all_strips(merged)
 
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
@@ -592,9 +576,9 @@ class FrameManager:
         self.last_rendered_frame_hash = frame_hash
         return False
     
-    def _render_to_hardware(self, merged):
-        """Render merged frame to every registered LedChannel."""
-        for led_channel in self.led_channels:
+    def _render_to_all_strips(self, merged):
+        """Render merged frame to every registered ZoneStrip."""
+        for strip in self.zone_strips:
             try:
                 led_channel_frame = self._prepare_led_channel_frame(led_channel, merged)
                 self._validate_led_channel_frame(led_channel, led_channel_frame)
@@ -651,9 +635,8 @@ class FrameManager:
             c = pixels[0]
             (r, g, b) = c.to_rgb()
             
-        led_channel.show_full_pixel_frame(led_channel_frame)
-        # log.debug(f"show_full_pixel_frame completed on {led_channel}")
-    
+        strip.show_full_pixel_frame(strip_frame)
+        # log.debug(f"show_full_pixel_frame completed on {strip}")
     
     # ============================================================
     # Helpers
