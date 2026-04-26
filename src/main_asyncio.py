@@ -173,28 +173,13 @@ async def main():
     # 3. APP CLOCK & FRAME MANAGER
     # ========================================================================
 
-    log.info("Initializing AppClock...")
-    app_clock = AppClock()
-    log.info("AppClock initialized", t=app_clock.now())
-
     log.info("Initializing FrameManager...")
-    frame_manager = FrameManager(fps=60, app_clock=app_clock)
+    frame_manager = FrameManager(fps=60)
     frame_manager_task = create_tracked_task(
         frame_manager.start(),
         category=TaskCategory.RENDER,
         description="Frame Manager render loop"
     )
-
-    log.info("Initializing FrameStreamer...")
-    frame_streamer = FrameStreamer(sio=socketio_server, target_fps=30)
-    frame_streamer_task = create_tracked_task(
-        frame_streamer.start(),
-        category=TaskCategory.SOCKETIO,
-        description="FrameStreamer streaming loop"
-    )
-    
-    frame_manager.frame_streamer = frame_streamer
-    log.info("FrameStreamer initialized", target_fps=30)
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.led_channels.items():
@@ -217,9 +202,7 @@ async def main():
         frame_manager=frame_manager,
         color_manager=config_manager.color_manager,
         config_manager=config_manager,
-        data_assembler=assembler,
-        app_clock=app_clock, 
-        frame_streamer=frame_streamer
+        data_assembler=assembler
     )
     
     snapshot_publisher = SnapshotPublisher(

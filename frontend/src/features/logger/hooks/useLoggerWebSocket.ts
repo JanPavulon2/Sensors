@@ -37,6 +37,10 @@ interface UseLoggerWebSocketOptions {
 // This listener stays active permanently to capture logs even when tab is inactive
 let logEntryListenerRegistered = false;
 
+// Avoid requesting log history more than once per socket connection.
+// Re-requesting can happen when the hook mounts while socket is already connected.
+let historyRequested = false;
+
 const registerLogEntryListener = () => {
   if (logEntryListenerRegistered) return;
 
@@ -99,8 +103,12 @@ export const useLoggerWebSocket = ({
     const handleConnect = () => {
       console.log('✓ Logger Socket.IO connected');
       setIsConnected(true);
-      // Request log history on first connect
-      socket.emit('logs_request_history', { limit: 500 });
+
+      // Request history only once per connection.
+      if (!historyRequested) {
+        historyRequested = true;
+        socket.emit('logs_request_history', { limit: 500 });
+      }
     };
 
     // Listen to log history response
@@ -140,6 +148,8 @@ export const useLoggerWebSocket = ({
     const handleDisconnect = (reason: string) => {
       console.log(`Logger Socket.IO disconnected: ${reason}`);
       setIsConnected(false);
+      // Allow history request again if we reconnect later
+      historyRequested = false;
     };
 
     // Connection error
@@ -155,6 +165,13 @@ export const useLoggerWebSocket = ({
 
     // Set initial connection state
     setIsConnected(socket.connected);
+
+    // If already connected, request history immediately (socket already connected before hook ran)
+    if (socket.connected && !historyRequested) {
+      console.log('✓ Logger Socket.IO already connected, requesting history...');
+      historyRequested = true;
+      socket.emit('logs_request_history', { limit: 500 });
+    }
 
     return () => {
       // Cleanup: Only unregister connect/disconnect handlers

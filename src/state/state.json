@@ -26,7 +26,7 @@
       "is_on": false,
       "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_FADE",
+        "id": "COLOR_SNAKE",
         "parameters": {}
       }
     },
@@ -46,6 +46,22 @@
       }
     },
     "circle": {
+      "color": {
+        "mode": "HUE",
+        "hue": 97
+      },
+      "brightness": 14,
+      "is_on": true,
+      "mode": "ANIMATION",
+      "animation": {
+        "id": "COLOR_SNAKE",
+        "parameters": {
+          "length": 15,
+          "speed": 1
+        }
+      }
+    },
+    "matrix": {
       "color": {
         "mode": "HUE",
         "hue": 11
@@ -82,9 +98,9 @@
   },
   "application": {
     "edit_mode_on": false,
-    "selected_animation_param_id": "SPEED",
-    "selected_zone_index": 0,
-    "selected_zone_edit_target": "COLOR_HUE",
+    "selected_animation_param_id": "HUE",
+    "selected_zone_index": 6,
+    "selected_zone_edit_target": "COLOR_PRESET",
     "frame_by_frame_mode": false,
     "save_on_change": true
   }

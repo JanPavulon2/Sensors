@@ -18,6 +18,3 @@ def register_socketio(sio, services):
     # Client command handlers (for on-demand requests)
     register_logs(sio)
     register_tasks(sio)
-
-    # Frame streaming
-    register_frame_broadcaster(sio, services)
