@@ -102,8 +102,8 @@ class SnakeAnimation(BaseAnimation):
 
         # Deterministic fractional position from elapsed time
         elapsed = time.monotonic() - self._start_time
-        pps = self._speed_to_pps(speed)
-        position = int(elapsed * pps) % pixel_count
+        pixels_per_second = self._speed_to_pps(speed)
+        position = (elapsed * pixels_per_second) % pixel_count
 
 
         # Base color for snake
@@ -119,9 +119,9 @@ class SnakeAnimation(BaseAnimation):
             pixels[pos] = base_color.with_brightness(
                 int(self.base_brightness * fade)
             )
-
         # Build pixel array with smooth brightness falloff
         pixels = self._snake_pixels(position, base_color, length)
+
 
 
         return PixelFrame(
