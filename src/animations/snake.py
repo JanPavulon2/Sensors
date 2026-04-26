@@ -23,26 +23,21 @@ class SnakeAnimation(BaseAnimation):
     Movement is time-based: speed parameter controls pixels-per-second.
     Rendering always reflects the current wall-clock position regardless
     of how often step() is called.
-<<<<<<< HEAD
-=======
+
 
     Uses sub-pixel fractional positioning for smooth movement:
     - Leading pixel fades in with quadratic brightness as it enters
     - Body pixels use quadratic brightness falloff toward the tail
     - Minimum brightness threshold prevents WS281x flicker
->>>>>>> origin/main
     """
 
     # Speed range: 0 → MIN_PPS, 100 → MAX_PPS (pixels per second)
     _MIN_PPS = 2.0
     _MAX_PPS = 60.0
 
-<<<<<<< HEAD
-=======
     # Below this brightness %, pixels are skipped to prevent WS281x flicker
     _MIN_VISIBLE_BRIGHTNESS = 2
 
->>>>>>> origin/main
     PARAMS = {
         AnimationParamID.SPEED: SpeedParam(),
         AnimationParamID.PRIMARY_COLOR_HUE: PrimaryColorHueParam(),
@@ -55,10 +50,6 @@ class SnakeAnimation(BaseAnimation):
 
     def _speed_to_pps(self, speed: int) -> float:
         """Convert speed parameter (0-100) to pixels per second."""
-<<<<<<< HEAD
-        t = speed / 100.0
-        return self._MIN_PPS + t * (self._MAX_PPS - self._MIN_PPS)
-=======
         normalized = speed / 100.0
         return self._MIN_PPS + normalized * (self._MAX_PPS - self._MIN_PPS)
 
@@ -97,7 +88,6 @@ class SnakeAnimation(BaseAnimation):
             pixels[pixel_index] = base_color.with_brightness(brightness)
 
         return pixels
->>>>>>> origin/main
 
     async def step(self) -> PixelFrame | None:
         speed = self.get_param(AnimationParamID.SPEED, 50)
@@ -110,22 +100,15 @@ class SnakeAnimation(BaseAnimation):
 
         length = max(1, min(length, pixel_count))
 
-<<<<<<< HEAD
-        # Deterministic position from elapsed time
+        # Deterministic fractional position from elapsed time
         elapsed = time.monotonic() - self._start_time
         pps = self._speed_to_pps(speed)
         position = int(elapsed * pps) % pixel_count
-=======
-        # Deterministic fractional position from elapsed time
-        elapsed = time.monotonic() - self._start_time
-        pixels_per_second = self._speed_to_pps(speed)
-        position = (elapsed * pixels_per_second) % pixel_count
->>>>>>> origin/main
+
 
         # Base color for snake
         base_color = Color.from_hue(hue)
 
-<<<<<<< HEAD
         # Start with all pixels off
         pixels: List[Color] = [Color.black() for _ in range(pixel_count)]
 
@@ -136,15 +119,16 @@ class SnakeAnimation(BaseAnimation):
             pixels[pos] = base_color.with_brightness(
                 int(self.base_brightness * fade)
             )
-=======
+
         # Build pixel array with smooth brightness falloff
         pixels = self._snake_pixels(position, base_color, length)
->>>>>>> origin/main
+
 
         return PixelFrame(
             zone_pixels={self.zone_id: pixels},
             priority=FramePriority.ANIMATION,
             source=FrameSource.ANIMATION,
             ttl=0.12,
-            partial=False,
+            partial=False
         )
+        
