@@ -204,26 +204,28 @@ class AnimationEngine:
         - engine forwards frames immediately
         - renderer (FrameManager) controls FPS
         """
-        
+
         log.info(f"_run_loop started for {zone_id.name}")
-        
+
         frames_sent = 0
         last_log = time.monotonic()
-            
+        animation_name = type(animation).__name__
+        metrics_collector = self.frame_manager.metrics_collector
+
         try:
             while True:
+                step_start = time.perf_counter()
                 frame = await animation.step()
-                
+                step_elapsed = time.perf_counter() - step_start
+
+                if metrics_collector:
+                    metrics_collector.record_animation_step(zone_id, animation_name, step_elapsed)
+
                 now = time.monotonic()
                 if now - last_log >= 1.0:
-                    # log.warn(
-                    #     "ANIM PUSH",
-                    #     zone=zone_id.name,
-                    #     fps=frames_sent
-                    # )
                     frames_sent = 0
                     last_log = now
-                
+
                 if frame is not None:
                     await self.frame_manager.push_frame(frame)
                     frames_sent += 1

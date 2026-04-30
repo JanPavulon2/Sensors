@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, LayoutGrid, Lightbulb, Bug, Settings, type LucideIcon } from 'lucide-react';
+import { Menu, X, LayoutGrid, Grid3X3, Lightbulb, Bug, Settings, type LucideIcon } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useAuth, useCheckBackendConnection } from '@/shared/hooks';
 
@@ -30,6 +30,7 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
+    { label: 'Zones', path: '/zones', icon: Grid3X3 },
     { label: 'Components', path: '/components', icon: Lightbulb },
     { label: 'Debug', path: '/debug', icon: Bug },
     { label: 'Settings', path: '/settings', icon: Settings },
@@ -41,9 +42,8 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
     <div className="flex h-screen bg-bg-app">
       {/* Sidebar */}
       <aside
-        className={`bg-bg-panel border-r border-border transition-all duration-300 ${
-          sidebarOpen ? 'w-64' : 'w-20'
-        }`}
+        className={`bg-bg-panel border-r border-border transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'
+          }`}
       >
         {/* Sidebar Header */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-border">
@@ -71,11 +71,10 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center justify-center gap-3 px-4 py-2 rounded-md transition-colors text-sm font-medium ${
-                  isActive(item.path)
+                className={`flex items-center justify-center gap-3 px-4 py-2 rounded-md transition-colors text-sm font-medium ${isActive(item.path)
                     ? 'bg-accent-primary text-bg-app'
                     : 'text-text-secondary hover:bg-bg-elevated'
-                }`}
+                  }`}
               >
                 {sidebarOpen ? (
                   <>
@@ -96,9 +95,8 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
             <div className="text-xs space-y-1">
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-2 h-2 rounded-full ${
-                    isConnected ? 'bg-success' : 'bg-warning'
-                  }`}
+                  className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success' : 'bg-warning'
+                    }`}
                 />
                 <span className="text-text-tertiary">
                   {isConnected ? 'Connected' : 'Connecting...'}

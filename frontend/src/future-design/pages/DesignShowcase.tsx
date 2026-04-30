@@ -56,7 +56,7 @@ export const DesignShowcase: React.FC = () => {
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <div>
-            <h1 className={styles.title}>🎨 Diuna Future Design System</h1>
+            <h1 className={styles.title}>🎨 Aurora Lighting</h1>
             <p className={styles.subtitle}>
               Phase 1: LED Strip Control • Real-time Visualization • Advanced Color & Animation Control
             </p>

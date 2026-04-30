@@ -68,6 +68,8 @@ from controllers import ControlPanelController
 
 # === Engine ===
 from engine.frame_manager import FrameManager
+from engine.render_metrics import RenderMetricsCollector
+from services.metrics_streamer import MetricsStreamer
 
 # === Runtime ===
 from runtime.runtime_info import RuntimeInfo
@@ -177,8 +179,11 @@ async def main():
     app_clock = AppClock()
     log.info("AppClock initialized", t=app_clock.now())
 
+    log.info("Initializing RenderMetricsCollector...")
+    metrics_collector = RenderMetricsCollector()
+
     log.info("Initializing FrameManager...")
-    frame_manager = FrameManager(fps=60, app_clock=app_clock)
+    frame_manager = FrameManager(fps=60, app_clock=app_clock, metrics_collector=metrics_collector)
     frame_manager_task = create_tracked_task(
         frame_manager.start(),
         category=TaskCategory.RENDER,
@@ -195,6 +200,13 @@ async def main():
     
     frame_manager.frame_streamer = frame_streamer
     log.info("FrameStreamer initialized", target_fps=30)
+
+    log.info("Initializing MetricsStreamer...")
+    metrics_streamer = MetricsStreamer(
+        socketio_server=socketio_server,
+        collector=metrics_collector,
+        interval=1.0,
+    )
 
     # Register all LED strips with FrameManager
     for gpio_pin, strip in hardware.led_channels.items():
@@ -218,8 +230,9 @@ async def main():
         color_manager=config_manager.color_manager,
         config_manager=config_manager,
         data_assembler=assembler,
-        app_clock=app_clock, 
-        frame_streamer=frame_streamer
+        app_clock=app_clock,
+        frame_streamer=frame_streamer,
+        metrics_streamer=metrics_streamer,
     )
     
     snapshot_publisher = SnapshotPublisher(

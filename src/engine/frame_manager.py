@@ -30,8 +30,9 @@ from models.frame import (
     PixelFrame, CompositeFrame, ZoneUpdateValue
 )
 from hardware.led.led_channel import LedChannel
+from contextlib import contextmanager
 from engine.zone_render_state import ZoneRenderState
-from time import perf_counter
+from engine.render_metrics import RenderMetricsCollector
 
 if TYPE_CHECKING:
     from services.app_clock import AppClock
@@ -83,7 +84,8 @@ class FrameManager:
         self,
         fps: int = 60,
         app_clock: Optional["AppClock"] = None,
-        frame_streamer: Optional["FrameStreamer"] = None
+        frame_streamer: Optional["FrameStreamer"] = None,
+        metrics_collector: Optional["RenderMetricsCollector"] = None,
     ):
         """
         Initialize FrameManager.
@@ -130,14 +132,8 @@ class FrameManager:
         # Async lock for frame submission safety
         self._lock = asyncio.Lock()
 
-        self._perf_acc = {
-            "build": 0.0,
-            "merge": 0.0,
-            "hw": 0.0,
-            "emit": 0.0,
-        }
-        self._perf_frames = 0
-        self._perf_last_log = perf_counter()
+        # Debug metrics collector (injected, zero-cost when None or disabled)
+        self.metrics_collector = metrics_collector
 
 
         log.info(
@@ -168,6 +164,8 @@ class FrameManager:
                     zone_id=zone_id,
                     pixels=[Color.black()] * zone_length,
                 )
+                if self.metrics_collector:
+                    self.metrics_collector.register_zone(zone_id)
                 log.debug(f"Initialized black render state for zone {zone_id.name} ({zone_length} pixels)")
 
         log.info(f"Registered led channel: {led_channel} (total zone_render_states now has {len(self.zone_render_states)} zones)")
@@ -223,6 +221,17 @@ class FrameManager:
  
         self.priority_queues[msf.priority.value].append(msf)
 
+        # Track frame submission per zone
+        if self.metrics_collector:
+            if isinstance(frame, SingleZoneFrame):
+                self.metrics_collector.record_frame_submitted(frame.zone_id, frame.source)
+            elif isinstance(frame, MultiZoneFrame):
+                for zid in frame.zone_colors:
+                    self.metrics_collector.record_frame_submitted(zid, frame.source)
+            elif isinstance(frame, PixelFrame):
+                for zid in frame.zone_pixels:
+                    self.metrics_collector.record_frame_submitted(zid, frame.source)
+
     # === Control API ===
 
     def pause(self) -> None: 
@@ -237,6 +246,8 @@ class FrameManager:
     def set_fps(self, fps: int) -> None:
         """Change FPS at runtime."""
         self.fps = max(1, min(fps, 240))
+        if self.metrics_collector:
+            self.metrics_collector.set_target_fps(self.fps)
         log.info(f"FrameManager FPS set to {self.fps}")
 
 
@@ -309,9 +320,6 @@ class FrameManager:
         """Main render loop @ target FPS."""
         log.info(f"Render loop @ {self.fps} FPS (delay={1000/self.fps:.2f}ms)")
 
-        frame_period = 1.0 / self.fps
-        min_frame_time = max(frame_period, WS2811Timing.MIN_FRAME_TIME_MS / 1000)
-
         # Absolute timeline: each frame targets an exact time, not relative to previous frame end
         next_frame_time = time.perf_counter()
 
@@ -320,6 +328,10 @@ class FrameManager:
             if self.paused and not self.step_requested:
                 await asyncio.sleep(0.01)
                 continue
+
+            # Re-read self.fps each tick so runtime changes via set_fps() take effect immediately
+            frame_period = 1.0 / self.fps
+            min_frame_time = max(frame_period, WS2811Timing.MIN_FRAME_TIME_MS / 1000)
 
             # === SLEEP UNTIL NEXT FRAME (RPi-optimized) ===
             while True:
@@ -343,16 +355,12 @@ class FrameManager:
 
             # === RENDER FRAME ===
             try:
-                t0 = perf_counter()
-                composite_frame = await self._build_composite_frame()
-                t1 = perf_counter()
-                self._perf_acc["build"] += (t1 - t0)
+                with self._metrics_measure_render_cycle():
+                    with self._metrics_measure_build():
+                        composite_frame = await self._build_composite_frame()
 
-                # Render atomically, but skip DMA if main frame hasn't changed
-                # (Phase 2 optimization: 95% DMA reduction in static-only mode)
-                if composite_frame is not None:
-                    # Frame changed (different object) → do full render with hardware DMA
-                    await self._render_frame(composite_frame)
+                    if composite_frame is not None:
+                        await self._render_frame(composite_frame)
 
             except Exception as e:
                 log.error(f"Render error: {e}", exc_info=True)
@@ -365,21 +373,6 @@ class FrameManager:
 
                 # Update last_show_time for compatibility (e.g., metrics, external readers)
                 self.last_show_time = time.perf_counter()
-                
-                now = perf_counter()
-                if now - self._perf_last_log >= 1.0 and self._perf_frames > 0:
-                    # f = self._perf_frames
-                    # log.warn(
-                    #     message=f"PERF 1s | fps=%d | build=%.2fms | merge=%.2fms | hw=%.2fms | emit=%.2fms",
-                    #     f=f,
-                    #     build=(self._perf_acc["build"] / f) * 1000,
-                    #     merge=(self._perf_acc["merge"] / f) * 1000,
-                    #     hw=(self._perf_acc["hw"] / f) * 1000,
-                    #     emit=(self._perf_acc["emit"] / f) * 1000,
-                    # )
-                    self._perf_acc = {k: 0.0 for k in self._perf_acc}
-                    self._perf_frames = 0
-                    self._perf_last_log = now
 
     # === Frame Selection ===
 
@@ -414,8 +407,9 @@ class FrameManager:
             while anim_queue:
                 frame = anim_queue.popleft()
                 if frame.is_expired():
+                    self._metrics_record_frame_expired()
                     continue
-                
+
                 merged_updates.update(frame.updates)
                 ttl = max(ttl, frame.ttl)
                 source = source or frame.source
@@ -430,8 +424,9 @@ class FrameManager:
             while queue:
                 frame = queue.popleft()
                 if frame.is_expired():
+                    self._metrics_record_frame_expired()
                     continue
-                
+
                 merged_updates.update(frame.updates) # Override ANIMATION for this zone
                 ttl = max(ttl, frame.ttl)
                 source = source or frame.source
@@ -446,8 +441,9 @@ class FrameManager:
             while queue:
                 frame = queue.popleft()
                 if frame.is_expired():
+                    self._metrics_record_frame_expired()
                     continue
-                
+
                 # Only fill zones that don't have updates yet
                 for zid, val in frame.updates.items():
                     merged_updates.setdefault(zid, val)
@@ -512,42 +508,63 @@ class FrameManager:
         if self.frame_streamer:
             await self.frame_streamer.emit(output_frame)
 
+    # === Metrics helpers ===
+    # Delegate to injected collector when present, otherwise no-op.
+
+    @contextmanager
+    def _no_op_context(self):
+        yield
+
+    def _metrics_measure_render_cycle(self):
+        if self.metrics_collector:
+            return self.metrics_collector.measure_frame_render_cycle_time()
+        return self._no_op_context()
+
+    def _metrics_measure_build(self):
+        if self.metrics_collector:
+            return self.metrics_collector.measure_frame_build_time()
+        return self._no_op_context()
+
+    def _metrics_measure_merge(self):
+        if self.metrics_collector:
+            return self.metrics_collector.measure_frame_merge_time()
+        return self._no_op_context()
+
+    def _metrics_measure_write_to_hardware(self):
+        if self.metrics_collector:
+            return self.metrics_collector.measure_frame_write_to_hardware_time()
+        return self._no_op_context()
+
+    def _metrics_measure_emit(self):
+        if self.metrics_collector:
+            return self.metrics_collector.measure_frame_emit_time()
+        return self._no_op_context()
+
+    def _metrics_record_frame_expired(self) -> None:
+        if self.metrics_collector:
+            self.metrics_collector.record_frame_expired()
+
     # === Rendering ===
 
     async def _render_frame(self, frame: CompositeFrame) -> None:
         """High-level render pipeline."""
-        t_merge0 = perf_counter()
-        updates = frame.updates
-        merged = self._merge_updates(frame, updates)
-        t_merge1 = perf_counter()
-        self._perf_acc["merge"] += (t_merge1 - t_merge0)
-        
+        with self._metrics_measure_merge():
+            updates = frame.updates
+            merged = self._merge_updates(frame, updates)
 
         if self._should_skip_dma(merged):
             return
 
-
-        t_hw0 = perf_counter()
-        self._render_to_hardware(merged)
-        t_hw1 = perf_counter()
-        self._perf_acc["hw"] += (t_hw1 - t_hw0)
+        with self._metrics_measure_write_to_hardware():
+            self._render_to_hardware(merged)
 
         self.frames_rendered += 1
         self.frame_times.append(time.perf_counter())
 
-
-        t_emit0 = perf_counter()
-        output_frame = self._build_output_frame()
-        if self.frame_streamer:
-            self.frame_streamer.push(output_frame)
-        t_emit1 = perf_counter()
-        self._perf_acc["emit"] += (t_emit1 - t_emit0)
-        
-        # Build output frame for streaming/recording
-        # output_frame = self._build_output_frame()
-        #await self._emit_output_frame(output_frame)
-        
-        self._perf_frames += 1
+        with self._metrics_measure_emit():
+            output_frame = self._build_output_frame()
+            if self.frame_streamer:
+                self.frame_streamer.push(output_frame)
         
     def _merge_updates(self, frame: CompositeFrame, updates: Dict[ZoneID, ZoneUpdateValue]):
         """Merge frame updates into zone_render_states."""
@@ -568,6 +585,8 @@ class FrameManager:
         frame_hash = self._hash_merged_frame(merged)
         if frame_hash == self.last_rendered_frame_hash:
             self.dma_skipped += 1
+            if self.metrics_collector:
+                self.metrics_collector.record_dma_skip()
             return True
 
         self.last_rendered_frame_hash = frame_hash
@@ -671,7 +690,14 @@ class FrameManager:
                 merged[zone_id] = list(state.pixels)
 
         for zid, pix in merged.items():
-            self.zone_render_states[zid].pixels = pix
+            zone_state = self.zone_render_states[zid]
+            if self.metrics_collector:
+                old_hash = zone_state.get_pixel_hash()
+                zone_state.update_pixels(pix, source=FrameSource.IDLE)
+                new_hash = zone_state.get_pixel_hash()
+                self.metrics_collector.record_zone_rendered(zid, changed=(old_hash != new_hash))
+            else:
+                zone_state.pixels = pix
 
         return merged
     
