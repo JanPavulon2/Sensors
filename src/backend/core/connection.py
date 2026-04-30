@@ -1,12 +1,13 @@
-# =========================================================
-# core/connection.py
-# =========================================================
-
 from dataclasses import dataclass
+from uuid import UUID
 
 
-@dataclass
+@dataclass(frozen=True)
 class Connection:
-    from_port: str
-    to_port: str
+    """Connection between two device instance ports."""
 
+    id: UUID
+    from_device_id: UUID
+    from_port: UUID
+    to_device_id: UUID
+    to_port: UUID
