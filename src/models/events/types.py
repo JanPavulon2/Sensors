@@ -10,11 +10,11 @@ class EventType(Enum):
 
     # Zone / static
     ZONE_STATIC_STATE_CHANGED = auto()
-    ZONE_ANIMATION_PARAM_CHANGED = auto()
     ZONE_RENDER_MODE_CHANGED = auto()
 
     # Animation
     ZONE_ANIMATION_CHANGED = auto()
+    ZONE_ANIMATION_PARAM_CHANGED = auto()
     ANIMATION_STARTED = auto()
     ANIMATION_STOPPED = auto()
     ANIMATION_PARAMETER_CHANGED = auto()

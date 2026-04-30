@@ -196,11 +196,11 @@ class TaskRegistry:
         task.add_done_callback(self._on_task_done)
 
         # Broadcast task creation event (non-blocking)
-        try:
-            asyncio.create_task(self._broadcast_task_event("task:created", record.to_dict()))
-        except RuntimeError:
-            # No event loop running (e.g., during app shutdown)
-            pass
+        # try:
+        #     asyncio.create_task(self._broadcast_task_event("task:created", record.to_dict()))
+        # except RuntimeError:
+        #     # No event loop running (e.g., during app shutdown)
+        #     pass
 
         return task_id
 
@@ -224,10 +224,10 @@ class TaskRegistry:
             record.cancelled = True
             log.debug(f"{task_label} - Cancelled")
             # Broadcast cancellation event
-            try:
-                asyncio.create_task(self._broadcast_task_event("task:cancelled", record.to_dict()))
-            except RuntimeError:
-                pass
+            # try:
+            #     asyncio.create_task(self._broadcast_task_event("task:cancelled", record.to_dict()))
+            # except RuntimeError:
+            #     pass
         else:
             exc = task.exception()
             if exc:
@@ -237,36 +237,34 @@ class TaskRegistry:
                     exc_info=True
                 )
                 # Broadcast failure event
-                try:
-                    asyncio.create_task(self._broadcast_task_event("task:failed", record.to_dict()))
-                except RuntimeError:
-                    pass
+                # try:
+                #     asyncio.create_task(self._broadcast_task_event("task:failed", record.to_dict()))
+                # except RuntimeError:
+                #     pass
             else:
                 record.finished_return = task.result()
-                log.info(
-                    f"{task_label} - Completed successfully"
-                )
+                log.info(f"{task_label} - Completed successfully")
                 # Broadcast completion event
-                try:
-                    asyncio.create_task(self._broadcast_task_event("task:completed", record.to_dict()))
-                except RuntimeError:
-                    pass
+                # try:
+                #     asyncio.create_task(self._broadcast_task_event("task:completed", record.to_dict()))
+                # except RuntimeError:
+                #     pass
 
     # -----------------------------
     # Internal broadcast helper
     # Note: Broadcasting is now primarily handled through Socket.IO
     # See: src/api/socketio/tasks/broadcaster.py
     # This method is kept for backwards compatibility but does nothing
-    async def _broadcast_task_event(self, event_type: str, task_data: dict[str, Any]) -> None:
-        """
-        Broadcast a task event (no-op, for backwards compatibility).
+    # async def _broadcast_task_event(self, event_type: str, task_data: dict[str, Any]) -> None:
+    #     """
+    #     Broadcast a task event (no-op, for backwards compatibility).
 
-        Broadcasting is now handled through Socket.IO:
-        - src/api/socketio/tasks/broadcaster.py (server-side)
-        - Frontend listens on Socket.IO events: tasks:all, tasks:active, tasks:stats
-        """
+    #     Broadcasting is now handled through Socket.IO:
+    #     - src/api/socketio/tasks/broadcaster.py (server-side)
+    #     - Frontend listens on Socket.IO events: tasks:all, tasks:active, tasks:stats
+    #     """
         # Socket.IO handles broadcasting - clients request data on-demand
-        pass
+        # pass
 
     # -----------------------------
     # Utility: find record by task instance

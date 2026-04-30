@@ -378,3 +378,29 @@ class ZoneState:
 - **State file:** `src/state/state.json`
 - **Pattern:** Debounced saves (500ms) via `ApplicationStateService`
 - **On startup:** `DataAssembler` loads state and builds domain objects
+
+---
+
+## User Preferences (learned from interactions)
+
+### Naming Conventions
+- **Never use abbreviations** in variable names, method names, or parameters. Always use full words.
+  - Bad: `frac`, `pos`, `hw_time`, `t0`, `idx`, `pps`
+  - Good: `fractional_offset`, `position`, `write_to_hardware_time`, `start_time`, `head_index`, `pixels_per_second`
+- Use descriptive, self-explanatory names — the name should convey meaning without needing a comment.
+
+### Code Style
+- Follow DRY — if multiple methods differ only in one line, extract the shared logic.
+- Use constructor injection, not tight coupling (don't create dependencies inside constructors).
+- Context manager pattern preferred for timing/measurement code.
+- Naming pattern for measurement methods: `measure_frame_X_time` where X describes the stage.
+- **Never remove comments** without direct user instruction. If code changes make a comment outdated, update the comment to match the new code. If unsure whether a comment is still accurate, ask the user.
+
+### Architecture
+- Mutations from frontend go through REST API, Socket.IO is for streaming only.
+- `/metrics` namespace for render metrics (not `/debug`).
+
+### API Client (Frontend)
+- Axios `baseURL` already includes `/api` — don't prefix routes with `/api` again.
+  - Correct: `api.put('/v1/metrics/render-fps', ...)`
+  - Wrong: `api.put('/api/v1/metrics/render-fps', ...)`

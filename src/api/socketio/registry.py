@@ -3,6 +3,7 @@ from api.socketio.zones.broadcaster import register_zone_broadcaster
 from api.socketio.logs.broadcaster import register_logs
 from api.socketio.tasks.broadcaster import register_tasks
 from api.socketio.frames.broadcaster import register_frame_broadcaster
+from api.socketio.metrics.broadcaster import register_metrics_broadcaster
 
 
 def register_socketio(sio, services):
@@ -21,3 +22,6 @@ def register_socketio(sio, services):
 
     # Frame streaming
     register_frame_broadcaster(sio, services)
+
+    # Render metrics streaming
+    register_metrics_broadcaster(sio, services)
