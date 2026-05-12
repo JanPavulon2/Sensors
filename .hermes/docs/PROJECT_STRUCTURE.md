@@ -1,495 +1,110 @@
-# Aurora Project Structure
+# Aurora System - Project Structure
 
-## src
+## Overview
+This document outlines the current structure of the Aurora system based on examination of the codebase.
 
+## Root Directory
+```
+/mnt/c/Repositories/Aurora_System/Sensors/
+```
+
+## Main Source Directory: src/
+```
 src/
-  main_asyncio.py
-  animations/
-    base.py
-    breathe.py
-    color_fade.py
-    color_snake.py
-    engine.py
-    rainbow.py
-    snake.py
-    __init__.py
-  api/
-    dependencies.py
-    main.py
-    package-lock.json
-    __init__.py
-    dto/
-      zone_snapshot_dto.py
-      __init__.py
-    middleware/
-      auth.py
-      error_handler.py
-      websocket_validation.py
-      __init__.py
-    models/
-      __init__.py
-    routes/
-      animations.py
-      frames.py
-      logger.py
-      system.py
-      zones.py
-      __init__.py
-    schemas/
-      animation.py
-      error.py
-      logger.py
-      zone.py
-      __init__.py
-    socketio/
-      on_connect.py
-      registry.py
-      server.py
-      __init__.py
-      frames/
-        broadcaster.py
-        __init__.py
-      logs/
-        broadcaster.py
-      tasks/
-        broadcaster.py
-      zones/
-        broadcaster.py
-        dto.py
-  backend/
-    core/
-      connection.py
-      device.py
-      event_bus.py
-      message.py
-      new.py
-      port.py
-      runtime.py
-  config/
-    animations.yaml
-    colors.yaml
-    config.yaml
-    factory_defaults.yaml
-    hardware.yaml
-    parameters.yaml
-    zones.yaml
-    zone_mapping.yaml
-  controllers/
-    control_panel_controller.py
-    __init__.py
-    led_controller/
-      animation_mode_controller.py
-      frame_playback_controller.py
-      lighting_controller.py
-      power_toggle_controller.py
-      static_mode_controller.py
-      __init__.py
-  engine/
-    frame_manager.py
-    zone_render_state.py
-    __init__.py
-  hardware/
-    hardware_coordinator.py
-    gpio/
-      gpio_manager.py
-      gpio_manager_factory.py
-      gpio_manager_hardware.py
-      gpio_manager_interface.py
-      gpio_manager_mock.py
-      __init__.py
-    input/
-      button.py
-      control_panel.py
-      rotary_encoder.py
-      __init__.py
-      keyboard/
-        factory.py
-        __init__.py
-        adapters/
-          base.py
-          dummy.py
-          evdev.py
-          stdin.py
-    led/
-      led_channel.py
-      led_channel_factory.py
-      strip_interface.py
-      virtual_strip.py
-      ws281x_strip.py
-      __init__.py
-    output/
-      buzzer.py
-  lifecycle/
-    api_server_wrapper.py
-    shutdown_coordinator.py
-    shutdown_protocol.py
-    task_registry.py
-    __init__.py
-    handlers/
-      all_tasks_cancellation_handler.py
-      animation_shutdown_handler.py
-      api_server_shutdown_handler.py
-      frame_manager_shutdown_handler.py
-      gpio_shutdown_handler.py
-      indicator_shutdown_handler.py
-      led_shutdown_handler.py
-      task_cancellation_handler.py
-      __init__.py
-  managers/
-    animation_manager.py
-    color_manager.py
-    config_manager.py
-    hardware_manager.py
-    __init__.py
-  models/
-    color.py
-    enums.py
-    events.py
-    frame.py
-    hardware.py
-    transition.py
-    zone_mapping.py
-    __init__.py
-    animation_params/
-      animation_param.py
-      animation_param_id.py
-      brightness_param.py
-      enum_param.py
-      float_range_param.py
-      hue_param.py
-      intensity_param.py
-      int_range_param.py
-      length_param.py
-      primary_color_hue_param.py
-      speed_param.py
-      __init__.py
-    domain/
-      animation.py
-      application.py
-      output_frame.py
-      zone.py
-      __init__.py
-    events/
-      base.py
-      hardware.py
-      sources.py
-      types.py
-      zone_runtime_events.py
-      zone_snapshot_events.py
-      zone_static_events.py
-      __init__.py
-  obsolete/
-    lamp_white_mode_controller.py
-    preview_panel.py
-    preview_panel_controller.py
-  runtime/
-    runtime_info.py
-    __init__.py
-  services/
-    animation_service.py
-    application_state_service.py
-    app_clock.py
-    data_assembler.py
-    event_bus.py
-    frame_streamer.py
-    log_broadcaster.py
-    middleware.py
-    port_manager.py
-    service_container.py
-    snapshot_publisher.py
-    transition_service.py
-    zone_service.py
-    __init__.py
-  state/
-    state.json
-  utils/
-    cleanup.py
-    colors.py
-    enum_helper.py
-    logger.py
-    serialization.py
-    socketio_logger.py
-    __init__.py
-  zone_layer/
-    selected_zone_indicator.py
-    zone_pixel_mapper.py
-## frontend/src
+├── animations/          # Animation definitions and engine
+│   ├── base.py         # Base animation class
+│   ├── breathe.py      # Breathe animation
+│   ├── color_fade.py   # Color fade animation
+│   ├── color_snake.py  # Color snake animation
+│   ├── engine.py       # Animation engine
+│   ├── rainbow.py      # Rainbow animation
+│   ├── snake.py        # Snake animation
+│   └── __init__.py
+│
+├── api/                 # FastAPI backend
+│   ├── dependencies.py # Dependency injection
+│   ├── dto/            # Data Transfer Objects
+│   │   ├── zone_snapshot_dto.py
+│   │   └── __init__.py
+│   ├── main.py         # FastAPI app entry point
+│   ├── middleware/     # Custom middleware
+│   │   ├── auth.py
+│   │   ├── error_handler.py
+│   │   ├── websocket_validation.py
+│   │   └── __init__.py
+│   ├── models/         # Pydantic models
+│   │   └── __init__.py
+│   ├── routes/         # API endpoints
+│   │   ├── animations.py
+│   │   ├── frames.py
+│   │   ├── logger.py
+│   │   └── ...
+│   └── ...
+│
+├── backend/             # Backend services
+├── config/              # Configuration files
+├── controllers/         # Hardware and logic controllers
+├── engine/              # Core rendering engine
+├── hardware/            # Hardware abstraction layer
+├── lifecycle/           # Application lifecycle management
+├── managers/            # Manager classes for various systems
+├── models/              # Data models
+├── obsolete/            # Deprecated code
+├── runtime/             # Runtime utilities
+├── services/            # Service implementations
+├── state/               # State management
+├── utils/               # Utility functions
+├── zone_layer/          # Zone-based rendering system
+└── main_asyncio.py      # Application entry point
+```
 
-src/
-  App.tsx
-  index.css
-  main.tsx
-  assets/
-    react.svg
-  config/
-    constants.ts
-  features/
-    animations/
-      index.ts
-      api/
-        index.ts
-        queries.ts
-    frames/
-      index.ts
-      components/
-        AllZonesView.tsx
-        FpsControl.tsx
-        FrameMetadata.tsx
-        FrameVisualizer.tsx
-        index.ts
-        ZoneFrameView.tsx
-      constants/
-        zone-shapes.ts
-      hooks/
-        index.ts
-      realtime/
-        frames.socket.ts
-        frames.store.ts
-      types/
-        output-frame.ts
-    logger/
-      index.ts
-      components/
-        index.ts
-        LogFilterPanel.tsx
-        Logger.tsx
-        LogViewer.tsx
-      hooks/
-        index.ts
-        useLogCategories.ts
-        useLoggerWebSocket.ts
-      stores/
-        index.ts
-        logFilterStore.ts
-        loggerStreamStore.ts
-    tasks/
-      index.ts
-      components/
-        index.ts
-        TaskCard.tsx
-        TaskMonitor.tsx
-        TaskStats.tsx
-      hooks/
-        index.ts
-        useTaskWebSocket.ts
-      stores/
-        index.ts
-        taskStreamStore.ts
-    zones/
-      index.ts
-      api/
-        index.ts
-        queries.ts
-        zone.commands.ts
-      components/
-        index.ts
-        animations/
-          AnimationCarousel.tsx
-          AnimationParametersPanel.tsx
-          animations.config.ts
-          AnimationSelector.tsx
-          index.ts
-        common/
-          index.ts
-          ZoneRenderModeIndicator.tsx
-        edit-panel/
-          index.ts
-          ZoneAnimationSection.tsx
-          ZoneColorSection.tsx
-          ZoneEditPanel.tsx
-          ZoneEditPanelFooter.tsx
-          ZoneEditPanelHeader.tsx
-          ZoneEditPanelPreview.tsx
-        grid/
-          index.ts
-          ZonesGrid.tsx
-        old/
-          AnimationParametersPanel.tsx
-          AnimationSelector.tsx
-          ColorControlPanel.tsx
-          CompactLEDPreview.tsx
-          FullLEDPreview.tsx
-          PresetColorGrid.tsx
-          ZoneCard.tsx
-          ZoneDetailPanel.tsx
-          ZonesList.tsx
-        preview/
-          CompactLEDPreview.tsx
-          FullLEDPreview.tsx
-          index.ts
-          LEDPreviewSettings.tsx
-        zone-card/
-          index.ts
-          ZoneCard.tsx
-          ZoneCardFooter.tsx
-          ZoneCardHeader.tsx
-          ZoneCardPreview.tsx
-      hooks/
-        index.ts
-        useZone.ts
-        useZonePowerCommand.ts
-        useZones.ts
-      realtime/
-        zones.socket.ts
-        zones.store.ts
-      stores/
-        previewSettingsStore.ts
-        zones.store.ts
-  future-design/
-    README.md
-    components/
-      AnimationControl/
-        AnimationControlPanel.module.css
-        AnimationControlPanel.tsx
-        index.ts
-      ColorControl/
-        ColorControlPanel.module.css
-        ColorControlPanel.tsx
-        HueWheelPicker.tsx
-        index.ts
-        PresetColorGrid.tsx
-        RGBSliderGroup.tsx
-      DemoToggle/
-        DemoToggle.module.css
-        DemoToggle.tsx
-      LEDRenderers/
-        LEDRenderers.module.css
-        LEDShapeRenderer.tsx
-        shapeUtils.ts
-      LEDVisualization/
-        index.ts
-        LEDCanvasRenderer.module.css
-        LEDCanvasRenderer.tsx
-      ZoneManagement/
-        index.ts
-        ZoneCard.tsx
-        ZoneManagement.module.css
-        ZoneManager.tsx
-      ZonesDashboard/
-        index.ts
-        ZoneDetailCard.tsx
-        ZonesDashboard.module.css
-        ZonesDashboard.tsx
-        ZoneThumbnail.tsx
-    hooks/
-      useDemoMode.ts
-    pages/
-      ControlPanel.module.css
-      ControlPanel.tsx
-      DesignShowcase.module.css
-      DesignShowcase.tsx
-      ZonesDashboardPage.module.css
-      ZonesDashboardPage.tsx
-    store/
-      designStore.ts
-    styles/
-      design-tokens.css
-      theme-cyber.css
-      theme-nature.css
-    types/
-      index.ts
-    utils/
-      colors.ts
-      exampleZones.ts
-  layout/
-    MainLayout.tsx
-  pages/
-    ComponentsPage.tsx
-    Dashboard.tsx
-    DebugPage.tsx
-    NotFound.tsx
-    SettingsPage.tsx
-  realtime/
-    socket.ts
-  shared/
-    api/
-      client.ts
-      index.ts
-    components/
-      CollectionNavigator.tsx
-      TreeNode.tsx
-      color/
-        ColorPresetSelector.tsx
-        HueColorPicker.tsx
-        HueWheelPicker.tsx
-        index.ts
-      leds/
-        index.ts
-        Led.tsx
-        LedStrip.tsx
-    hooks/
-      index.ts
-      useAuth.ts
-      useSystem.ts
-    types/
-      api/
-        responses.ts
-      domain/
-        animation.ts
-        color.ts
-        index.ts
-        logger.ts
-        task.ts
-        zone.ts
-    ui/
-      button.tsx
-      card.tsx
-      dialog.tsx
-      dropdown-menu.tsx
-      input.tsx
-      label.tsx
-      power-switch.tsx
-      slider.tsx
-      switch.tsx
-      tabs.tsx
-    utils/
-      colorConversions.ts
-      colorConvert.ts
-      formatters.ts
-    websocket/
-      client.ts
-      index.ts
-## tests
+## Key Components Identified
 
-tests/
-  run_all_tests.py
-  test_api_debug.py
-  test_color.py
-  test_color_manager.py
-  test_event_bus.py
-  test_frontend_ws.html
-  test_logger.py
-  test_logger_singleton.py
-  __init__.py
-  domain_models/
-    7_test_anim_engine_multi_zone_verbose.py
-    test_domain_models.py
-  engine/
-    test_frame_change_detection.py
-    test_partial_frames.py
-    test_partial_frame_pipeline.py
-    test_zone_render_state.py
-  framesV2/
-    6_test_anim_engine_two_zones.py
-    conftest.py
-    test_animation_engine.py
-    test_breathe_animation.py
-    test_breathe_single_step_returns_frame.py
-    test_frame_manager_merge.py
-    test_frame_manager_render.py
-    test_frame_v2_models.py
-    test_integration_animation_to_framemanager.py
-    test_merge_partial.py
-    test_two_zones_independent.py
-  hardware/
-    input/
-      button_test.py
-      test_keyboard_adapters.py
-      test_keyboard_integration.py
-  lifecycle/
-    test_api_server_wrapper.py
-    test_shutdown_coordinator_task_monitoring.py
-  websocket/
-    diagnose_websocket.py
-    test_websocket_connection.py
-    test_websocket_log_transmission.py
+### 1. Animation System
+- Located in `src/animations/`
+- Uses base class pattern with specific animation implementations
+- Managed by AnimationEngine
+
+### 2. API Layer
+- FastAPI-based REST API in `src/api/`
+- Real-time communication via Socket.IO
+- DTOs for data transfer
+- Middleware for authentication, error handling, validation
+
+### 3. Hardware Abstraction
+- LED channels abstraction (WS2811/WS2812 support)
+- Zone-based mapping system
+- Input handling (buttons, encoders, keyboard)
+
+### 4. Frame Rendering System
+- FrameManager with priority queues
+- CompositeFrame/OutputFrame architecture
+- 60 FPS render loop
+- Zone system with YAML configuration
+
+### 5. Lifecycle Management
+- Shutdown coordination
+- Task registry and cancellation handling
+- Graceful startup/shutdown procedures
+
+## Current Limitations (from now.md)
+- Single-host architecture (rendering centralized on Raspberry Pi)
+- Zone definitions in YAML files
+- Limited to local LED strips
+
+## Planned Enhancements
+1. Multi-device architecture (Host/Node separation)
+2. 2D LED mapping (shape-based mapping)
+3. ESP32 as remote rendering nodes
+4. Distributed frame computation
+
+## Documentation Location
+Documentation should be maintained in:
+- `/mnt/c/Repositories/Synteza_Group/vault/Sekcje/Aurora Systems/`
+- Or locally in `/mnt/c/Repositories/Aurora_System/Sensors/docs/` for code-adjacent docs
+
+## Next Steps for Orchestrator Agent
+1. Create skill for project orchestration
+2. Establish documentation standards
+3. Create task management system
+4. Set up code review and quality gates

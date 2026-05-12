@@ -3,20 +3,18 @@
 # =========================================================
 
 from dataclasses import dataclass
-from enum import auto
-
-from core.primitives import AutoSnakeStrEnum, DeviceInstanceId, PortId
+from enum import Enum
 
 
-class PortDirection(AutoSnakeStrEnum):
-    INPUT = auto()
-    OUTPUT = auto()
+class PortDirection(str, Enum):
+    INPUT = "input"
+    OUTPUT = "output"
 
 
 @dataclass
 class Port:
-    id: PortId
+    id: str
     name: str
     direction: PortDirection
-    device_id: DeviceInstanceId
+    device_id: str
 
