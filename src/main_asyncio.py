@@ -12,6 +12,7 @@ Responsible for:
 import sys
 import asyncio
 
+
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
 if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding != 'UTF-8':
     sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
@@ -143,6 +144,10 @@ async def main():
     event_bus = EventBus().instance()
     event_bus.add_middleware(log_middleware)
 
+    def ensure_input(self, pin):
+        if pin not in self._inputs:
+            self.register_input(pin)
+            
     log.info("Loading application state...")
     state_file = Path(__file__).resolve().parent / "state" / "state.json"
     assembler = DataAssembler(config_manager, state_file)

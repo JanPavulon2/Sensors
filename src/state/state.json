@@ -3,22 +3,22 @@
     "floor": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "yellow"
+        "preset_name": "green"
       },
-      "brightness": 4,
+      "brightness": 75,
       "is_on": true,
-      "mode": "STATIC",
+      "mode": "ANIMATION",
       "animation": {
-        "id": "COLOR_SNAKE",
+        "id": "COLOR_FADE",
         "parameters": {}
       }
     },
     "pixel": {
       "color": {
         "mode": "PRESET",
-        "preset_name": "red"
+        "preset_name": "blue"
       },
-      "brightness": 19,
+      "brightness": 100,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
@@ -28,31 +28,28 @@
     },
     "pixel2": {
       "color": {
-        "mode": "HUE",
-        "hue": 109
+        "mode": "PRESET",
+        "preset_name": "orange"
       },
       "brightness": 48,
       "is_on": true,
       "mode": "ANIMATION",
       "animation": {
-        "id": "BREATHE",
+        "id": "COLOR_SNAKE",
         "parameters": {}
       }
     },
     "circle": {
       "color": {
-        "mode": "HUE",
-        "hue": 97
+        "mode": "PRESET",
+        "preset_name": "yellow"
       },
-      "brightness": 14,
+      "brightness": 96,
       "is_on": true,
-      "mode": "ANIMATION",
+      "mode": "STATIC",
       "animation": {
         "id": "COLOR_SNAKE",
-        "parameters": {
-          "length": 15,
-          "speed": 1
-        }
+        "parameters": {}
       }
     },
     "matrix": {
