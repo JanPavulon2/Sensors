@@ -56,7 +56,7 @@ class ZoneID(str, Enum):
     # LEFT = auto()
     TOP = "TOP"
     # RIGHT = auto()
-    BOTTOM = auto()
+    BOTTOM = "BOTTOM"
     LAMP = "LAMP"
     GATE = "GATE"
     PIXEL = "PIXEL"

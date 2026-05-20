@@ -56,3 +56,6 @@ Thumbs.db
 *.tmp
 *.bak
 *.old
+
+# App state file
+src/state/state.json
