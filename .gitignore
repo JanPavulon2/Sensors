@@ -5,6 +5,7 @@ venv/
 env/
 ENV/
 .venv
+src/state/state.json
 
 # Python
 __pycache__/
