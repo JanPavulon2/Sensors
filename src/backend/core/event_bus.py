@@ -5,8 +5,9 @@
 # =========================================================
 
 import asyncio
-from uuid import UUID
 from typing import Callable, Coroutine, List
+
+from core.domain.port_ref import PortRef
 from core.message import Message
 
 
@@ -15,14 +16,14 @@ class EventBus:
         self.queue = asyncio.Queue()
         self.subscribers: List[Callable] = []
 
-    def subscribe(self, handler: Callable[[Message, UUID], Coroutine]):
+    def subscribe(self, handler: Callable[[Message, PortRef], Coroutine]):
         self.subscribers.append(handler)
 
-    async def publish(self, message: Message, port_id: UUID):
-        await self.queue.put((message, port_id))
+    async def publish(self, message: Message, port_ref: PortRef):
+        await self.queue.put((message, port_ref))
 
     async def run(self):
         while True:
-            msg, port_id = await self.queue.get()
+            msg, port_ref = await self.queue.get()
             for sub in self.subscribers:
-                await sub(msg, port_id)
+                await sub(msg, port_ref)

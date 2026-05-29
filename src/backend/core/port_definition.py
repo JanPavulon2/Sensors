@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 
-class PortDirection(Enum):
-    INPUT = auto()
-    OUTPUT = auto()
+class PortDirection(str, Enum):
+    INPUT = "input"
+    OUTPUT = "output"
 
 
 class SignalType(Enum):

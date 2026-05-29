@@ -3,15 +3,15 @@
 # core/device.py
 # =========================================================
 
-import uuid
 from uuid import UUID
 from typing import Dict, List, Tuple
+from core.domain.ids import new_id
 from core.port import Port, PortDirection
 from core.message import Message
 
 
 def gen_id() -> UUID:
-    return uuid.uuid4()
+    return new_id()
 
 
 class Device:
@@ -25,5 +25,5 @@ class Device:
         self.ports[port.id] = port
         return port
 
-    async def handle_message(self, port: Port, message: Message) -> List[Tuple[UUID, Message]]:
+    async def handle_message(self, port: Port, message: Message) -> List[Tuple[str, Message]]:
         return []

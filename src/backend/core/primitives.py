@@ -4,6 +4,8 @@ from enum import Enum, auto
 from typing import NewType, TypeAlias
 from uuid import UUID, uuid4
 
+from core.domain.ids import parse_uuid
+
 
 class AutoNameStrEnum(str, Enum):
     """String enum that derives lowercase values from member names."""
@@ -52,30 +54,24 @@ def new_port_id() -> PortId:
 
 
 def as_node_id(value: str | UUID) -> NodeId:
-    return NodeId(_to_uuid(value))
+    return NodeId(parse_uuid(value))
 
 
 def as_node_link_id(value: str | UUID) -> NodeLinkId:
-    return NodeLinkId(_to_uuid(value))
+    return NodeLinkId(parse_uuid(value))
 
 
 def as_device_instance_id(value: str | UUID) -> DeviceInstanceId:
-    return DeviceInstanceId(_to_uuid(value))
+    return DeviceInstanceId(parse_uuid(value))
 
 
 def as_connection_id(value: str | UUID) -> ConnectionId:
-    return ConnectionId(_to_uuid(value))
+    return ConnectionId(parse_uuid(value))
 
 
 def as_port_id(value: str | UUID) -> PortId:
-    return PortId(_to_uuid(value))
+    return PortId(parse_uuid(value))
 
 
 def as_port_name(value: str) -> PortName:
     return PortName(value)
-
-
-def _to_uuid(value: str | UUID) -> UUID:
-    if isinstance(value, UUID):
-        return value
-    return UUID(value)

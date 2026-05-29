@@ -6,6 +6,8 @@ from uuid import UUID
 
 from core.connection import Connection
 from core.device import Device
+from core.domain.ids import parse_uuid
+from core.domain.port_ref import PortRef
 from core.event_bus import EventBus
 from core.message import Message
 from core.node_link import NodeMessage
@@ -15,17 +17,11 @@ from core.node_transport import ConnectedNode, NodeTransport
 from core.port import Port
 
 
-def _to_uuid(value: UUID | str) -> UUID:
-    if isinstance(value, UUID):
-        return value
-    return UUID(value)
-
-
 class HostEngine:
     """Host orchestration engine routing messages between local and remote nodes."""
 
     def __init__(self, host_node_id: UUID | str | None = None):
-        self.host_node_id = _to_uuid(host_node_id) if host_node_id else uuid.uuid4()
+        self.host_node_id = parse_uuid(host_node_id) if host_node_id else uuid.uuid4()
         self.host_node = Node(
             id=uuid.uuid4(),
             node_type=NodeType.OTHER,
@@ -34,8 +30,8 @@ class HostEngine:
 
         self.devices: Dict[UUID, Device] = {}
         self.connections: List[Connection] = []
-        self.connections_by_source_port: Dict[UUID, List[Connection]] = {}
-        self.port_index: Dict[UUID, Port] = {}
+        self.connections_by_source_port: Dict[PortRef, List[Connection]] = {}
+        self.port_index: Dict[PortRef, Port] = {}
 
         self.nodes: Dict[UUID, ConnectedNode] = {}
         self.device_node_index: Dict[UUID, UUID] = {}
@@ -57,7 +53,7 @@ class HostEngine:
         self.nodes[node_instance.id] = ConnectedNode(node_instance=node_instance, transport=transport)
 
     def register_device(self, device: Device, node_id: Optional[UUID | str] = None) -> None:
-        assigned_node_id = _to_uuid(node_id) if node_id is not None else self.host_node_id
+        assigned_node_id = parse_uuid(node_id) if node_id is not None else self.host_node_id
         if assigned_node_id not in self.nodes:
             raise ValueError(f"Node '{assigned_node_id}' is not registered")
 
@@ -65,29 +61,31 @@ class HostEngine:
         self.device_node_index[device.id] = assigned_node_id
 
         for port in device.ports.values():
-            self.port_index[port.id] = port
+            self.port_index[PortRef(device_id=device.id, port_name=port.name)] = port
 
     def connect(self, source_port: Port, destination_port: Port, connection_id: Optional[UUID | str] = None) -> Connection:
         connection = Connection(
-            id=_to_uuid(connection_id) if connection_id is not None else uuid.uuid4(),
+            id=parse_uuid(connection_id) if connection_id is not None else uuid.uuid4(),
             from_device_id=source_port.device_id,
-            from_port=source_port.id,
+            from_port_name=source_port.name,
             to_device_id=destination_port.device_id,
-            to_port=destination_port.id,
+            to_port_name=destination_port.name,
         )
         self.connections.append(connection)
-        self.connections_by_source_port.setdefault(connection.from_port, []).append(connection)
+        self.connections_by_source_port.setdefault(
+            PortRef(device_id=connection.from_device_id, port_name=connection.from_port_name), []
+        ).append(connection)
         return connection
 
     async def emit(self, source_port: Port, message: Message) -> None:
-        await self.event_bus.publish(message, source_port.id)
+        await self.event_bus.publish(message, PortRef(device_id=source_port.device_id, port_name=source_port.name))
 
-    async def _handle(self, message: Message, source_port_id: UUID) -> None:
-        for connection in self.connections_by_source_port.get(source_port_id, []):
+    async def _handle(self, message: Message, source_port_ref: PortRef) -> None:
+        for connection in self.connections_by_source_port.get(source_port_ref, []):
             await self._deliver(connection, message)
 
     async def _deliver(self, connection: Connection, message: Message) -> None:
-        destination_port = self.port_index.get(connection.to_port)
+        destination_port = self.port_index.get(PortRef(device_id=connection.to_device_id, port_name=connection.to_port_name))
         if destination_port is None:
             return
 
@@ -97,8 +95,11 @@ class HostEngine:
         if destination_node_id == self.host_node_id and destination_device_id in self.devices:
             destination_device = self.devices[destination_device_id]
             output_messages = await destination_device.handle_message(destination_port, message)
-            for output_port_id, output_message in output_messages:
-                await self.event_bus.publish(output_message, output_port_id)
+            for output_port_name, output_message in output_messages:
+                await self.event_bus.publish(
+                    output_message,
+                    PortRef(device_id=destination_device_id, port_name=output_port_name),
+                )
             return
 
         connected_node = self.nodes.get(destination_node_id)
@@ -111,9 +112,9 @@ class HostEngine:
             from_node_id=source_node_id,
             to_node_id=destination_node_id,
             from_device_id=connection.from_device_id,
-            from_port_id=connection.from_port,
+            from_port=connection.from_port_name,
             to_device_id=connection.to_device_id,
-            to_port_id=connection.to_port,
+            to_port=connection.to_port_name,
             message=message,
         )
         await connected_node.transport.send(connected_node.node_instance, packet)

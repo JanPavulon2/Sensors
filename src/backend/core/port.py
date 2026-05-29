@@ -3,14 +3,9 @@
 # =========================================================
 
 from dataclasses import dataclass
-from enum import Enum
 from uuid import UUID
 
-
-class PortDirection(str, Enum):
-    INPUT = "input"
-    OUTPUT = "output"
-
+from core.port_definition import PortDirection
 
 @dataclass
 class Port:

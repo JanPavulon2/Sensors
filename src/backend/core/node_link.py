@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from core.domain.ids import parse_uuid
 from core.message import Message
 from core.node_transport import NodeTransport
 from core.primitives import JsonObject
@@ -25,9 +26,9 @@ class NodeMessage:
     from_node_id: UUID
     to_node_id: UUID
     from_device_id: UUID
-    from_port_id: UUID
+    from_port: str
     to_device_id: UUID
-    to_port_id: UUID
+    to_port: str
     message: Message
 
     def to_dict(self) -> dict[str, object]:
@@ -36,9 +37,9 @@ class NodeMessage:
             "from_node_id": str(self.from_node_id),
             "to_node_id": str(self.to_node_id),
             "from_device_id": str(self.from_device_id),
-            "from_port_id": str(self.from_port_id),
+            "from_port": self.from_port,
             "to_device_id": str(self.to_device_id),
-            "to_port_id": str(self.to_port_id),
+            "to_port": self.to_port,
             "message": {
                 "type": self.message.type.value,
                 "name": self.message.name,
@@ -55,9 +56,9 @@ class NodeMessage:
             from_node_id=_require_uuid(data, "from_node_id"),
             to_node_id=_require_uuid(data, "to_node_id"),
             from_device_id=_require_uuid(data, "from_device_id"),
-            from_port_id=_require_uuid(data, "from_port_id"),
+            from_port=_require_str(data, "from_port"),
             to_device_id=_require_uuid(data, "to_device_id"),
-            to_port_id=_require_uuid(data, "to_port_id"),
+            to_port=_require_str(data, "to_port"),
             message=Message(
                 type=_parse_message_type(message_data),
                 name=_require_str(message_data, "name"),
@@ -72,7 +73,7 @@ class NodeMessenger(Protocol):
 
 
 def _require_uuid(data: dict[str, object], key: str) -> UUID:
-    return UUID(_require_str(data, key))
+    return parse_uuid(_require_str(data, key))
 
 
 def _require_str(data: dict[str, object], key: str) -> str:

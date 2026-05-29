@@ -28,7 +28,7 @@ class WhiteLedDevice(Device):
 
             return [
                 (
-                    self.state_port.id,
+                    self.state_port.name,
                     Message(
                         type=MessageType.EVENT,
                         name="led.state_changed",
@@ -63,7 +63,7 @@ class RelayDevice(Device):
 
             return [
                 (
-                    self.state_port.id,
+                    self.state_port.name,
                     Message(
                         type=MessageType.EVENT,
                         name="relay.state_changed",
@@ -90,7 +90,7 @@ class ButtonDevice(Device):
         if message.name == "button.press":
             return [
                 (
-                    self.event_port.id,
+                    self.event_port.name,
                     Message(type=MessageType.EVENT, name="button.pressed", payload={}),
                 )
             ]
@@ -98,7 +98,7 @@ class ButtonDevice(Device):
         if message.name == "button.release":
             return [
                 (
-                    self.event_port.id,
+                    self.event_port.name,
                     Message(type=MessageType.EVENT, name="button.released", payload={}),
                 )
             ]

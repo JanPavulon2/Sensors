@@ -8,6 +8,6 @@ class Connection:
 
     id: UUID
     from_device_id: UUID
-    from_port: UUID
+    from_port_name: str
     to_device_id: UUID
-    to_port: UUID
+    to_port_name: str
