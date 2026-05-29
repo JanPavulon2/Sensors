@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from uuid import UUID
 
 
 class PortDirection(str, Enum):
@@ -13,8 +14,7 @@ class PortDirection(str, Enum):
 
 @dataclass
 class Port:
-    id: str
+    id: UUID
     name: str
     direction: PortDirection
-    device_id: str
-
+    device_id: UUID
