@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol
 
-from core.message import Message
 from core.node_instance import NodeInstance
+
+if TYPE_CHECKING:
+    from core.node_link import NodeMessage
 
 
 class TransportProtocol(Enum):
@@ -23,9 +25,7 @@ class NodeTransport(Protocol):
     async def send(
         self,
         destination_node: NodeInstance,
-        destination_device_id: str,
-        destination_port_id: str,
-        message: Message,
+        packet: "NodeMessage",
     ) -> None:
         ...
 

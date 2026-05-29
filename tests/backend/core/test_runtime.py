@@ -31,8 +31,8 @@ class TransportSpy:
     def __init__(self):
         self.calls = []
 
-    async def send(self, destination_node, destination_device_id, destination_port_id, message):
-        self.calls.append((destination_node.id, destination_device_id, destination_port_id, message.name))
+    async def send(self, destination_node, packet):
+        self.calls.append((destination_node.id, packet.to_device_id, packet.to_port_id, packet.message.name))
 
 
 def test_register_device_rejects_unknown_node() -> None:
@@ -57,9 +57,9 @@ def test_connect_creates_uuid_based_connection_and_indexes_source_port() -> None
     connection = host_engine.connect(source_output_port, destination_input_port)
 
     assert isinstance(connection.id, UUID)
-    assert connection.from_port == UUID(source_output_port.id)
-    assert connection.to_port == UUID(destination_input_port.id)
-    assert str(connection.from_port) in host_engine.connections_by_source_port
+    assert connection.from_port == source_output_port.id
+    assert connection.to_port == destination_input_port.id
+    assert connection.from_port in host_engine.connections_by_source_port
 
 
 def test_handle_routes_to_local_host_device() -> None:
