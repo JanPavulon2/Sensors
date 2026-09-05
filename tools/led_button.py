@@ -1,7 +1,7 @@
 import lgpio
 import time
 
-PWM_PIN = 12
+PWM_PIN = 18
 PWM_FREQ = 1000  # Hz
 
 h = lgpio.gpiochip_open(0)

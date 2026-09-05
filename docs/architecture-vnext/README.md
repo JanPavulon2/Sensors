@@ -12,3 +12,4 @@ Zasady:
 - `02-communication-and-event-flow.md`
 - `03-led-taxonomy.md`
 - `04-capabilities.md`
+- `05-esp32-rpi-roadmap.md`

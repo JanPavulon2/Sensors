@@ -11,7 +11,7 @@
 import lgpio
 import time
 
-GPIO_PIN = 12  # BCM numbering
+GPIO_PIN = 18  # BCM numbering
 
 # otwarcie chipu GPIO (dla Raspberry Pi zawsze 0)
 h = lgpio.gpiochip_open(0)

@@ -16,4 +16,5 @@ class EventSource(Enum):
     APPLICATION = auto()        # Generic application events
     ANIMATION_ENGINE = auto()   # Animation engine events
     SNAPSHOT_PUBLISHER = auto() # UI/frontend snapshot events
+    NODE_REGISTRY = auto()      # Remote node (ESP32) heartbeat registry
     
