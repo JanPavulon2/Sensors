@@ -34,7 +34,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import zones, logger as logger_routes, system, animations, frames, metrics
+from api.routes import zones, logger as logger_routes, system, animations, frames, metrics, nodes
 from api.middleware.error_handler import register_exception_handlers
 from utils.logger import get_logger, LogCategory
 from models.enums import LogCategory
@@ -44,12 +44,14 @@ log = get_logger().for_category(LogCategory.API)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("FastAPI lifespan startup")
+    nodes.start_node_watchdog()
     try:
         yield
     except asyncio.CancelledError:
         # Normal shutdown cancellation – swallow it
         log.debug("FastAPI lifespan cancelled (normal shutdown)")
     finally:
+        await nodes.stop_node_watchdog()
         log.info("FastAPI lifespan shutdown complete")
 
 def create_app(
@@ -142,8 +144,9 @@ def create_app(
     app.include_router(animations.router, prefix="/api/v1")
     app.include_router(frames.router, prefix="/api/v1")
     app.include_router(metrics.router, prefix="/api/v1")
+    app.include_router(nodes.router, prefix="/api/v1")
 
-    log.debug("Routes registered: zones, logger, system, animations, frames, metrics (all under /api/v1)")
+    log.debug("Routes registered: zones, logger, system, animations, frames, metrics, nodes (all under /api/v1)")
 
     # =========================================================================
     # Health Check Endpoint

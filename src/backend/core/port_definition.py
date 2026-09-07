@@ -1,19 +1,19 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, auto
 
 
-class PortDirection(str, Enum):
-    INPUT = "input"
-    OUTPUT = "output"
+class PortDirection(Enum):
+    INPUT = auto()
+    OUTPUT = auto()
 
 
-class SignalType(str, Enum):
-    BOOL = "bool"
-    INT = "int"
-    FLOAT = "float"
-    RGB = "rgb"
-    FRAME = "frame"
-    DELTA_INT = "delta_int"
+class SignalType(Enum):
+    BOOL = auto()
+    INT = auto()
+    FLOAT = auto()
+    RGB = auto()
+    FRAME = auto()
+    DELTA_INT = auto()
 
 
 @dataclass(frozen=True)

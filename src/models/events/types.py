@@ -22,6 +22,10 @@ class EventType(Enum):
     # Snapshot (UI)
     ZONE_SNAPSHOT_UPDATED = auto()
 
+    # Remote nodes (ESP32 heartbeat registry watchdog)
+    NODE_CAME_ONLINE = auto()
+    NODE_WENT_OFFLINE = auto()
+
     # Future: Web API, MQTT, system events
     WEB_COMMAND = auto()
     MQTT_COMMAND = auto()

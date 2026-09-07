@@ -5,6 +5,7 @@ venv/
 env/
 ENV/
 .venv
+src/state/state.json
 
 # Python
 __pycache__/
@@ -56,3 +57,6 @@ Thumbs.db
 *.tmp
 *.bak
 *.old
+
+# App state file
+src/state/state.json
