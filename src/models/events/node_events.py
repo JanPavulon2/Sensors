@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from models.domain.node import NodeSnapshot
 from models.events.base import Event
 from models.events.types import EventType
 from models.events.sources import EventSource
@@ -39,3 +40,16 @@ class NodeWentOfflineEvent(Event):
         self.node_id = node_id
         self.node_type = node_type
         self.address = address
+
+
+@dataclass(init=False)
+class NodeSnapshotUpdatedEvent(Event):
+    """A node's snapshot changed (heartbeat received, online/offline transition)"""
+    snapshot: NodeSnapshot
+
+    def __init__(self, snapshot: NodeSnapshot):
+        super().__init__(
+            type=EventType.NODE_SNAPSHOT_UPDATED,
+            source=EventSource.NODE_REGISTRY,
+        )
+        self.snapshot = snapshot

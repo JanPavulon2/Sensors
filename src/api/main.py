@@ -34,6 +34,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from api.dependencies import get_service_container
 from api.routes import zones, logger as logger_routes, system, animations, frames, metrics, nodes
 from api.middleware.error_handler import register_exception_handlers
 from utils.logger import get_logger, LogCategory
@@ -44,14 +45,16 @@ log = get_logger().for_category(LogCategory.API)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("FastAPI lifespan startup")
-    nodes.start_node_watchdog()
+    services = await get_service_container()
+    services.node_registry_service.start_watchdog()
     try:
         yield
     except asyncio.CancelledError:
         # Normal shutdown cancellation – swallow it
         log.debug("FastAPI lifespan cancelled (normal shutdown)")
     finally:
-        await nodes.stop_node_watchdog()
+        await services.node_registry_service.stop_watchdog()
+        await services.node_registry_service.close()
         log.info("FastAPI lifespan shutdown complete")
 
 def create_app(

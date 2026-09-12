@@ -34,6 +34,7 @@ from models.events.zone_runtime_events import (
 from models.events.node_events import (
     NodeCameOnlineEvent,
     NodeWentOfflineEvent,
+    NodeSnapshotUpdatedEvent,
 )
 
 __all__ = [
@@ -63,4 +64,5 @@ __all__ = [
     # Remote nodes
     "NodeCameOnlineEvent",
     "NodeWentOfflineEvent",
+    "NodeSnapshotUpdatedEvent",
 ]

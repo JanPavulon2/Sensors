@@ -1,0 +1,26 @@
+[Unit]
+Description=Diuna LED Control Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root (not the aruszku user) - rpi_ws281x needs raw /dev/mem access
+# for DMA-driven WS281x PWM, which group membership (gpio/spi/i2c) doesn't
+# cover. systemd starts this directly as root itself - it never goes through
+# sudo/PAM, so it's unaffected by a login shell's "no_new_privs" flag (e.g.
+# VS Code Remote-SSH's integrated terminal, which sets this on every process
+# it spawns, including subprocesses of extensions).
+User=root
+WorkingDirectory=/home/aruszku/projects/Sensors/src
+# The shared secret lives in deploy/diuna-backend.env (gitignored), not here -
+# same pattern as firmware/firmware/include/secrets.h vs secrets.h.example, so
+# the real value never reaches git history. Copy diuna-backend.env.example to
+# diuna-backend.env and fill it in before enabling this unit.
+EnvironmentFile=/home/aruszku/projects/Sensors/deploy/diuna-backend.env
+ExecStart=/home/aruszku/projects/Sensors/.diunaenv/bin/python3 /home/aruszku/projects/Sensors/src/main_asyncio.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

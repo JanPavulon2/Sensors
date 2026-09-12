@@ -25,6 +25,7 @@ class EventType(Enum):
     # Remote nodes (ESP32 heartbeat registry watchdog)
     NODE_CAME_ONLINE = auto()
     NODE_WENT_OFFLINE = auto()
+    NODE_SNAPSHOT_UPDATED = auto()
 
     # Future: Web API, MQTT, system events
     WEB_COMMAND = auto()

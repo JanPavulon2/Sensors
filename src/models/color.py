@@ -127,7 +127,7 @@ class Color:
 
             return cls(
                 mode=ColorMode.RGB,
-                _rgb=Tuple(request.rgb) # type: ignore
+                _rgb=tuple(request.rgb)
             )
 
         if request.mode == "PRESET":

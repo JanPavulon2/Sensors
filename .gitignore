@@ -60,3 +60,6 @@ Thumbs.db
 
 # App state file
 src/state/state.json
+
+# Deployment secrets (template committed as diuna-backend.env.example)
+deploy/diuna-backend.env

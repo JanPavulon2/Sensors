@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from api.dto.node_snapshot_dto import node_snapshot_to_dict
 from api.socketio.zones.dto import ZoneSnapshotDTO
 from lifecycle.task_registry import TaskRegistry
 from services.log_broadcaster import get_broadcaster
@@ -26,6 +27,13 @@ def register_on_connect(sio, services):
             await sio.emit("zones:snapshot", payload, room=sid)
         else:
             log.warn(f"Skipping initial zone snapshot for {sid}: services not ready")
+
+        # === Nodes ===
+        if services and services.node_registry_service:
+            nodes_payload = [node_snapshot_to_dict(n) for n in services.node_registry_service.list_nodes()]
+            await sio.emit("nodes:snapshot", nodes_payload, room=sid)
+        else:
+            log.warn(f"Skipping initial node snapshot for {sid}: services not ready")
 
         # === Tasks ===
         try:

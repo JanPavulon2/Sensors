@@ -1,32 +1,33 @@
 """
-Node endpoints - Basic connectivity POC for remote nodes (e.g. ESP32 executors)
+Node endpoints - remote node (ESP32) registry and command dispatch.
 
-This is a standalone, in-memory registry. It is deliberately NOT wired into
-ServiceContainer/src/backend/core yet - see the RPi5<->ESP32
-connectivity POC plan for why. It does publish to the shared EventBus
-singleton (`EventBus.instance()`), the same one main_asyncio.py wires up,
-so the staleness watchdog below can emit real events without needing full
-service-container wiring.
+Thin FastAPI layer over NodeRegistryService (src/services/node_registry_service.py),
+which owns the actual HostEngine-based node/device/transport model in
+src/backend/core. See docs/architecture-vnext/05-esp32-rpi-roadmap.md Phase 4.
 """
-import asyncio
 import hmac
 import os
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-from models.events import NodeCameOnlineEvent, NodeWentOfflineEvent
-from services.event_bus import EventBus
+from api.dependencies import get_service_container
+from api.dto.node_snapshot_dto import node_snapshot_to_dict
+from api.schemas.node import (
+    NodeHeartbeatRequest,
+    SendNodeCommandRequest,
+    SetRemoteZoneBrightnessRequest,
+    SetRemoteZoneColorRequest,
+    SetRemoteZoneIsOnRequest,
+)
+from core.capabilities import ESP32_LED_STRIP_DEVICE_CAPABILITIES
+from models.color import Color
+from services.service_container import ServiceContainer
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.API)
 
 router = APIRouter(prefix="/nodes", tags=["Nodes"])
-
-ONLINE_THRESHOLD_SECONDS = 15.0
-WATCHDOG_POLL_INTERVAL_SECONDS = 5.0
 
 DEFAULT_NODE_SHARED_SECRET = "diuna-dev-secret"
 NODE_SHARED_SECRET = os.environ.get("DIUNA_NODE_SHARED_SECRET", DEFAULT_NODE_SHARED_SECRET)
@@ -36,139 +37,145 @@ if NODE_SHARED_SECRET == DEFAULT_NODE_SHARED_SECRET:
         "secret. Set it before exposing this API to a real LAN, and match it in firmware secrets.h."
     )
 
-_known_nodes: Dict[str, Dict[str, Any]] = {}
-
-# Tracks each node's online/offline state as last observed by the watchdog or
-# a heartbeat, so transitions (not just point-in-time reads) can be detected.
-_node_is_online: Dict[str, bool] = {}
-
-_watchdog_task: Optional[asyncio.Task] = None
-
-
-class NodeHeartbeat(BaseModel):
-    node_id: str
-    node_type: str
-    address: str
-    firmware: str
-
 
 def _authenticate_node(x_node_secret: Optional[str]) -> bool:
     return bool(x_node_secret) and hmac.compare_digest(x_node_secret, NODE_SHARED_SECRET)
 
 
-def _is_stale(node: Dict[str, Any], now: datetime) -> bool:
-    return (now - node["last_seen"]).total_seconds() > ONLINE_THRESHOLD_SECONDS
+def _remote_zone_state_to_dict(state) -> Dict[str, Any]:
+    red, green, blue = state.color.to_rgb()
+    return {
+        "is_on": state.is_on,
+        "brightness": state.brightness,
+        "color": {"rgb": [red, green, blue]},
+        "render_mode": state.render_mode,
+    }
 
 
 @router.post("/heartbeat")
 async def receive_heartbeat(
-    heartbeat: NodeHeartbeat,
+    heartbeat: NodeHeartbeatRequest,
     x_node_secret: Optional[str] = Header(default=None),
+    services: ServiceContainer = Depends(get_service_container),
 ) -> Dict[str, Any]:
-    """
-    Receive a heartbeat from a remote node and update the in-memory registry.
-    """
     if not _authenticate_node(x_node_secret):
         log.warn(f"Rejected heartbeat from node '{heartbeat.node_id}': invalid or missing shared secret")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing node secret")
 
-    received_at = datetime.now(timezone.utc)
-
-    _known_nodes[heartbeat.node_id] = {
-        "node_id": heartbeat.node_id,
-        "node_type": heartbeat.node_type,
-        "address": heartbeat.address,
-        "firmware": heartbeat.firmware,
-        "last_seen": received_at,
-    }
+    snapshot = await services.node_registry_service.register_or_update_node(
+        external_node_id=heartbeat.node_id,
+        node_type=heartbeat.node_type,
+        address=heartbeat.address,
+        command_port=heartbeat.command_port,
+        firmware=heartbeat.firmware,
+        capabilities=heartbeat.capabilities,
+    )
 
     log.info(
         f"Heartbeat from node '{heartbeat.node_id}' "
-        f"({heartbeat.node_type} @ {heartbeat.address}, firmware={heartbeat.firmware})"
+        f"({heartbeat.node_type} @ {heartbeat.address}:{heartbeat.command_port}, firmware={heartbeat.firmware})"
     )
 
-    if not _node_is_online.get(heartbeat.node_id, False):
-        _node_is_online[heartbeat.node_id] = True
-        log.info(f"Node '{heartbeat.node_id}' came online")
-        await EventBus.instance().publish(
-            NodeCameOnlineEvent(
-                node_id=heartbeat.node_id,
-                node_type=heartbeat.node_type,
-                address=heartbeat.address,
-            )
-        )
-
-    return {
-        "status": "ok",
-        "host_time": received_at.isoformat(),
-    }
+    return {"status": "ok", "host_time": snapshot.last_seen.isoformat()}
 
 
 @router.get("")
-async def list_nodes() -> Dict[str, Any]:
-    """
-    List all known nodes with a computed 'online' flag based on last heartbeat.
-    """
-    now = datetime.now(timezone.utc)
+async def list_nodes(services: ServiceContainer = Depends(get_service_container)) -> Dict[str, Any]:
+    nodes = [node_snapshot_to_dict(n) for n in services.node_registry_service.list_nodes()]
+    return {"count": len(nodes), "nodes": nodes}
 
-    nodes = []
-    for node in _known_nodes.values():
-        nodes.append({
-            **{key: value for key, value in node.items() if key != "last_seen"},
-            "last_seen": node["last_seen"].isoformat(),
-            "online": not _is_stale(node, now),
-        })
 
+@router.get("/{node_id}")
+async def get_node(
+    node_id: str,
+    services: ServiceContainer = Depends(get_service_container),
+) -> Dict[str, Any]:
+    snapshot = services.node_registry_service.get_node(node_id)
+    if snapshot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown node: {node_id}")
+
+    node_dict = node_snapshot_to_dict(snapshot)
+    node_dict["declared_device_capabilities"] = (
+        ESP32_LED_STRIP_DEVICE_CAPABILITIES if snapshot.node_type == "ESP32" else []
+    )
+    return node_dict
+
+
+@router.post("/{node_id}/command", status_code=status.HTTP_204_NO_CONTENT)
+async def send_node_command(
+    node_id: str,
+    request: SendNodeCommandRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    try:
+        await services.node_registry_service.send_command(node_id, request.name, request.payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
+
+
+@router.get("/{node_id}/zones")
+async def list_remote_zones(
+    node_id: str,
+    services: ServiceContainer = Depends(get_service_container),
+) -> Dict[str, Any]:
+    zone_configs = services.remote_zone_render_bridge.get_zones_for_node(node_id)
     return {
-        "count": len(nodes),
-        "nodes": nodes,
+        "zones": [
+            {
+                "node_id": zone_config.node_id,
+                "zone_label": zone_config.zone_label,
+                "display_name": zone_config.display_name,
+                "pixel_count": zone_config.pixel_count,
+                "sync_group": zone_config.sync_group,
+                "state": _remote_zone_state_to_dict(
+                    services.remote_zone_render_bridge.get_state(zone_config.zone_label)
+                ),
+            }
+            for zone_config in zone_configs
+        ]
     }
 
 
-async def _run_watchdog() -> None:
-    """
-    Periodically scan known nodes for staleness and emit NodeWentOfflineEvent
-    on the shared EventBus the moment a node crosses ONLINE_THRESHOLD_SECONDS,
-    instead of only ever computing the 'online' flag on demand in list_nodes().
-    """
-    event_bus = EventBus.instance()
+@router.put("/{node_id}/zones/{zone_label}/color", status_code=status.HTTP_204_NO_CONTENT)
+async def set_remote_zone_color(
+    node_id: str,
+    zone_label: str,
+    request: SetRemoteZoneColorRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    color_request = request.color
+    if color_request.mode == "PRESET" and color_request.preset_name:
+        color = Color.from_preset(color_request.preset_name, services.color_manager)
+    else:
+        color = Color.from_request(color_request)
 
-    while True:
-        await asyncio.sleep(WATCHDOG_POLL_INTERVAL_SECONDS)
-        now = datetime.now(timezone.utc)
-
-        for node in list(_known_nodes.values()):
-            node_id = node["node_id"]
-            if _node_is_online.get(node_id, False) and _is_stale(node, now):
-                _node_is_online[node_id] = False
-                log.warn(f"Node '{node_id}' went offline (no heartbeat for over {ONLINE_THRESHOLD_SECONDS:.0f}s)")
-                await event_bus.publish(
-                    NodeWentOfflineEvent(
-                        node_id=node_id,
-                        node_type=node["node_type"],
-                        address=node["address"],
-                    )
-                )
-
-
-def start_node_watchdog() -> None:
-    """Start the background staleness watchdog. Call once from app startup."""
-    global _watchdog_task
-    if _watchdog_task is None:
-        _watchdog_task = asyncio.create_task(_run_watchdog())
-        log.info("Node watchdog started")
-
-
-async def stop_node_watchdog() -> None:
-    """Cancel the background staleness watchdog. Call from app shutdown."""
-    global _watchdog_task
-    if _watchdog_task is None:
-        return
-
-    _watchdog_task.cancel()
     try:
-        await _watchdog_task
-    except asyncio.CancelledError:
-        pass
-    _watchdog_task = None
-    log.info("Node watchdog stopped")
+        await services.remote_zone_render_bridge.set_color(zone_label, color)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
+
+
+@router.put("/{node_id}/zones/{zone_label}/brightness", status_code=status.HTTP_204_NO_CONTENT)
+async def set_remote_zone_brightness(
+    node_id: str,
+    zone_label: str,
+    request: SetRemoteZoneBrightnessRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    try:
+        await services.remote_zone_render_bridge.set_brightness(zone_label, request.brightness)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
+
+
+@router.put("/{node_id}/zones/{zone_label}/is-on", status_code=status.HTTP_204_NO_CONTENT)
+async def set_remote_zone_is_on(
+    node_id: str,
+    zone_label: str,
+    request: SetRemoteZoneIsOnRequest,
+    services: ServiceContainer = Depends(get_service_container),
+) -> None:
+    try:
+        await services.remote_zone_render_bridge.set_is_on(zone_label, request.is_on)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error))
