@@ -21,8 +21,12 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Python build output. Anchored to the repo root so it does not also swallow
+# frontend/src/lib/ (the shadcn cn() helper lives there, and an unanchored
+# "lib/" kept it out of git entirely - a fresh clone could not build the
+# frontend).
+/lib/
+/lib64/
 parts/
 sdist/
 var/
