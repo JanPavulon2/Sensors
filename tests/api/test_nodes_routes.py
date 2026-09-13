@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,8 +11,17 @@ from fastapi.testclient import TestClient
 from api.dependencies import get_service_container
 from api.main import create_app
 from models.domain.node import NodeSnapshot
-from services.remote_zone_render_bridge import RemoteZoneRenderBridge
+from services.rig_service import RigService
 from services.service_container import ServiceContainer
+
+
+def empty_rig_service() -> RigService:
+    """A rig with a catalog but nothing wired up, so node routes can be tested
+    without dragging in any fixture configuration."""
+    return RigService(
+        catalog_path=Path(__file__).resolve().parents[2] / "src" / "config" / "rig.yaml",
+        state_path=Path("/nonexistent/rig.json"),
+    )
 
 
 class FakeNodeRegistryService:
@@ -61,6 +70,8 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     async def fake_get_service_container() -> ServiceContainer:
         container = AsyncMock(spec=ServiceContainer)
         container.node_registry_service = fake_registry
+        container.rig_service = empty_rig_service()
+        container.remote_fixture_animator = MagicMock()
         return container
 
     app.dependency_overrides[get_service_container] = fake_get_service_container
@@ -110,11 +121,14 @@ def test_get_node_404_for_unknown_node(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_get_node_includes_declared_device_capabilities(client: TestClient) -> None:
+def test_get_node_derives_device_capabilities_from_what_is_wired_to_it(client: TestClient) -> None:
+    """Capabilities come from the rig, not from the node's type. The node in
+    this fixture has nothing attached, so it advertises nothing."""
     response = client.get("/api/v1/nodes/AA:BB:CC:DD:EE:FF")
 
     assert response.status_code == 200
-    assert response.json()["declared_device_capabilities"] == ["addressable_pixels", "color_control_rgb"]
+    assert response.json()["device_capabilities"] == []
+    assert response.json()["zone_ids"] == []
 
 
 def test_send_command_dispatches_to_registry(client: TestClient) -> None:
@@ -136,57 +150,3 @@ def test_send_command_404_for_unknown_node(client: TestClient) -> None:
     )
 
     assert response.status_code == 404
-
-
-@pytest.fixture
-def client_with_remote_zones(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
-    # NODE_SHARED_SECRET is read from the environment once at import time
-    # (module-level constant), so monkeypatch.setenv() here would be too
-    # late - the module is already imported by test collection. Patch the
-    # already-resolved constant directly instead.
-    monkeypatch.setattr("api.routes.nodes.NODE_SHARED_SECRET", "test-secret")
-
-    config_file = tmp_path / "esp32_zones.yaml"
-    config_file.write_text(
-        """
-remote_zones:
-  - node_id: "AA:BB:CC:DD:EE:FF"
-    zone_label: "esp32_strip_1"
-    display_name: "Workshop Strip"
-    pixel_count: 30
-"""
-    )
-
-    fake_registry = FakeNodeRegistryService()
-    bridge = RemoteZoneRenderBridge(node_registry_service=fake_registry, config_path=config_file)
-    app = create_app()
-
-    async def fake_get_service_container() -> ServiceContainer:
-        container = AsyncMock(spec=ServiceContainer)
-        container.node_registry_service = fake_registry
-        container.remote_zone_render_bridge = bridge
-        return container
-
-    app.dependency_overrides[get_service_container] = fake_get_service_container
-    return TestClient(app)
-
-
-def test_list_remote_zones_returns_zones_for_node(client_with_remote_zones: TestClient) -> None:
-    response = client_with_remote_zones.get("/api/v1/nodes/AA:BB:CC:DD:EE:FF/zones")
-
-    assert response.status_code == 200
-    zones = response.json()["zones"]
-    assert zones[0]["zone_label"] == "esp32_strip_1"
-    assert zones[0]["state"]["is_on"] is True
-
-
-def test_set_remote_zone_brightness_updates_state(client_with_remote_zones: TestClient) -> None:
-    response = client_with_remote_zones.put(
-        "/api/v1/nodes/AA:BB:CC:DD:EE:FF/zones/esp32_strip_1/brightness",
-        json={"brightness": 42},
-    )
-
-    assert response.status_code == 204
-
-    zones_response = client_with_remote_zones.get("/api/v1/nodes/AA:BB:CC:DD:EE:FF/zones")
-    assert zones_response.json()["zones"][0]["state"]["brightness"] == 42

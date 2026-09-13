@@ -1,5 +1,6 @@
 
 from __future__ import annotations
+import os
 from typing import Dict, List, Optional
 
 from models.domain.zone import ZoneCombined, ZoneConfig
@@ -7,6 +8,16 @@ from managers.hardware_manager import HardwareManager
 from hardware.led.led_channel import LedChannel
 from hardware.led import VirtualStrip
 from hardware.led import IPhysicalStrip
+from hardware.led.driver_selection import (
+    LedDriverName,
+    resolve_driver_name,
+    verify_driver_available,
+)
+from hardware.led.spi_addressable_strip import (
+    SpiAddressableStrip,
+    SpidevWriter,
+    resolve_spi_bus_number,
+)
 from hardware.led.ws281x_strip import WS281xStrip
 from runtime.runtime_info import RuntimeInfo
 from utils.logger import get_logger, LogCategory
@@ -20,7 +31,7 @@ class LedChannelFactory:
     Responsibilities:
     - group zones by GPIO pin
     - resolve hardware parameters (GPIO, DMA, channel, color order)
-    - decide between WS281xStrip and VirtualStrip
+    - decide which strip driver renders each GPIO (see driver_selection.py)
     - create LedChannel (zone-aware logical renderer)
 
     This is the ONLY place that:
@@ -147,17 +158,27 @@ class LedChannelFactory:
         mapping: dict,
     ) -> IPhysicalStrip:
         """
-        Create WS281xStrip or VirtualStrip depending on runtime.
+        Create the strip driver this mapping declares.
+
+        The driver is read from the mapping's "driver" key, defaulting to
+        ws281x when absent - which is every entry in the committed
+        hardware.yaml. A declared driver whose module is missing raises
+        LedDriverUnavailableError; it is never quietly swapped for a
+        VirtualStrip, because an application that has silently stopped driving
+        hardware looks identical to one that works.
         """
 
         color_order = mapping.get("color_order", "GRB")
         dma_channel = mapping.get("dma", 10)
         pwm_channel = cls._resolve_pwm_channel(gpio_pin)
 
+        driver_name = resolve_driver_name(mapping, environment=os.environ)
+        verify_driver_available(driver_name, module_is_available=RuntimeInfo.has_module)
+
         # --------------------------------------------------
-        # Real hardware path
+        # Real hardware path - PWM/DMA (Raspberry Pi 4 and earlier)
         # --------------------------------------------------
-        if RuntimeInfo.has_ws281x():
+        if driver_name is LedDriverName.WS281X:
             log.info(
                 "Creating WS281xStrip",
                 gpio=gpio_pin,
@@ -176,10 +197,30 @@ class LedChannelFactory:
             )
 
         # --------------------------------------------------
-        # Virtual / dev fallback
+        # Real hardware path - SPI MOSI (Raspberry Pi 5)
         # --------------------------------------------------
-        log.warn(
-            "WS281x not available – using VirtualStrip",
+        if driver_name is LedDriverName.SPI:
+            spi_bus_number = resolve_spi_bus_number(gpio_pin)
+
+            log.info(
+                "Creating SpiAddressableStrip",
+                gpio=gpio_pin,
+                pixels=pixel_count,
+                order=color_order,
+                spi_bus=spi_bus_number,
+            )
+
+            return SpiAddressableStrip(
+                pixel_count=pixel_count,
+                color_order=color_order,
+                spi_writer=SpidevWriter(bus_number=spi_bus_number),
+            )
+
+        # --------------------------------------------------
+        # Virtual - only ever reached when it was asked for by name
+        # --------------------------------------------------
+        log.info(
+            "Creating VirtualStrip (requested explicitly)",
             gpio=gpio_pin,
             pixels=pixel_count,
         )

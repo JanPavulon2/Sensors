@@ -30,7 +30,11 @@ DEVICE_CAPABILITIES: frozenset[str] = frozenset(
     }
 )
 
-ESP32_LED_STRIP_DEVICE_CAPABILITIES: list[str] = ["addressable_pixels", "color_control_rgb"]
+# NOTE: there is deliberately no hardcoded per-node-type device capability list
+# here any more. Device capabilities are derived from the actual driver module +
+# light fixture + channel bindings - see core/capability_derivation.py. The old
+# ESP32_LED_STRIP_DEVICE_CAPABILITIES constant claimed every ESP32 drove an
+# addressable RGB strip, which was false for MOSFET-dimmed fixtures.
 
 
 def split_known_node_capabilities(capabilities: list[str]) -> tuple[list[str], list[str]]:

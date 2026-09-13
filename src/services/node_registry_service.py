@@ -26,7 +26,12 @@ from core.node import Node, NodeType
 from core.node_command_router_device import NodeCommandRouterDevice
 from core.node_instance import NodeInstance
 from models.domain.node import NodeSnapshot
-from models.events import NodeCameOnlineEvent, NodeSnapshotUpdatedEvent, NodeWentOfflineEvent
+from models.events import (
+    NodeAppliedStateReportedEvent,
+    NodeCameOnlineEvent,
+    NodeSnapshotUpdatedEvent,
+    NodeWentOfflineEvent,
+)
 from services.event_bus import EventBus
 from utils.logger import get_logger, LogCategory
 
@@ -70,6 +75,7 @@ class NodeRegistryService:
         command_port: int,
         firmware: str,
         capabilities: List[str],
+        applied_states: Optional[List[dict]] = None,
     ) -> NodeSnapshot:
         known_capabilities, unknown_capabilities = split_known_node_capabilities(capabilities)
         if unknown_capabilities:
@@ -111,6 +117,15 @@ class NodeRegistryService:
                 NodeCameOnlineEvent(node_id=external_node_id, node_type=node_type, address=address)
             )
 
+        # Published even when empty so subscribers can tell "node reported
+        # nothing" from "node never heartbeat at all".
+        if applied_states:
+            await self.event_bus.publish(
+                NodeAppliedStateReportedEvent(
+                    node_id=external_node_id, applied_states=applied_states
+                )
+            )
+
         snapshot = self._build_snapshot(external_node_id, node_instance)
         await self.event_bus.publish(NodeSnapshotUpdatedEvent(snapshot=snapshot))
         return snapshot
@@ -135,6 +150,7 @@ class NodeRegistryService:
             capabilities=node_instance.capabilities,
             online=self._online_by_external_id.get(external_node_id, False),
             last_seen=self._last_seen_by_external_id[external_node_id],
+            last_command_delivered=self._transport.last_delivery_succeeded(node_instance.address),
         )
 
     def get_node(self, external_node_id: str) -> Optional[NodeSnapshot]:

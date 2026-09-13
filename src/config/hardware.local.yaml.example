@@ -1,0 +1,24 @@
+# Per-machine LED hardware override (copy to hardware.local.yaml to activate)
+# ===========================================================================
+# hardware.yaml is committed and describes the Raspberry Pi 4 rig. This file is
+# gitignored and describes what is physically wired to THIS machine instead.
+#
+# Top-level keys REPLACE their counterpart from hardware.yaml wholesale - they
+# are not deep-merged. State the full led_strips list you want.
+#
+# Absent file = no change at all, which is the normal case.
+#
+# The example below is the Raspberry Pi 5 development board: one 30-pixel
+# WS2812 test strip on SPI0 MOSI (GPIO 10) instead of the two PWM chains.
+#
+# Requires: dtparam=spi=on in /boot/firmware/config.txt (already the default)
+#           and spidev importable (sudo apt install python3-spidev)
+
+led_strips:
+  - id: AUX_5V            # reuse an existing LEDStripID so zone_mapping.yaml
+    gpio: 10              # still applies - MOSI on SPI0
+    driver: spi           # omit this key entirely for the ws281x PWM path
+    type: WS2812_5V
+    color_order: GRB
+    count: 30
+    voltage: 5

@@ -35,6 +35,7 @@ from models.events.node_events import (
     NodeCameOnlineEvent,
     NodeWentOfflineEvent,
     NodeSnapshotUpdatedEvent,
+    NodeAppliedStateReportedEvent,
 )
 
 __all__ = [
@@ -65,4 +66,5 @@ __all__ = [
     "NodeCameOnlineEvent",
     "NodeWentOfflineEvent",
     "NodeSnapshotUpdatedEvent",
+    "NodeAppliedStateReportedEvent",
 ]

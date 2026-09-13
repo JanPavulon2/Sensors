@@ -46,11 +46,16 @@ export function NodeCard({ node }: NodeCardProps): JSX.Element {
           <div className="text-xs text-gray-500 mt-1">
             Last seen: {formatLastSeen(node.last_seen)}
           </div>
+          {node.last_command_delivered === false && (
+            <div className="text-xs text-amber-400 mt-1">
+              Last command was not delivered
+            </div>
+          )}
 
           <div className="mt-2">
             <NodeCapabilityBadges
               capabilities={node.capabilities}
-              deviceCapabilities={node.declared_device_capabilities}
+              deviceCapabilities={node.device_capabilities}
             />
           </div>
         </div>

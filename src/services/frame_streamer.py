@@ -2,6 +2,8 @@
 
 import asyncio
 from collections import deque
+from typing import Callable, Dict, List, Optional, Tuple
+
 from socketio import AsyncServer
 
 from models.domain.output_frame import OutputFrame
@@ -30,6 +32,14 @@ class FrameStreamer:
             target_fps: Target streaming FPS (default 30)
         """
         self._sio = sio
+        # Remote (ESP32) fixtures are merged into the same output_frame rather
+        # than pushed here directly: FrameManager owns the frame cadence and
+        # this queue has maxlen=2, so a second producer would simply overwrite
+        # its frames. See services/remote_fixture_animator.py.
+        self._remote_pixel_provider: Optional[
+            Callable[[], Dict[str, List[Tuple[int, int, int]]]]
+        ] = None
+        self._last_frame: Optional[OutputFrame] = None
         self.target_fps = target_fps
         self._interval = 1.0 / target_fps
         self._queue: deque[OutputFrame] = deque(maxlen=2)
@@ -50,13 +60,25 @@ class FrameStreamer:
         if self._task:
             self._task.cancel()
     
+    def set_remote_pixel_provider(
+        self, provider: Callable[[], Dict[str, List[Tuple[int, int, int]]]]
+    ) -> None:
+        """Register a source of remote-fixture pixels to merge into each frame."""
+        self._remote_pixel_provider = provider
+
     async def _loop(self):
         while self._running:
             if self._queue:
-                frame = self._queue.pop()  # latest only    
+                self._last_frame = self._queue.pop()  # latest only
+
+            # Emitted even with an empty queue so remote fixtures keep
+            # animating in the browser when FrameManager is idle (no local
+            # zones, or nothing changing) - otherwise a remote breathe would
+            # freeze on screen while the real LED carried on breathing.
+            if self._last_frame is not None or self._remote_pixel_provider is not None:
                 await self._sio.emit(
                     "output_frame",
-                    self._serialize(frame), 
+                    self._serialize(self._last_frame),
                     namespace="/frames",
                 )
             await asyncio.sleep(self._interval)
@@ -96,7 +118,7 @@ class FrameStreamer:
         except Exception as e:
             log.error(f"Failed to emit output frame: {e}", exc_info=True)
 
-    def _serialize(self, frame: OutputFrame) -> dict:
+    def _serialize(self, frame: Optional[OutputFrame]) -> dict:
         """
         Serialize OutputFrame to JSON-compatible dict.
 
@@ -114,10 +136,22 @@ class FrameStreamer:
                 }
             }
         """
-        return {
-            "t": frame.t,
-            "zones": {
-                zone_id.name: [list(c.to_rgb()) for c in pixels]
-                for zone_id, pixels in frame.zones.items()
+        zones = {}
+        if frame is not None:
+            zones = {
+                # Local zones key on ZoneID; remote fixtures key on their
+                # instance id, which is already a string.
+                (key.name if hasattr(key, "name") else str(key)): [
+                    list(c.to_rgb()) for c in pixels
+                ]
+                for key, pixels in frame.zones.items()
             }
+
+        if self._remote_pixel_provider is not None:
+            for fixture_id, pixels in self._remote_pixel_provider().items():
+                zones[fixture_id] = [list(pixel) for pixel in pixels]
+
+        return {
+            "t": frame.t if frame is not None else 0.0,
+            "zones": zones,
         }

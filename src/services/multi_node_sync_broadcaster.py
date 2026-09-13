@@ -14,7 +14,7 @@ import time
 from typing import Dict, List
 
 from services.node_registry_service import NodeRegistryService
-from services.remote_zone_render_bridge import RemoteZoneRenderBridge
+from services.remote_zone_state_service import RemoteZoneStateService
 from utils.logger import get_logger, LogCategory
 
 log = get_logger().for_category(LogCategory.SYSTEM)
@@ -26,23 +26,23 @@ SYNC_CYCLE_DURATION_MILLISECONDS = 2400  # matches firmware's breathe full cycle
 
 
 class MultiNodeSyncBroadcaster:
-    def __init__(self, remote_zone_render_bridge: RemoteZoneRenderBridge, node_registry_service: NodeRegistryService):
-        self.remote_zone_render_bridge = remote_zone_render_bridge
+    def __init__(self, remote_zone_state_service: RemoteZoneStateService, node_registry_service: NodeRegistryService):
+        self.remote_zone_state_service = remote_zone_state_service
         self.node_registry_service = node_registry_service
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self._socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
     def compute_sync_groups(self) -> Dict[str, List[str]]:
         groups: Dict[str, List[str]] = {}
-        for zone_config in self.remote_zone_render_bridge.list_zones():
-            if zone_config.sync_group is None:
+        for zone in self.remote_zone_state_service.list_zones():
+            if zone.sync_group is None:
                 continue
 
-            node_snapshot = self.node_registry_service.get_node(zone_config.node_id)
+            node_snapshot = self.node_registry_service.get_node(zone.node_id)
             if node_snapshot is None or not node_snapshot.online:
                 continue
 
-            groups.setdefault(zone_config.sync_group, []).append(node_snapshot.address)
+            groups.setdefault(zone.sync_group, []).append(node_snapshot.address)
         return groups
 
     async def start(self) -> None:

@@ -67,7 +67,10 @@ from services.frame_streamer import FrameStreamer
 from services.middleware import log_middleware
 from services.multi_node_sync_broadcaster import MultiNodeSyncBroadcaster
 from services.node_registry_service import NodeRegistryService
-from services.remote_zone_render_bridge import RemoteZoneRenderBridge
+from services.node_configuration_pusher import NodeConfigurationPusher
+from services.remote_fixture_animator import RemoteFixtureAnimator
+from services.remote_zone_state_service import RemoteZoneStateService
+from services.rig_service import RigService
 from services.transition_service import TransitionService
 
 # === Managers ===
@@ -236,16 +239,37 @@ async def main():
         description="Node registry HostEngine loop"
     )
 
-    log.info("Initializing remote zone render bridge...")
-    remote_zone_config_path = Path(__file__).resolve().parent / "config" / "esp32_zones.yaml"
-    remote_zone_render_bridge = RemoteZoneRenderBridge(
-        node_registry_service=node_registry_service,
-        config_path=remote_zone_config_path,
+    log.info("Initializing rig service...")
+    source_root = Path(__file__).resolve().parent
+    rig_service = RigService(
+        catalog_path=source_root / "config" / "rig.yaml",
+        state_path=source_root / "state" / "rig.json",
     )
+
+    log.info("Initializing remote zone state service...")
+    remote_zone_state_service = RemoteZoneStateService(
+        node_registry_service=node_registry_service,
+        rig_service=rig_service,
+        event_bus=event_bus,
+    )
+
+    log.info("Initializing node configuration pusher...")
+    node_configuration_pusher = NodeConfigurationPusher(
+        rig_service=rig_service,
+        node_registry_service=node_registry_service,
+        remote_zone_state_service=remote_zone_state_service,
+        event_bus=event_bus,
+    )
+
+    log.info("Initializing remote fixture animator...")
+    remote_fixture_animator = RemoteFixtureAnimator(rig_service=rig_service)
+    # Remote fixtures ride the existing output_frame stream so the browser
+    # previews them exactly like local zones (see FrameStreamer._serialize).
+    frame_streamer.set_remote_pixel_provider(remote_fixture_animator.compute_fixture_pixels)
 
     log.info("Initializing multi-node sync broadcaster...")
     multi_node_sync_broadcaster = MultiNodeSyncBroadcaster(
-        remote_zone_render_bridge=remote_zone_render_bridge,
+        remote_zone_state_service=remote_zone_state_service,
         node_registry_service=node_registry_service,
     )
     sync_broadcaster_task = create_tracked_task(
@@ -271,7 +295,10 @@ async def main():
         frame_streamer=frame_streamer,
         metrics_streamer=metrics_streamer,
         node_registry_service=node_registry_service,
-        remote_zone_render_bridge=remote_zone_render_bridge,
+        rig_service=rig_service,
+        remote_zone_state_service=remote_zone_state_service,
+        remote_fixture_animator=remote_fixture_animator,
+        node_configuration_pusher=node_configuration_pusher,
         multi_node_sync_broadcaster=multi_node_sync_broadcaster,
     )
     

@@ -1,7 +1,5 @@
-from pathlib import Path
-
 from models.color import Color
-from models.domain.remote_zone import RemoteZoneConfig, RemoteZoneState, load_remote_zone_configs
+from models.domain.remote_zone import RemoteZone, RemoteZoneState
 
 
 def test_remote_zone_state_defaults() -> None:
@@ -12,41 +10,16 @@ def test_remote_zone_state_defaults() -> None:
     assert state.render_mode == "STATIC"
 
 
-def test_load_remote_zone_configs_parses_yaml(tmp_path: Path) -> None:
-    config_file = tmp_path / "esp32_zones.yaml"
-    config_file.write_text(
-        """
-remote_zones:
-  - node_id: "AA:BB:CC:DD:EE:FF"
-    zone_label: "esp32_strip_1"
-    display_name: "Workshop Strip"
-    pixel_count: 30
-    sync_group: "workshop"
-  - node_id: "11:22:33:44:55:66"
-    zone_label: "esp32_strip_2"
-    pixel_count: 30
-"""
-    )
+def test_remote_zone_defaults_to_no_devices_and_no_sync_group() -> None:
+    zone = RemoteZone(zone_id="desk", display_name="Desk", node_id="AA:BB")
 
-    configs = load_remote_zone_configs(config_file)
-
-    assert configs == [
-        RemoteZoneConfig(
-            node_id="AA:BB:CC:DD:EE:FF",
-            zone_label="esp32_strip_1",
-            display_name="Workshop Strip",
-            pixel_count=30,
-            sync_group="workshop",
-        ),
-        RemoteZoneConfig(
-            node_id="11:22:33:44:55:66",
-            zone_label="esp32_strip_2",
-            display_name="esp32_strip_2",
-            pixel_count=30,
-            sync_group=None,
-        ),
-    ]
+    assert zone.device_instance_ids == []
+    assert zone.sync_group is None
 
 
-def test_load_remote_zone_configs_returns_empty_list_when_file_missing(tmp_path: Path) -> None:
-    assert load_remote_zone_configs(tmp_path / "does_not_exist.yaml") == []
+def test_remote_zone_ids_are_free_form_strings() -> None:
+    """Unlike the local ZoneID enum - this is what makes remote zones
+    creatable at runtime from the UI."""
+    zone = RemoteZone(zone_id="a zone created at 12:04", display_name="Ad hoc", node_id="AA:BB")
+
+    assert zone.zone_id == "a zone created at 12:04"

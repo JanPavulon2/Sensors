@@ -13,3 +13,4 @@ Zasady:
 - `03-led-taxonomy.md`
 - `04-capabilities.md`
 - `05-esp32-rpi-roadmap.md`
+- `06-rig-model-worklog.md`

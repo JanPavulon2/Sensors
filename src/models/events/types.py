@@ -26,6 +26,7 @@ class EventType(Enum):
     NODE_CAME_ONLINE = auto()
     NODE_WENT_OFFLINE = auto()
     NODE_SNAPSHOT_UPDATED = auto()
+    NODE_APPLIED_STATE_REPORTED = auto()
 
     # Future: Web API, MQTT, system events
     WEB_COMMAND = auto()

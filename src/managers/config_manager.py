@@ -24,6 +24,41 @@ if TYPE_CHECKING:
 log = get_logger().for_category(LogCategory.CONFIG) 
 
 
+# Optional, gitignored, per-machine hardware override. src/config/hardware.yaml
+# is committed and describes the Raspberry Pi 4 rig; a machine wired differently
+# - such as the Pi 5 development board, whose addressable strip hangs off SPI
+# rather than PWM - drops this file next to it. Absent on every other machine,
+# which is the normal case and must change nothing.
+LOCAL_HARDWARE_OVERRIDE_FILENAME = "hardware.local.yaml"
+
+
+def apply_local_hardware_override(merged: Dict, config_dir: Path) -> Dict:
+    """Overlay hardware.local.yaml onto already-merged config data, if present.
+
+    Top-level keys are replaced wholesale rather than deep-merged: a machine
+    with different strips wired to it states its full led_strips list, and there
+    is no question of which half of a half-merged list is in effect.
+    """
+    override_path = config_dir / LOCAL_HARDWARE_OVERRIDE_FILENAME
+
+    if not override_path.exists():
+        return merged
+
+    with open(override_path, "r", encoding="utf-8") as override_file:
+        override_data = yaml.safe_load(override_file)
+
+    if not override_data:
+        log.warn(f"{LOCAL_HARDWARE_OVERRIDE_FILENAME} is empty - ignoring it")
+        return merged
+
+    merged.update(override_data)
+    log.warn(
+        f"Local hardware override applied from {LOCAL_HARDWARE_OVERRIDE_FILENAME}",
+        keys=str(list(override_data.keys())),
+    )
+    return merged
+
+
 
 class ConfigManager:
     """
@@ -90,7 +125,9 @@ class ConfigManager:
             # Check for include system
             if 'include' in main_config:
                 log.info("Using include-based configuration")
-                self.data = self._load_with_includes(main_config['include'], src_dir / self.config_path.parent)
+                config_dir = src_dir / self.config_path.parent
+                self.data = self._load_with_includes(main_config['include'], config_dir)
+                self.data = apply_local_hardware_override(self.data, config_dir)
             else:
                 # Monolithic config (backward compatibility)
                 log.info("Using monolithic configuration")

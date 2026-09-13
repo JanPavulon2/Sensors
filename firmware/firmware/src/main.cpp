@@ -7,6 +7,7 @@
 #include <FastLED.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include <Preferences.h>
 #include "time.h"
 #include "secrets.h"
 #include "led_config.h"
@@ -60,17 +61,59 @@ unsigned long identifyStartTime = 0;
 unsigned long lastIdentifyToggleTime = 0;
 bool identifyLedIsOn = false;
 
-#if USE_ADDRESSABLE_STRIP
-CRGB ledStripPixels[LED_STRIP_PIXEL_COUNT];
-#else
-// Original single MOSFET-dimmed LED (no addressable strip attached yet).
-const int MOSFET_PIN = 23;
-const int PWM_CHANNEL = 0;
+// ---------------------------------------------------------------------------
+// Runtime output configuration
+//
+// What is physically wired to this node is a deployment fact, not a property of
+// the firmware build, so it is pushed by the host ("node.config" command) and
+// kept in NVS rather than chosen with a #if. led_config.h now only supplies the
+// fallback used on a board that has never been configured.
+//
+// One limitation to be aware of: FastLED takes its data pin as a template
+// parameter, so the addressable path can only use a pin this build was compiled
+// for - see ADDRESSABLE_DATA_PIN_CHOICES below. The analog PWM path has no such
+// restriction and accepts any GPIO.
+// ---------------------------------------------------------------------------
+
 const int PWM_FREQUENCY = 5000;
 const int PWM_RESOLUTION = 8;
-#endif
+const uint8_t MAX_OUTPUT_CHANNELS = 4;
+const uint16_t MAX_ADDRESSABLE_PIXELS = 300;
+
+enum class OutputInterface {
+    ANALOG_PWM,
+    ADDRESSABLE_DATA,
+};
+
+enum class ChannelRole {
+    SINGLE,
+    RED,
+    GREEN,
+    BLUE,
+    WHITE,
+    DATA,
+};
+
+struct OutputChannel {
+    ChannelRole role = ChannelRole::SINGLE;
+    int pin = -1;
+};
+
+struct OutputConfig {
+    OutputInterface interface = OutputInterface::ANALOG_PWM;
+    uint8_t channelCount = 1;
+    OutputChannel channels[MAX_OUTPUT_CHANNELS];
+    uint16_t pixelCount = 1;
+    char version[24] = "fallback";
+};
+
+OutputConfig outputConfig;
+Preferences outputPreferences;
+CRGB ledStripPixels[MAX_ADDRESSABLE_PIXELS];
+bool addressableOutputStarted = false;
 
 struct RemoteZoneState {
+    char zoneId[32] = "";
     bool isOn = true;
     uint8_t brightness = 100;
     uint8_t red = 255;
@@ -87,17 +130,119 @@ bool phaseReferenceKnown = false;
 unsigned long phaseReferenceEpochMilliseconds = 0;
 unsigned long phaseCycleDurationMilliseconds = DEFAULT_BREATHE_CYCLE_DURATION_MILLISECONDS;
 
-// Initializes whichever physical LED output is currently wired up - see
-// USE_ADDRESSABLE_STRIP in led_config.h.
-void beginLedOutput() {
+const char* roleName(ChannelRole role) {
+    switch (role) {
+        case ChannelRole::RED: return "RED";
+        case ChannelRole::GREEN: return "GREEN";
+        case ChannelRole::BLUE: return "BLUE";
+        case ChannelRole::WHITE: return "WHITE";
+        case ChannelRole::DATA: return "DATA";
+        default: return "SINGLE";
+    }
+}
+
+ChannelRole parseRole(const char* text) {
+    if (strcmp(text, "RED") == 0) return ChannelRole::RED;
+    if (strcmp(text, "GREEN") == 0) return ChannelRole::GREEN;
+    if (strcmp(text, "BLUE") == 0) return ChannelRole::BLUE;
+    if (strcmp(text, "WHITE") == 0) return ChannelRole::WHITE;
+    if (strcmp(text, "DATA") == 0) return ChannelRole::DATA;
+    return ChannelRole::SINGLE;
+}
+
+// FastLED needs its data pin at compile time, so only these pins can carry an
+// addressable strip. Add one here (and rebuild) if a strip is wired elsewhere.
+bool beginAddressableOutput(int dataPin, uint16_t pixelCount) {
+    switch (dataPin) {
+        case 4:  FastLED.addLeds<WS2812B, 4, GRB>(ledStripPixels, pixelCount); break;
+        case 5:  FastLED.addLeds<WS2812B, 5, GRB>(ledStripPixels, pixelCount); break;
+        case 16: FastLED.addLeds<WS2812B, 16, GRB>(ledStripPixels, pixelCount); break;
+        case 18: FastLED.addLeds<WS2812B, 18, GRB>(ledStripPixels, pixelCount); break;
+        default:
+            Serial.print("Unsupported addressable data pin: ");
+            Serial.println(dataPin);
+            return false;
+    }
+    return true;
+}
+
+// Configures the physical outputs described by outputConfig. Safe to call again
+// after a node.config command - PWM channels are simply re-attached. FastLED
+// can only be initialized once per boot, hence addressableOutputStarted.
+void applyOutputConfig() {
+    if (outputConfig.interface == OutputInterface::ADDRESSABLE_DATA) {
+        if (addressableOutputStarted) {
+            Serial.println("Addressable output already initialized - reboot to change its pin");
+            return;
+        }
+        int dataPin = outputConfig.channelCount > 0 ? outputConfig.channels[0].pin : -1;
+        uint16_t pixelCount = min(outputConfig.pixelCount, MAX_ADDRESSABLE_PIXELS);
+        if (beginAddressableOutput(dataPin, pixelCount)) {
+            addressableOutputStarted = true;
+            Serial.print("Addressable strip initialized on pin ");
+            Serial.print(dataPin);
+            Serial.print(", pixels: ");
+            Serial.println(pixelCount);
+        }
+        return;
+    }
+
+    for (uint8_t index = 0; index < outputConfig.channelCount; index++) {
+        const OutputChannel& channel = outputConfig.channels[index];
+        if (channel.pin < 0) {
+            continue;
+        }
+        ledcSetup(index, PWM_FREQUENCY, PWM_RESOLUTION);
+        ledcAttachPin(channel.pin, index);
+        Serial.print("PWM channel ");
+        Serial.print(index);
+        Serial.print(" (");
+        Serial.print(roleName(channel.role));
+        Serial.print(") on pin ");
+        Serial.println(channel.pin);
+    }
+}
+
+// Restores the last configuration pushed by the host. A board that has never
+// been configured falls back to led_config.h, so an unprovisioned node still
+// lights up instead of doing nothing.
+void loadOutputConfig() {
+    outputPreferences.begin("diuna-rig", true);
+    size_t storedSize = outputPreferences.getBytesLength("output");
+    if (storedSize == sizeof(OutputConfig)) {
+        outputPreferences.getBytes("output", &outputConfig, sizeof(OutputConfig));
+        Serial.print("Loaded stored output config, version: ");
+        Serial.println(outputConfig.version);
+    } else {
 #if USE_ADDRESSABLE_STRIP
-    FastLED.addLeds<WS2812B, LED_STRIP_DATA_PIN, GRB>(ledStripPixels, LED_STRIP_PIXEL_COUNT);
-    Serial.println("FastLED strip initialized");
+        outputConfig.interface = OutputInterface::ADDRESSABLE_DATA;
+        outputConfig.channelCount = 1;
+        outputConfig.channels[0].role = ChannelRole::DATA;
+        outputConfig.channels[0].pin = LED_STRIP_DATA_PIN;
+        outputConfig.pixelCount = LED_STRIP_PIXEL_COUNT;
 #else
-    ledcSetup(PWM_CHANNEL, PWM_FREQUENCY, PWM_RESOLUTION);
-    ledcAttachPin(MOSFET_PIN, PWM_CHANNEL);
-    Serial.println("MOSFET-dimmed single LED initialized (no addressable strip attached yet)");
+        outputConfig.interface = OutputInterface::ANALOG_PWM;
+        outputConfig.channelCount = 1;
+        outputConfig.channels[0].role = ChannelRole::SINGLE;
+        outputConfig.channels[0].pin = FALLBACK_MOSFET_PIN;
+        outputConfig.pixelCount = 1;
 #endif
+        Serial.println("No stored output config - using led_config.h fallback");
+    }
+    outputPreferences.end();
+}
+
+void saveOutputConfig() {
+    outputPreferences.begin("diuna-rig", false);
+    outputPreferences.putBytes("output", &outputConfig, sizeof(OutputConfig));
+    outputPreferences.end();
+    Serial.print("Stored output config, version: ");
+    Serial.println(outputConfig.version);
+}
+
+void beginLedOutput() {
+    loadOutputConfig();
+    applyOutputConfig();
 }
 
 // Single seam between "what color/brightness should be shown" and "how to
@@ -107,13 +252,35 @@ void beginLedOutput() {
 // single MOSFET-dimmed LED, only brightness matters (it can't reproduce
 // hue), so the brightest of the three channels drives the PWM duty cycle.
 void applyOutputColor(uint8_t red, uint8_t green, uint8_t blue) {
-#if USE_ADDRESSABLE_STRIP
-    fill_solid(ledStripPixels, LED_STRIP_PIXEL_COUNT, CRGB(red, green, blue));
-    FastLED.show();
-#else
-    uint8_t peakChannelValue = max(red, max(green, blue));
-    ledcWrite(PWM_CHANNEL, peakChannelValue);
-#endif
+    if (outputConfig.interface == OutputInterface::ADDRESSABLE_DATA) {
+        if (!addressableOutputStarted) {
+            return;
+        }
+        uint16_t pixelCount = min(outputConfig.pixelCount, MAX_ADDRESSABLE_PIXELS);
+        fill_solid(ledStripPixels, pixelCount, CRGB(red, green, blue));
+        FastLED.show();
+        return;
+    }
+
+    // Analog PWM: each channel is driven by whichever colour component it is
+    // wired to. A SINGLE channel drives one non-RGB light, which can only vary
+    // brightness, so the brightest component sets its duty cycle.
+    for (uint8_t index = 0; index < outputConfig.channelCount; index++) {
+        const OutputChannel& channel = outputConfig.channels[index];
+        if (channel.pin < 0) {
+            continue;
+        }
+
+        uint8_t dutyCycle = 0;
+        switch (channel.role) {
+            case ChannelRole::RED:   dutyCycle = red; break;
+            case ChannelRole::GREEN: dutyCycle = green; break;
+            case ChannelRole::BLUE:  dutyCycle = blue; break;
+            case ChannelRole::WHITE: dutyCycle = min(red, min(green, blue)); break;
+            default:                 dutyCycle = max(red, max(green, blue)); break;
+        }
+        ledcWrite(index, dutyCycle);
+    }
 }
 
 // Builds a per-device mDNS hostname from the MAC address so multiple ESP32
@@ -421,7 +588,34 @@ void applyRemoteZoneStateToStrip() {
     );
 }
 
+// Applies a rig configuration pushed by the host and persists it, so the node
+// keeps its wiring across reboots without needing a reflash.
+void applyNodeConfigCommand(JsonObject payload) {
+    const char* interfaceText = payload["interface"] | "ANALOG_PWM";
+    outputConfig.interface = (strcmp(interfaceText, "ADDRESSABLE_DATA") == 0)
+        ? OutputInterface::ADDRESSABLE_DATA
+        : OutputInterface::ANALOG_PWM;
+
+    JsonArray channels = payload["channels"];
+    outputConfig.channelCount = 0;
+    for (JsonObject channel : channels) {
+        if (outputConfig.channelCount >= MAX_OUTPUT_CHANNELS) {
+            break;
+        }
+        outputConfig.channels[outputConfig.channelCount].role = parseRole(channel["role"] | "SINGLE");
+        outputConfig.channels[outputConfig.channelCount].pin = channel["pin"] | -1;
+        outputConfig.channelCount++;
+    }
+
+    outputConfig.pixelCount = payload["pixel_count"] | 1;
+    strlcpy(outputConfig.version, payload["version"] | "unversioned", sizeof(outputConfig.version));
+
+    applyOutputConfig();
+    saveOutputConfig();
+}
+
 void applyZoneStateCommand(JsonObject payload) {
+    strlcpy(remoteZoneState.zoneId, payload["zone_id"] | "", sizeof(remoteZoneState.zoneId));
     remoteZoneState.isOn = payload["is_on"] | true;
     remoteZoneState.brightness = payload["brightness"] | 100;
 
@@ -458,6 +652,8 @@ void handleCommandRequest() {
         beginIdentifyBlink();
     } else if (commandName == "zone.state") {
         applyZoneStateCommand(commandDocument["payload"].as<JsonObject>());
+    } else if (commandName == "node.config") {
+        applyNodeConfigCommand(commandDocument["payload"].as<JsonObject>());
     } else {
         // Unknown command names are rejected rather than silently ignored,
         // so a misconfigured RPi command gets a visible error instead of nothing.
@@ -473,6 +669,26 @@ void beginCommandServer() {
     commandServer.begin();
     Serial.print("Command server listening on port ");
     Serial.println(NODE_COMMAND_PORT);
+}
+
+// Reports the state this node currently has applied. Empty while no zone has
+// been pushed yet, which the host reads as "nothing to reconcile".
+String buildAppliedStateJson() {
+    if (strlen(remoteZoneState.zoneId) == 0) {
+        return "[]";
+    }
+
+    return String("[{")
+        + "\"zone_id\":\"" + String(remoteZoneState.zoneId) + "\","
+        + "\"is_on\":" + (remoteZoneState.isOn ? "true" : "false") + ","
+        + "\"brightness\":" + String(remoteZoneState.brightness) + ","
+        + "\"color\":{"
+        + "\"r\":" + String(remoteZoneState.red) + ","
+        + "\"g\":" + String(remoteZoneState.green) + ","
+        + "\"b\":" + String(remoteZoneState.blue)
+        + "},"
+        + "\"render_mode\":\"" + String(remoteZoneState.useBreatheAnimation ? "BREATHE" : "STATIC") + "\""
+        + "}]";
 }
 
 void sendHeartbeat() {
@@ -498,7 +714,14 @@ void sendHeartbeat() {
         + "\"address\":\"" + WiFi.localIP().toString() + "\","
         + "\"command_port\":" + NODE_COMMAND_PORT + ","
         + "\"firmware\":\"diuna-esp32-poc\","
-        + "\"capabilities\":[\"render_output\",\"command_execution\",\"telemetry_publish\"]"
+        + "\"capabilities\":[\"render_output\",\"command_execution\",\"telemetry_publish\"],"
+        + "\"config_version\":\"" + String(outputConfig.version) + "\","
+        // What this node is actually rendering right now. The host compares it
+        // against the state it believes this zone should be in and re-pushes on
+        // mismatch - see RemoteZoneStateService.reconcile_node(). Command
+        // delivery itself is fire-and-forget, so this is what makes a rebooted
+        // or missed-command node converge again.
+        + "\"applied_state\":" + buildAppliedStateJson()
         + "}";
 
     int responseCode = httpClient.POST(payload);

@@ -1,6 +1,7 @@
 """Remote node connectivity events (ESP32 heartbeat registry watchdog)"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
 
 from models.domain.node import NodeSnapshot
 from models.events.base import Event
@@ -53,3 +54,24 @@ class NodeSnapshotUpdatedEvent(Event):
             source=EventSource.NODE_REGISTRY,
         )
         self.snapshot = snapshot
+
+
+@dataclass(init=False)
+class NodeAppliedStateReportedEvent(Event):
+    """A node reported the state it is actually applying to its hardware.
+
+    Published on every heartbeat that carries an `applied_state` payload.
+    RemoteZoneStateService subscribes and reconciles against desired state -
+    routed through the event bus rather than a direct call so the registry does
+    not have to depend on the zone layer (which already depends on it).
+    """
+    node_id: str
+    applied_states: List[Dict[str, Any]]
+
+    def __init__(self, node_id: str, applied_states: List[Dict[str, Any]]):
+        super().__init__(
+            type=EventType.NODE_APPLIED_STATE_REPORTED,
+            source=EventSource.NODE_REGISTRY,
+        )
+        self.node_id = node_id
+        self.applied_states = applied_states

@@ -65,5 +65,13 @@ Thumbs.db
 # App state file
 src/state/state.json
 
+# Rig state - per-installation wiring, bootstrapped from src/config/rig.yaml
+src/state/rig.json
+
 # Deployment secrets (template committed as diuna-backend.env.example)
 deploy/diuna-backend.env
+
+# Per-machine LED hardware override - describes what is physically wired to
+# THIS Raspberry Pi. src/config/hardware.yaml stays the committed rig; this file
+# exists only on a machine wired differently (e.g. the Pi 5's SPI test strip).
+src/config/hardware.local.yaml

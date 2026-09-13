@@ -1,18 +1,18 @@
 /**
- * Node Queries
- * React Query hooks for fetching node (ESP32) connection state and remote zones
+ * Node & rig queries
+ * React Query hooks for node connection state and the rig (zones, fixtures, catalog).
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/shared/api/client';
-import type { NodeSnapshot, RemoteZone } from '@/shared/types/domain/node';
+import type { NodeSnapshot, RemoteZone, RigCatalog } from '@/shared/types/domain/node';
 
 interface ListNodesResponse {
   count: number;
   nodes: NodeSnapshot[];
 }
 
-interface ListRemoteZonesResponse {
+interface ListZonesResponse {
   zones: RemoteZone[];
 }
 
@@ -27,13 +27,24 @@ export const useNodesQuery = () => {
   });
 };
 
-export const useRemoteZonesQuery = (nodeId: string) => {
+export const useRemoteZonesQuery = () => {
   return useQuery<RemoteZone[], Error>({
-    queryKey: ['nodes', nodeId, 'zones'],
+    queryKey: ['rig', 'zones'],
     queryFn: async () => {
-      const response = await api.get<ListRemoteZonesResponse>(`/v1/nodes/${nodeId}/zones`);
+      const response = await api.get<ListZonesResponse>('/v1/rig/zones');
       return response.data.zones;
     },
-    enabled: Boolean(nodeId),
+  });
+};
+
+export const useRigCatalogQuery = () => {
+  return useQuery<RigCatalog, Error>({
+    queryKey: ['rig', 'catalog'],
+    queryFn: async () => {
+      const response = await api.get<RigCatalog>('/v1/rig/catalog');
+      return response.data;
+    },
+    // The catalog is hand-authored and only changes on a restart.
+    staleTime: Infinity,
   });
 };
