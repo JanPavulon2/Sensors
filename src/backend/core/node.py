@@ -1,20 +1,20 @@
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, auto
+from uuid import UUID
 
 
-class NodeKind(str, Enum):
-    PI = "pi"
-    ESP32 = "esp32"
-    BROWSER = "browser"
-    OTHER = "other"
+class NodeType(Enum):
+    ESP32 = auto()
+    RASPBERRY_PI_4 = auto()
+    RASPBERRY_PI_5 = auto()
+    FRONTEND_RUNTIME = auto()
+    OTHER = auto()
 
 
 @dataclass(frozen=True)
 class Node:
-    """Execution node where one or more device instances run."""
+    """Core node model (type/profile), reused by NodeInstance."""
 
-    id: str
-    kind: NodeKind
-    address: str
-    port: int
-    capabilities: tuple[str, ...] = field(default_factory=tuple)
+    id: UUID
+    node_type: NodeType
+    default_capabilities: list[str] = field(default_factory=list)

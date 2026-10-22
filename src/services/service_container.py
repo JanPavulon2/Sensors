@@ -12,6 +12,12 @@ from services.data_assembler import DataAssembler
 from services.app_clock import AppClock
 from services.frame_streamer import FrameStreamer
 from services.metrics_streamer import MetricsStreamer
+from services.multi_node_sync_broadcaster import MultiNodeSyncBroadcaster
+from services.node_registry_service import NodeRegistryService
+from services.rig_service import RigService
+from services.node_configuration_pusher import NodeConfigurationPusher
+from services.remote_fixture_animator import RemoteFixtureAnimator
+from services.remote_zone_state_service import RemoteZoneStateService
 
 @dataclass
 class ServiceContainer:
@@ -72,3 +78,9 @@ class ServiceContainer:
     app_clock: AppClock
     frame_streamer: FrameStreamer
     metrics_streamer: MetricsStreamer
+    node_registry_service: NodeRegistryService
+    rig_service: RigService
+    remote_zone_state_service: RemoteZoneStateService
+    remote_fixture_animator: RemoteFixtureAnimator
+    node_configuration_pusher: NodeConfigurationPusher
+    multi_node_sync_broadcaster: MultiNodeSyncBroadcaster

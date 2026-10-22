@@ -10,6 +10,7 @@ Responsible for:
 """
 
 import sys
+import os
 import asyncio
 
 # Set UTF-8 encoding for output BEFORE any imports (fixes Unicode symbol rendering)
@@ -19,6 +20,13 @@ if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding != 'UTF-8':
     sys.stderr.reconfigure(encoding='utf-8')  # type: ignore
 
 from pathlib import Path
+
+# src/backend hosts the standalone core/ node-orchestration module (see
+# src/backend/core/CHANGES_MULTI_NODE_CORE.md) - it isn't on the default
+# pythonpath, so make `core.*` importable before NodeRegistryService needs it.
+_BACKEND_MODULE_PATH = str(Path(__file__).resolve().parent / "backend")
+if _BACKEND_MODULE_PATH not in sys.path:
+    sys.path.insert(0, _BACKEND_MODULE_PATH)
 
 # === Lifecycle Management ===
 from lifecycle.handlers import (
@@ -57,6 +65,12 @@ from services import (
 from services.app_clock import AppClock
 from services.frame_streamer import FrameStreamer
 from services.middleware import log_middleware
+from services.multi_node_sync_broadcaster import MultiNodeSyncBroadcaster
+from services.node_registry_service import NodeRegistryService
+from services.node_configuration_pusher import NodeConfigurationPusher
+from services.remote_fixture_animator import RemoteFixtureAnimator
+from services.remote_zone_state_service import RemoteZoneStateService
+from services.rig_service import RigService
 from services.transition_service import TransitionService
 
 # === Managers ===
@@ -215,12 +229,59 @@ async def main():
 
         # Create TransitionService for this strip (used by FrameManager internally)
         transition_service = TransitionService(strip, frame_manager)
-        
-    
+
+    log.info("Initializing node registry service...")
+    node_shared_secret = os.environ.get("DIUNA_NODE_SHARED_SECRET", "diuna-dev-secret")
+    node_registry_service = NodeRegistryService(event_bus=event_bus, node_shared_secret=node_shared_secret)
+    node_registry_engine_task = create_tracked_task(
+        node_registry_service.run_engine_loop(),
+        category=TaskCategory.SYSTEM,
+        description="Node registry HostEngine loop"
+    )
+
+    log.info("Initializing rig service...")
+    source_root = Path(__file__).resolve().parent
+    rig_service = RigService(
+        catalog_path=source_root / "config" / "rig.yaml",
+        state_path=source_root / "state" / "rig.json",
+    )
+
+    log.info("Initializing remote zone state service...")
+    remote_zone_state_service = RemoteZoneStateService(
+        node_registry_service=node_registry_service,
+        rig_service=rig_service,
+        event_bus=event_bus,
+    )
+
+    log.info("Initializing node configuration pusher...")
+    node_configuration_pusher = NodeConfigurationPusher(
+        rig_service=rig_service,
+        node_registry_service=node_registry_service,
+        remote_zone_state_service=remote_zone_state_service,
+        event_bus=event_bus,
+    )
+
+    log.info("Initializing remote fixture animator...")
+    remote_fixture_animator = RemoteFixtureAnimator(rig_service=rig_service)
+    # Remote fixtures ride the existing output_frame stream so the browser
+    # previews them exactly like local zones (see FrameStreamer._serialize).
+    frame_streamer.set_remote_pixel_provider(remote_fixture_animator.compute_fixture_pixels)
+
+    log.info("Initializing multi-node sync broadcaster...")
+    multi_node_sync_broadcaster = MultiNodeSyncBroadcaster(
+        remote_zone_state_service=remote_zone_state_service,
+        node_registry_service=node_registry_service,
+    )
+    sync_broadcaster_task = create_tracked_task(
+        multi_node_sync_broadcaster.start(),
+        category=TaskCategory.SYSTEM,
+        description="Multi-node sync broadcaster loop"
+    )
+
     # ========================================================================
     # 4. SERVICE CONTAINER
     # ========================================================================
- 
+
     services = ServiceContainer(
         event_bus=event_bus,
         zone_service=zone_service,
@@ -233,6 +294,12 @@ async def main():
         app_clock=app_clock,
         frame_streamer=frame_streamer,
         metrics_streamer=metrics_streamer,
+        node_registry_service=node_registry_service,
+        rig_service=rig_service,
+        remote_zone_state_service=remote_zone_state_service,
+        remote_fixture_animator=remote_fixture_animator,
+        node_configuration_pusher=node_configuration_pusher,
+        multi_node_sync_broadcaster=multi_node_sync_broadcaster,
     )
     
     snapshot_publisher = SnapshotPublisher(

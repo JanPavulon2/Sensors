@@ -29,16 +29,16 @@ encoders:
 
 buttons: 
   - id: BTN1
-    gpio: 22
+    gpio: 23
     
   - id: BTN2
-    gpio: 26
+    gpio: 17
 
   - id: BTN3
-    gpio: 23
+    gpio: 14
 
   - id: BTN4
-    gpio: 24
+    gpio: 15
 
 led_strips:
   - id: MAIN_12V

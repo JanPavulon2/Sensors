@@ -96,6 +96,10 @@ class LEDStripConfig:
     voltage: float = 5.0
     frequency_hz: int = 800_000
     enabled: bool = True
+    # Which output driver renders this strip - see hardware/led/driver_selection.py.
+    # None means ws281x, which is what every strip in the committed hardware.yaml
+    # relies on; a Raspberry Pi 5 declares "spi" in hardware.local.yaml instead.
+    driver: Optional[str] = None
     
     def __post_init__(self):
         if self.count is not None and self.count < 0:

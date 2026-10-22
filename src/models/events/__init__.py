@@ -30,6 +30,14 @@ from models.events.zone_runtime_events import (
 # Snapshot events (frontend/UI)
 # from models.events.zone_snapshot_events import ZoneSnapshotUpdatedEvent
 
+# Remote node events (ESP32 heartbeat registry watchdog)
+from models.events.node_events import (
+    NodeCameOnlineEvent,
+    NodeWentOfflineEvent,
+    NodeSnapshotUpdatedEvent,
+    NodeAppliedStateReportedEvent,
+)
+
 __all__ = [
     # Type, base, and sources
     "EventType",
@@ -50,7 +58,13 @@ __all__ = [
     "ZoneAnimationChangedEvent",
     "AnimationStartedEvent",
     "AnimationStoppedEvent",
-    "ZoneAnimationParamChangedEvent"
+    "ZoneAnimationParamChangedEvent",
     # Snapshot
     # "ZoneSnapshotUpdatedEvent",
+
+    # Remote nodes
+    "NodeCameOnlineEvent",
+    "NodeWentOfflineEvent",
+    "NodeSnapshotUpdatedEvent",
+    "NodeAppliedStateReportedEvent",
 ]

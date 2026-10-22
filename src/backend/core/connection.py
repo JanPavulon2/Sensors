@@ -1,12 +1,13 @@
 from dataclasses import dataclass
+from uuid import UUID
 
 
 @dataclass(frozen=True)
 class Connection:
     """Connection between two device instance ports."""
 
-    id: str
-    from_device_id: str
-    from_port: str
-    to_device_id: str
-    to_port: str
+    id: UUID
+    from_device_id: UUID
+    from_port: UUID
+    to_device_id: UUID
+    to_port: UUID

@@ -13,8 +13,8 @@ Features:
 
 from __future__ import annotations
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import List, TYPE_CHECKING
+from hardware.led.color_order import COLOR_ORDER_MAP, ColorOrder
 from hardware.led.strip_interface import IPhysicalStrip
 from runtime import RuntimeInfo
 from models.color import Color
@@ -28,28 +28,10 @@ try:
 except ImportError:
     ws = None  # type: ignore
 
-# Color order channel mapping
-COLOR_ORDER_MAP = {
-    "RGB": (0, 1, 2),
-    "RBG": (0, 2, 1),
-    "GRB": (1, 0, 2),
-    "GBR": (1, 2, 0),
-    "BRG": (2, 0, 1),
-    "BGR": (2, 1, 0),
-}
+# Color order channel mapping now lives in color_order.py so the SPI driver can
+# share it; re-exported here so existing importers of this module still find it.
 
 
-class ColorOrder(StrEnum):
-    RGB = "RGB"
-    RBG = "RBG"
-    GRB = "GRB"
-    GBR = "GBR"
-    BRG = "BRG"
-    BGR = "BGR"
-
-    def lower(self) -> str:
-        return self.value.lower()
-    
 @dataclass(frozen=True)
 class WS281xConfig:
     """Configuration for WS281x LED strip."""

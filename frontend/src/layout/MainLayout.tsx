@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, LayoutGrid, Grid3X3, Lightbulb, Bug, Settings, type LucideIcon } from 'lucide-react';
+import { Menu, X, LayoutGrid, Grid3X3, Cpu, Lightbulb, Bug, Settings, type LucideIcon } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { useAuth, useCheckBackendConnection } from '@/shared/hooks';
 
@@ -31,6 +31,7 @@ export function MainLayout({ children }: MainLayoutProps): JSX.Element {
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/', icon: LayoutGrid },
     { label: 'Zones', path: '/zones', icon: Grid3X3 },
+    { label: 'Nodes', path: '/nodes', icon: Cpu },
     { label: 'Components', path: '/components', icon: Lightbulb },
     { label: 'Debug', path: '/debug', icon: Bug },
     { label: 'Settings', path: '/settings', icon: Settings },

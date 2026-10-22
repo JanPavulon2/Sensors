@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { MainLayout } from '@/layout/MainLayout';
 import Dashboard from '@/pages/Dashboard';
 import Zones from '@/pages/Zones';
+import Nodes from '@/pages/Nodes';
 import ComponentsPage from '@/pages/ComponentsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { DebugPage } from '@/pages/DebugPage';
@@ -40,6 +41,7 @@ export function App(): JSX.Element {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/zones" element={<Zones />} />
+                  <Route path="/nodes" element={<Nodes />} />
                   <Route path="/components" element={<ComponentsPage />} />
                   <Route path="/debug" element={<DebugPage />} />
                   <Route path="/settings" element={<SettingsPage />} />

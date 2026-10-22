@@ -49,3 +49,6 @@ class RuntimeInfo:
         except Exception:
             return False
         
+    @classmethod
+    def has_lgpio(cls) -> bool:
+        return cls.has_module("lgpio")

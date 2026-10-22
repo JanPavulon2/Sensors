@@ -145,6 +145,7 @@ class HardwareManager:
                         color_order=entry["color_order"],
                         count=entry.get("count"),
                         voltage=entry.get("voltage", 5.0),
+                        driver=entry.get("driver"),
                     )
                 )
             except (KeyError, ValueError) as e:
@@ -327,13 +328,15 @@ class HardwareManager:
         Get GPIO-to-zones mapping for multi-GPIO strip support
 
         Returns:
-            List of dicts describing each LED strip: gpio, type, color_order, count, voltage, id
+            List of dicts describing each LED strip: gpio, type, color_order, count, voltage, id, driver
+
+        A driver of None means ws281x - see hardware/led/driver_selection.py.
 
         Example:
             mapping = hw_mgr.get_gpio_to_zones_mapping()
             # [
-            #   {"gpio": 18, "type": "WS2811_12V", "color_order": "BRG", "count": 100, "voltage": 12, "id": "MAIN_12V"},
-            #   {"gpio": 19, "type": "WS2812_5V", "color_order": "GRB", "count": 38, "voltage": 5, "id": "AUX_5V"}
+            #   {"gpio": 18, "type": "WS2811_12V", "color_order": "BRG", "count": 100, "voltage": 12, "id": "MAIN_12V", "driver": None},
+            #   {"gpio": 19, "type": "WS2812_5V", "color_order": "GRB", "count": 38, "voltage": 5, "id": "AUX_5V", "driver": None}
             # ]
         """
         if not self.config:
@@ -347,6 +350,7 @@ class HardwareManager:
                 "count": strip.count,
                 "voltage": strip.voltage,
                 "id": strip.id.name,
+                "driver": strip.driver,
             }
             for strip in self.config.led_strips.strips
         ]

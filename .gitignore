@@ -5,6 +5,7 @@ venv/
 env/
 ENV/
 .venv
+src/state/state.json
 
 # Python
 __pycache__/
@@ -20,8 +21,12 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Python build output. Anchored to the repo root so it does not also swallow
+# frontend/src/lib/ (the shadcn cn() helper lives there, and an unanchored
+# "lib/" kept it out of git entirely - a fresh clone could not build the
+# frontend).
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -56,3 +61,17 @@ Thumbs.db
 *.tmp
 *.bak
 *.old
+
+# App state file
+src/state/state.json
+
+# Rig state - per-installation wiring, bootstrapped from src/config/rig.yaml
+src/state/rig.json
+
+# Deployment secrets (template committed as diuna-backend.env.example)
+deploy/diuna-backend.env
+
+# Per-machine LED hardware override - describes what is physically wired to
+# THIS Raspberry Pi. src/config/hardware.yaml stays the committed rig; this file
+# exists only on a machine wired differently (e.g. the Pi 5's SPI test strip).
+src/config/hardware.local.yaml

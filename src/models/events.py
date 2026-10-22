@@ -32,6 +32,9 @@ from models.events import (
     AnimationStartedEvent,
     AnimationStoppedEvent,
     AnimationParameterChangedEvent,
+    # Remote node events
+    NodeCameOnlineEvent,
+    NodeWentOfflineEvent,
 )
 
 __all__ = [

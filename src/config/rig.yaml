@@ -1,0 +1,136 @@
+# Rig bootstrap - driver/fixture catalog plus this installation's initial wiring.
+#
+# Loaded ONLY when src/state/rig.json does not exist yet. After first run, the
+# rig lives in rig.json and is edited through the UI (PUT/POST /api/v1/rig/...).
+# Editing this file afterwards has no effect unless rig.json is deleted.
+#
+# Two halves, matching docs/architecture-vnext/01-naming-convention.md:
+#   catalog - blueprints (Module / LightFixture / DeviceDefinition). What a
+#             thing IS. Hand-authored, stable slugs, picked from by the UI.
+#   rig     - instances (DeviceInstance). What is ACTUALLY wired up here, on
+#             which node, to which GPIO pins, with which diode fitted.
+
+catalog:
+  # ---------------------------------------------------------------------
+  # Driver modules - how light is physically driven (HardwareControlInterface)
+  # ---------------------------------------------------------------------
+  drivers:
+    - id: mosfet_driver_1ch
+      name: "1-channel MOSFET dimmer"
+      control_interface: ANALOG_PWM
+      channels: [ch0]
+      ports:
+        - {name: power, direction: INPUT, signal_type: BOOL}
+        - {name: brightness, direction: INPUT, signal_type: INT}
+
+    - id: mosfet_driver_3ch
+      name: "3-channel MOSFET dimmer (analog RGB)"
+      control_interface: ANALOG_PWM
+      channels: [ch0, ch1, ch2]
+      ports:
+        - {name: power, direction: INPUT, signal_type: BOOL}
+        - {name: color, direction: INPUT, signal_type: RGB}
+
+    - id: mosfet_driver_4ch
+      name: "4-channel MOSFET dimmer (analog RGBW)"
+      control_interface: ANALOG_PWM
+      channels: [ch0, ch1, ch2, ch3]
+      ports:
+        - {name: power, direction: INPUT, signal_type: BOOL}
+        - {name: color, direction: INPUT, signal_type: RGB}
+
+    - id: addressable_data_output
+      name: "Addressable data line (WS281x)"
+      control_interface: ADDRESSABLE_DATA
+      channels: [data]
+      ports:
+        - {name: power, direction: INPUT, signal_type: BOOL}
+        - {name: pixels, direction: INPUT, signal_type: FRAME}
+
+  # ---------------------------------------------------------------------
+  # Light fixtures - what actually emits. component_count is how many LEDs
+  # physically emit; addressable_group_count is how many can be driven
+  # independently. That pair is what separates a COB strip from a WS2812 strip.
+  # ---------------------------------------------------------------------
+  fixtures:
+    - id: single_diode
+      name: "Single diode"
+      component_type: SINGLE_COLOR
+      component_count: 1
+      addressable_group_count: 1
+
+    - id: non_addressable_strip
+      name: "Non-addressable strip"
+      component_type: SINGLE_COLOR
+      component_count: 60
+      addressable_group_count: 1
+
+    - id: cob_strip
+      name: "COB strip"
+      component_type: SINGLE_COLOR
+      component_count: 320
+      addressable_group_count: 1
+
+    - id: analog_rgb_strip
+      name: "Analog RGB strip"
+      component_type: RGB
+      component_count: 150
+      addressable_group_count: 1
+
+    - id: analog_rgbw_strip
+      name: "Analog RGBW strip"
+      component_type: RGBW
+      component_count: 150
+      addressable_group_count: 1
+
+    - id: addressable_strip
+      name: "Addressable strip (WS281x)"
+      component_type: ADDRESSABLE_PIXEL
+      component_count: 30
+      addressable_group_count: 30
+
+    - id: addressable_pixel
+      name: "Single addressable pixel"
+      component_type: ADDRESSABLE_PIXEL
+      component_count: 1
+      addressable_group_count: 1
+
+# -----------------------------------------------------------------------
+# This installation's actual wiring.
+#
+# One ESP32 (04:B2:47:9B:BD:E8) driving one warm-white diode through a single
+# MOSFET channel on GPIO 23. nominal_color is user-declared: no software can
+# discover what colour diode was physically fitted.
+# -----------------------------------------------------------------------
+rig:
+  driver_instances:
+    - id: desk_dimmer
+      definition_id: mosfet_driver_1ch
+      node_id: "04:B2:47:9B:BD:E8"
+      label: "Desk dimmer"
+      config:
+        channel_pins:
+          ch0: 23
+
+  fixture_instances:
+    - id: desk_diode
+      definition_id: single_diode
+      node_id: "04:B2:47:9B:BD:E8"
+      label: "Desk diode"
+      config:
+        nominal_color: [255, 170, 80]
+        white_profile: WARM
+        bindings:
+          - {module_instance_id: desk_dimmer, channel_name: ch0, role: SINGLE}
+
+  zones:
+    - zone_id: desk
+      display_name: "Desk"
+      node_id: "04:B2:47:9B:BD:E8"
+      device_instance_ids: [desk_diode]
+      sync_group: workshop
+      state:
+        color: [255, 170, 80]
+        brightness: 100
+        is_on: false
+        render_mode: STATIC
